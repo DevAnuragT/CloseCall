@@ -11,6 +11,7 @@ import '../../features/media/presentation/media_controller.dart';
 import '../config/app_config.dart';
 import '../../features/widget/data/home_widget_service.dart';
 import '../../features/widget/data/local_widget_writer.dart';
+import '../../features/widget/data/native_widget_timeline.dart';
 import '../../features/widget/data/serverpod_schedule_repository.dart';
 import '../../features/widget/presentation/schedule_controller.dart';
 
@@ -33,9 +34,10 @@ class ServerpodBootstrap {
     final mediaRepository = ServerpodMediaRepository(client);
     final writer = LocalWidgetWriter(
       applyPhoto: (bytes) async {
-        await HomeWidgetService.setPhoto(bytes);
+        await HomeWidgetService.setPhoto(bytes, preserveTimeline: true);
       },
       clearPhoto: HomeWidgetService.clear,
+      timeline: const AndroidWidgetTimeline(),
     );
     schedules = ScheduleController(
       pairing: pairing,

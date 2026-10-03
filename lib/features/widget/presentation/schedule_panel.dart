@@ -95,15 +95,20 @@ class _SchedulePanelState extends State<SchedulePanel> {
           ),
           const Text(
             'Schedule private photos for your partner. Each recipient must '
-            'opt in separately to foreground auto-sync. Nothing runs with the app closed.',
+            'opt in separately to auto-sync on their own device.',
           ),
           if (!c.canSchedule)
             const Text('Complete pairing before loading timelines.'),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Foreground auto-sync on this device'),
-            subtitle: const Text(
-              'Opt-in for this account/couple only. Local-only photo choices pause it.',
+            title: Text(
+              c.backgroundCacheSupported
+                  ? 'Auto-sync + cached Android transitions'
+                  : 'Foreground auto-sync on this device',
+            ),
+            subtitle: Text(
+              'Opt-in for this account/couple only. Local-only photo choices pause it. '
+              '${c.backgroundCacheSupported ? 'Cached Android transitions may run while app closed; OS can delay. New, changed or cancelled schedules require reconnect; cache expires after 24h.' : 'Background cache is unavailable on this platform; keep the app open.'}',
             ),
             value: c.autoSyncEnabled,
             onChanged: c.canSchedule ? c.setAutoSync : null,
@@ -114,8 +119,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
             child: const Text('Refresh timelines'),
           ),
           if (c.busy) const LinearProgressIndicator(),
-          if (c.syncing)
-            const Text('Downloading/applying own foreground timeline…'),
+          if (c.syncing) const Text('Downloading/applying your own timeline…'),
           if (c.error != null) ...[
             Text(
               scheduleErrorMessage(c.error!),
@@ -134,10 +138,10 @@ class _SchedulePanelState extends State<SchedulePanel> {
             ),
           ],
           if (c.syncError != null) ...[
-            Text('Foreground sync: ${c.syncError}'),
+            Text('Timeline sync: ${c.syncError}'),
             TextButton(
               onPressed: c.autoSyncEnabled && !c.syncing ? c.syncNow : null,
-              child: const Text('Retry foreground sync'),
+              child: const Text('Retry timeline sync'),
             ),
           ],
           if (c.status != null) Text(c.status!),

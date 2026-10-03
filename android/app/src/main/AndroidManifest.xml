@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
+        android:allowBackup="false"
         android:label="closecall"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
@@ -33,6 +35,14 @@
             android:value="2" />
 
         <!-- CloseCall home-screen widget -->
+        <receiver android:name=".WidgetTimelineReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <receiver
             android:name=".CloseCallWidgetProvider"
             android:exported="true">

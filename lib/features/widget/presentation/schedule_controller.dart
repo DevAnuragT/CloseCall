@@ -80,6 +80,7 @@ class ScheduleController extends ChangeNotifier {
   String? status;
   WidgetTimeline? ownTimeline;
   WidgetTimeline? partnerTimeline;
+  WidgetTimeline? _nativeCachedTimeline;
   shared.WidgetResolution? ownResolution;
   shared.WidgetResolution? partnerResolution;
   PendingScheduleRequest? pendingCreate;
@@ -95,6 +96,10 @@ class ScheduleController extends ChangeNotifier {
   int _syncFlightVersion = -1;
   int _syncFlightTicket = 0;
   static const maxCachedAssets = 12;
+  static const maxCachedSchedules = 100;
+  static const nativeCacheTtl = Duration(hours: 24);
+  bool _scopeInitialized = false;
+  bool get backgroundCacheSupported => localWriter.timeline.supported;
   int get cachedAssetCount => _cache.length;
   Uint8List? get currentPhoto => _cache[ownCurrentAssetId];
   String? get ownCurrentAssetId => _asset(ownResolution);
@@ -128,7 +133,8 @@ class ScheduleController extends ChangeNotifier {
   }
 
   void _scopeChanged() {
-    if (_disposed || _scope == _currentScope) return;
+    if (_disposed || (_scopeInitialized && _scope == _currentScope)) return;
+    _scopeInitialized = true;
     _scope = _currentScope;
     final scope = ++_scopeVersion;
     _operationVersion++;
@@ -140,6 +146,7 @@ class ScheduleController extends ChangeNotifier {
     error = streamError = syncError = null;
     status = null;
     ownTimeline = partnerTimeline = null;
+    _nativeCachedTimeline = null;
     ownResolution = partnerResolution = null;
     _ownClock = _partnerClock = null;
     _cache.clear();
@@ -264,6 +271,12 @@ class ScheduleController extends ChangeNotifier {
 
   void _accept(WidgetTimeline timeline, {required bool own}) {
     if (!canSchedule) return;
+    // Generated wire models are mutable; retain a detached scope snapshot.
+    timeline = timeline.copyWith(
+      schedules: List.unmodifiable(
+        timeline.schedules.map((entry) => entry.copyWith()),
+      ),
+    );
     final expected = own
         ? pairing.userId
         : pairing.couple!.partnerOf(pairing.userId!);
@@ -297,6 +310,25 @@ class ScheduleController extends ChangeNotifier {
       ownTimeline = timeline;
       _ownClock = anchor;
       _syncVersion++;
+      if (autoSyncEnabled) {
+        final scope = _scopeVersion;
+        final sync = _syncVersion;
+        // Stop outdated alarms immediately, even if downloading replacement
+        // photos fails. The visible photo is intentionally not cleared.
+        unawaited(
+          localWriter
+              .disableTimeline(
+                isCurrent: () => _current(scope) && autoSyncEnabled,
+              )
+              .catchError((Object failure) {
+                if (_syncCurrent(scope, sync)) {
+                  syncError = failure;
+                  _notify();
+                }
+                return false;
+              }),
+        );
+      }
     } else {
       partnerTimeline = timeline;
       _partnerClock = anchor;
@@ -383,9 +415,26 @@ class ScheduleController extends ChangeNotifier {
     _appliedAsset = null;
     _appliedEmpty = false;
     status = enabled
-        ? 'Foreground auto-sync enabled for this account and couple only.'
+        ? (backgroundCacheSupported
+              ? 'Auto-sync enabled for this account and couple: foreground sync and cached Android transitions.'
+              : 'Foreground auto-sync enabled. Background cache is unavailable on this platform.')
         : 'Auto-sync off. The current local photo is left unchanged.';
     _notify();
+    if (!enabled) {
+      final scope = _scopeVersion;
+      final sync = _syncVersion;
+      try {
+        await localWriter.disableTimeline(
+          isCurrent: () => _current(scope) && sync == _syncVersion,
+        );
+      } catch (failure) {
+        if (_current(scope) && sync == _syncVersion) {
+          syncError = failure;
+          _notify();
+        }
+        return;
+      }
+    }
     if (enabled && foreground) {
       if (ownTimeline == null) await refresh();
       await syncNow();
@@ -398,7 +447,14 @@ class ScheduleController extends ChangeNotifier {
     // Manual choice explicitly pauses auto-sync, preventing a later stream
     // event or already queued automatic write from overwriting that choice.
     await setAutoSync(false);
-    await localWriter.write(photo, isCurrent: () => _current(scope));
+    if (!_current(scope) || autoSyncEnabled) return;
+    if (syncError != null) throw syncError!;
+    final sync = _syncVersion;
+    await localWriter.write(
+      photo,
+      isCurrent: () =>
+          _current(scope) && sync == _syncVersion && !autoSyncEnabled,
+    );
   }
 
   Future<void> syncNow() {
@@ -468,26 +524,109 @@ class ScheduleController extends ChangeNotifier {
           }
         }
       }
-      // Bounded, authorized foreground prefetch: current + fallback + the next
-      // ten distinct upcoming assets (at most 24 MiB of validated PNGs).
+      // Only own recipient truth is cached. The native TTL is measured from
+      // this exact server-adjusted epoch anchor, not the device wall clock.
+      final cacheNow = serverNow;
+      final horizon = cacheNow.add(nativeCacheTtl);
       final upcoming =
           timeline.schedules
-              .where((s) => s.activeUntil.toUtc().isAfter(serverNow))
+              .where(
+                (s) =>
+                    s.activeUntil.toUtc().isAfter(cacheNow) &&
+                    s.activeFrom.toUtc().isBefore(horizon),
+              )
               .toList()
             ..sort((a, b) => a.activeFrom.compareTo(b.activeFrom));
-      final ids = <String>{
+      final needed = <String>{
         ?currentAsset,
-        if (timeline.fallbackAssetId != null) timeline.fallbackAssetId!,
+        if (timeline.fallbackAssetId?.isNotEmpty == true)
+          timeline.fallbackAssetId!,
         ...upcoming.map((s) => s.assetId),
-      }.take(maxCachedAssets).toList();
+      };
+      final ids = needed.take(maxCachedAssets).toList();
       _cache.removeWhere((key, _) => !ids.contains(key));
       for (final id in ids) {
         if (!_syncCurrent(scope, sync)) return;
         await _download(id, scope, sync);
       }
       if (_syncCurrent(scope, sync)) {
-        status =
-            'Own current timeline applied locally while the app is open. No background delivery.';
+        if (backgroundCacheSupported) {
+          final publicationNow = serverNow;
+          final publicationHorizon = publicationNow.add(nativeCacheTtl);
+          final cachedSchedules = timeline.schedules
+              .where(
+                (s) =>
+                    s.activeUntil.toUtc().isAfter(publicationNow) &&
+                    s.activeFrom.toUtc().isBefore(publicationHorizon),
+              )
+              .toList();
+          final requiredPhotos = <String>{
+            ?ownCurrentAssetId,
+            if (timeline.fallbackAssetId?.isNotEmpty == true)
+              timeline.fallbackAssetId!,
+            ...cachedSchedules.map((s) => s.assetId),
+          };
+          // Never truncate competing windows into incorrect cached truth. If
+          // the complete 24h horizon cannot fit, keep foreground-only sync.
+          if (requiredPhotos.length > maxCachedAssets ||
+              cachedSchedules.length > maxCachedSchedules ||
+              !requiredPhotos.every(_cache.containsKey)) {
+            await localWriter.disableTimeline(
+              isCurrent: () => _syncCurrent(scope, sync),
+            );
+            if (!_syncCurrent(scope, sync)) return;
+            status =
+                'Foreground sync only: the next 24h timeline exceeds the Android cache bounds (12 photos / 100 schedules).';
+          } else {
+            final applied = await localWriter.cacheTimeline(
+              {
+                'scope': _scope!,
+                'serverTimeMs': publicationNow.millisecondsSinceEpoch,
+                'fallbackAssetId': timeline.fallbackAssetId,
+                'schedules': [
+                  for (final entry in cachedSchedules)
+                    {
+                      'scheduleId': entry.scheduleId,
+                      'assetId': entry.assetId,
+                      'activeFromMs': entry.activeFrom.millisecondsSinceEpoch,
+                      'activeUntilMs': entry.activeUntil.millisecondsSinceEpoch,
+                      'createdAtMs': entry.createdAt.millisecondsSinceEpoch,
+                      'createdAtUs': entry.createdAt.microsecondsSinceEpoch,
+                    },
+                ],
+                'photos': {for (final id in requiredPhotos) id: _cache[id]!},
+              },
+              serverNow: () => serverNow,
+              isCurrent: () {
+                if (!_syncCurrent(scope, sync)) return false;
+                final now = serverNow;
+                return _asset(_resolve(timeline, now)) == currentAsset &&
+                    timeline.schedules
+                        .where(
+                          (entry) =>
+                              entry.activeUntil.toUtc().isAfter(now) &&
+                              entry.activeFrom.toUtc().isBefore(
+                                now.add(nativeCacheTtl),
+                              ),
+                        )
+                        .every(
+                          (entry) => cachedSchedules.any(
+                            (cached) => cached.scheduleId == entry.scheduleId,
+                          ),
+                        );
+              },
+            );
+            if (!_syncCurrent(scope, sync)) return;
+            if (applied) {
+              _nativeCachedTimeline = timeline;
+              status =
+                  'Own Android timeline cached for up to 24h. OS may delay transitions; reconnect for new, changed or cancelled schedules.';
+            }
+          }
+        } else {
+          status =
+              'Own timeline applied locally while the app is open. Background cache is unavailable on this platform.';
+        }
       }
     } catch (failure) {
       if (_syncCurrent(scope, sync)) syncError = failure;
@@ -556,7 +695,7 @@ class ScheduleController extends ChangeNotifier {
     }
     pendingCreate = null;
     status =
-        'Scheduled for your partner. Their device needs its own foreground auto-sync opt-in.';
+        'Scheduled for your partner. Their device needs its own auto-sync opt-in and reconnect to receive changes.';
     final timeline = await repository.partnerTimeline();
     if (_operationCurrent(scope, operation)) _accept(timeline, own: false);
   }, () => pendingCreate == null ? refresh() : retryCreate());
@@ -566,7 +705,7 @@ class ScheduleController extends ChangeNotifier {
     if (!_operationCurrent(scope, operation)) return;
     _accept(timeline, own: true);
     status =
-        'Saved your own fallback. Local changes require foreground auto-sync.';
+        'Saved your own fallback. Local changes require auto-sync and reconnect.';
   }, () => setOwnFallback(assetId));
 
   bool canCancel(WidgetScheduleEntry entry) =>
@@ -614,7 +753,13 @@ class ScheduleController extends ChangeNotifier {
   @override
   void dispose() {
     if (_disposed) return;
-    final clearNative = autoSyncEnabled;
+    // A validated opted-in native cache survives Flutter shutdown. Identity
+    // changes clear through the writer queue; native TTL bounds offline life.
+    final leaveCached =
+        autoSyncEnabled &&
+        canSchedule &&
+        _scope == _currentScope &&
+        identical(_nativeCachedTimeline, ownTimeline);
     _disposed = true;
     _scopeVersion++;
     _syncVersion++;
@@ -626,7 +771,7 @@ class ScheduleController extends ChangeNotifier {
     pendingCreate = null;
     pairing.removeListener(_scopeChanged);
     pairing.session.removeListener(_scopeChanged);
-    localWriter.dispose(clear: clearNative);
+    localWriter.dispose(disable: !leaveCached);
     super.dispose();
   }
 }
