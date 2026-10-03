@@ -14,11 +14,15 @@ partner's home-screen widget. Flutter frontend; Serverpod authoritative backend.
 - Implemented frontend integration: explicit demo/live modes, persisted secure
   session, email registration/login/reset, Profile pairing, photo picking,
   private upload/list/download, loading/error/retry and manual refresh.
+- Implemented scheduling: private recipient timelines, overlap priority,
+  own fallback, cancellation, live foreground streams, and opt-in Android
+  cached transitions/revert with a 24-hour expiry.
 - Not implemented: production email delivery verification,
-  partner-device delivery, live widget schedules, native background expiry,
+  network delivery of new schedules while the app is closed,
   live mood/reminders, Moments, cloud deployment, or iOS widgets.
 
-The widget editor currently updates the **same device**, not a partner's device.
+Local editing updates the **same device**. Private sharing and schedules target
+the partner's timeline; the recipient must opt in to sync and cache it.
 Live Home intentionally shows no sample mood/reminder/widget state as real data.
 
 ## Packages
@@ -84,8 +88,11 @@ Photos are limited to 2 MiB / 2048 pixels per dimension; 50 assets per couple.
 
 When paired, Widget also supports private-photo fallback selection, partner
 schedules (UTC windows, overlap resolution, cancel), live foreground timeline
-updates, and explicit foreground auto-sync. Auto-sync is opt-in per couple and
-does not run with the app closed yet. It never overwrites a manual local choice.
+updates, and explicit auto-sync. Android can apply already cached windows while
+the app is closed, but alarms may be delayed by the OS. New/changed/cancelled
+schedules require reconnect; force-stop blocks background work. Cache expires
+after 24 hours. Manual local choices pause auto-sync; relaunch requires opt-in
+again. No exact-time or closed-app network delivery guarantee is made.
 
 Omit `SERVERPOD_URL` for explicitly labelled offline demo mode. A configured but
 unreachable/invalid server never silently selects demo data. `.env` is not

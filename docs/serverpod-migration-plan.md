@@ -22,10 +22,12 @@ Supabase is a legacy implementation during migration, not the target backend.
 4. **Schedules (implemented, locally verified):** store UTC windows and fallback
    assets; reuse shared resolver rules; publish transitions through Serverpod,
    durable future-call wakes, live foreground timelines, and opt-in local cache
-   sync. Closed-app delivery remains pending.
-5. **Two-device delivery:** recipient refresh and foreground Android widget
-   application are implemented. Background expiry/revert, offline recovery,
-   reboot testing and physical-device validation remain pending.
+   sync. Android cached transitions/revert are implemented; receiving new
+   server updates with the app closed still needs authenticated push delivery.
+5. **Two-device delivery (partially implemented):** recipient refresh,
+   foreground sync and cached Android transitions are implemented. Native
+   cache/receiver/revert/expiry tests pass on an Android emulator. Physical
+   two-device, reboot/Doze timing and new closed-app push delivery remain pending.
 6. **Submission:** cloud deployment, reproducible test build, real two-device demo,
    English setup instructions, AI-use disclosure, and a public video under two
    minutes. Submit before 14 October 2026 23:59 CEST / 15 October 03:29 IST.
@@ -44,7 +46,7 @@ Supabase is a legacy implementation during migration, not the target backend.
 ## Acceptance checks
 
 Foundation/authenticated-pairing source and database migration are implemented.
-Local validation includes frontend/backend tests; cloud deployment and physical
+Local validation includes frontend/backend/native tests; cloud deployment and physical
 two-device acceptance remain outstanding. See `serverpod-setup.md` for commands.
 
 - App, generated client, and server analyze successfully on the pinned SDK.
@@ -56,6 +58,19 @@ two-device acceptance remain outstanding. See `serverpod-setup.md` for commands.
 - State persists and each authenticated user belongs to at most one couple.
 - Flutter offers explicit demo mode and configured backend mode, with visible
   connection failures rather than silently substituting mock data.
+
+## Manual intervention now required
+
+- Serverpod Cloud CLI authentication is not configured. Sign in through its
+  browser flow and choose a project with database and future-call support.
+- Verify transactional email and Cloud production secrets before deploy.
+- For new closed-app delivery, configure a Firebase service account through
+  secure server secret management (never commit it or paste it into chat).
+- Connect two physical Android devices and add home-screen widgets for real
+  device, reboot, battery-saving and permission validation.
+
+Development databases and original uncommitted widget work are preserved.
+All completed slices use short conventional commits without co-author trailers.
 
 ## References
 

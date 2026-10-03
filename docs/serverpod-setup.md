@@ -63,8 +63,25 @@ production. Email accounts are recoverable; they do not automatically acquire
 an existing guest's couple/media data. Actual deployed email delivery still
 requires Serverpod Cloud email access or a configured alternative provider.
 Pairing and private photo sharing are live. Widget application is explicit and
-local. Foreground schedule timelines and opt-in auto-sync are live while app is
-open. Closed-app automatic delivery is not implemented.
+local. Foreground streams and opt-in Android cache sync are live. Already
+cached transitions can run without Flutter, subject to OS delay; receiving
+new/changed/cancelled server schedules still requires reconnect.
+
+## Android offline cache
+
+- Per-account/couple opt-in, up to 12 private photos and 100 windows in a 24h
+  horizon. If the complete horizon cannot fit, sync stays foreground-only.
+- Photos and scope metadata live in app-private, backup-excluded storage. No
+  credentials or URLs are sent to the native cache. App backup is disabled.
+- Start-inclusive/end-exclusive windows share server resolver priority; creation
+  microseconds are preserved to avoid false ties within one millisecond.
+- Inexact alarms recompute current truth at actual wake; delayed alarms do not
+  replay expired photos. Boot/time changes reload cached state; post-reboot time
+  uses a bounded wall-clock approximation until reconnect.
+- Missing/expired cache shows fallback or empty, not a stale scheduled photo.
+  Cache expires after 24h. Auth/couple changes clear it; manual choices stop it.
+- Relaunch starts with cleanup and requires fresh opt-in. Force-stop suppresses
+  Android alarms. Physical Doze/reboot behaviour still needs real-device testing.
 
 ## Code generation and migrations
 
@@ -92,13 +109,23 @@ export PATH="$PWD/.tooling/flutter/bin:$PATH"
 export PUB_CACHE="$PWD/.tooling/pub-cache"
 dart pub global activate serverpod_cli 4.0.3
 cd closecall_server
-dart pub global run serverpod_cli:serverpod_cli generate
+dart run tool/generate.dart
+dart run tool/generate.dart --check
 ```
 
-After a schema change, also run `create-migration` through that same CLI, inspect
-the generated SQL, then start the server with `--apply-migrations`. Keep server,
-client and auth package versions aligned. Current migration creates the auth and
-pairing schema; Supabase SQL is not applied to the Serverpod database.
+Use the wrapper rather than bare generation: Serverpod 4.0.3's model DSL cannot
+express the same-couple composite foreign keys, and its FK renderer/inspection
+have ordering bugs. The wrapper adds a narrow, AST-validated server schema
+extension reproducibly; CI checks the generation roundtrip. Do not patch
+generated files by hand. The wrapper owns server outputs; endpoint changes also
+require regenerating/reviewing the companion client with the pinned CLI.
+
+After a schema change, run `create-migration` through the pinned CLI and inspect
+JSON, SQL and definition snapshots. Preserve composite same-couple FK/check
+invariants. `tool/schedule_migration_sql.dart` corrects composite quoting without
+modifying the global CLI. Apply reviewed migrations using `--apply-migrations`.
+The appended `20261004000100000` repair works for previous incremental installs
+as well as fresh databases. Supabase SQL is not applied to Serverpod's database.
 
 ## Before production
 
@@ -111,25 +138,29 @@ pairing schema; Supabase SQL is not applied to the Serverpod database.
   management; never include them in app builds or repository files.
 - Add pairing-attempt throttling/abuse protection and decide invite expiry and
   account unlink/deletion behaviour before public release.
-- Implement scheduling and automatic recipient refresh. Database-backed private
-  media works locally; choose appropriate object storage for deployment scale.
+- Configure closed-app authenticated push refresh if required. Database-backed
+  private media works locally; choose appropriate object storage for scale.
 - Schedules use durable Serverpod future-call wakeups plus foreground stream/DB
   reconciliation. Verify Serverpod Cloud plan supports future calls; Starter
   currently disables them.
-- Verify the hosting plan supports future calls; Starter currently disables them.
 - Verify physical-device/release networking, secure session restoration and the
   genuine two-device widget flow before claiming end-to-end readiness.
 
 Legacy Supabase code/migrations remain for reference but are not selected at
 startup. Existing private `.env` and Firebase files have not been removed.
 
-## Validation recorded on 3 October 2026
+## Validation recorded on 4 October 2026
 
 - App, generated client and backend analysis: clean.
-- Flutter tests: 107 passed; backend tests: 37 passed, including real PostgreSQL
+- Flutter tests: 155 passed; backend tests: 57 passed; shared resolver: 7 passed,
+  including real PostgreSQL
   concurrency and authentication tests.
 - Local HTTP/JWT smoke: passed.
+- Preserved original development database upgraded successfully; HTTP pairing,
+  private media and scheduling smoke passed afterward.
 - Clean source copy without `.env` or inherited secrets: Flutter/backend tests
   passed after fresh local-secret bootstrap.
 - Android debug APK build: passed (`build/app/outputs/flutter-apk/app-debug.apk`).
+- Android JVM tests: 27 passed; native emulator instrumentation: 4 passed,
+  including receiver-based fallback without launching Flutter.
 - Physical devices, native iOS and deployed Cloud environments: not verified.
