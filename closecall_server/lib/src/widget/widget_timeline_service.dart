@@ -9,6 +9,7 @@ import 'package:serverpod/protocol.dart' show FutureCallEntry;
 import '../generated/future_calls.dart';
 import '../generated/future_calls_generated_models/widget_timeline_future_call_wake_model.dart';
 import '../generated/protocol.dart';
+import 'widget_schedule_policy.dart';
 
 UuidValue? parseScheduleUuid(String value) {
   if (!RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(value)) {
@@ -28,6 +29,11 @@ Future<void> notifyTimeline(Session session, String recipient) async {
 
 class WidgetTimelineService {
   static const _noFallback = '\u0000closecall/no-widget-fallback';
+
+  final WidgetSchedulePolicy _policy;
+
+  WidgetTimelineService({WidgetSchedulePolicy? policy})
+    : _policy = policy ?? WidgetSchedulePolicy.fromEnvironment();
 
   Future<WidgetTimeline> timeline(Session session, String user, {bool partner = false}) =>
     session.db.transaction((transaction) async {
@@ -75,8 +81,13 @@ class WidgetTimelineService {
           senderMemberId: pair.current.id!, recipientMemberId: pair.partner.id!,
           activeFrom: from, activeUntil: until, createdAt: now,
           requestId: requestId, payloadHash: fingerprint), transaction: transaction);
-      await _enqueueWake(session, row, from.isBefore(now) ? now : from, 'start', transaction);
-      await _enqueueWake(session, row, until, 'end', transaction);
+      // Serverpod's feature switch can also be supplied by Cloud. Its separate
+      // execution switch is NOT a feature switch (maintenance/tests may pause
+      // execution while still scheduling durable calls).
+      if (_policy.futureCallsEnabled && session.serverpod.config.futureCall.enabled) {
+        await _enqueueWake(session, row, from.isBefore(now) ? now : from, 'start', transaction);
+        await _enqueueWake(session, row, until, 'end', transaction);
+      }
       return _entry(row, pair.current, pair.partner);
     });
     await _bestEffortNotice(session, result.recipientId);

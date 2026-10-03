@@ -57,3 +57,7 @@ lib/firebase_options.dart
 .fvm/
 **/.serverpod/
 **/config/passwords.yaml
+
+# Cloud CLI local state and private OmniRush attachments.
+**/.scloud/
+.opencode/omnirush/inbox/

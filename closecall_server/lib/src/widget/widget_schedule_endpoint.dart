@@ -11,7 +11,10 @@ class WidgetScheduleEndpoint extends Endpoint {
   @override
   bool get requireLogin => true;
 
-  final _service = WidgetTimelineService();
+  final WidgetTimelineService _service;
+
+  WidgetScheduleEndpoint({WidgetTimelineService? service})
+    : _service = service ?? WidgetTimelineService();
 
   Future<WidgetTimeline> currentTimeline(Session session) =>
     _service.timeline(session, session.authenticated!.userIdentifier);

@@ -83,6 +83,47 @@ new/changed/cancelled server schedules still requires reconnect.
 - Relaunch starts with cleanup and requires fresh opt-in. Force-stop suppresses
   Android alarms. Physical Doze/reboot behaviour still needs real-device testing.
 
+## Cloud Starter deployment
+
+Project: `closecall`. Starter trial expires 3 November 2026. Do not upgrade or
+enable paid resources without separate approval. Starter disables future calls;
+foreground DB reconciliation and cached Android transitions still work.
+
+Cloud variables set for this project:
+
+- `CLOSECALL_FUTURE_CALLS_ENABLED=false`: no dead future-call queue entries.
+- `SERVERPOD_MAX_REQUEST_SIZE=4194304`: permits bounded 2 MiB PNG RPC payloads.
+
+Cloud manages production config and database/auth/email secrets. No development
+passwords are uploaded. Stage only reviewed runtime files:
+
+```sh
+python3 scripts/prepare_cloud_deploy.py --replace
+cd .tooling/cloud-deploy
+../../.tooling/flutter/bin/dart pub get --offline
+```
+
+Deploy with the existing isolated Cloud CLI, specifying
+`--project-dir .tooling/cloud-deploy/closecall_server` (absolute path recommended)
+and project `closecall`. Always review `deploy --wet-run --show-files --output
+<ignored-zip-path>` first. Root/server `.scloudignore` intentionally deny direct
+repository uploads; only the generated deployment workspace is allowlisted.
+The stage bundles the shared resolver as a Dart workspace, strips dev
+dependencies, preserves pinned runtime versions, and excludes all private
+configs, inbox attachments, SDKs, logs and databases. No code-generation hooks
+run during deployment; run the verified generation wrapper beforehand.
+
+Packaging validation:
+
+```sh
+CLOSECALL_DEPLOY_INTEGRATION=1 python3 -m unittest discover \
+  -s scripts -p 'test_prepare_cloud_deploy.py' -v
+```
+
+These optional integration tests use the isolated Cloud CLI package context at
+`.tooling/cloud-inspect/.dart_tool/package_config.json`. They inspect ZIP contents
+and compile staged Dart runtime sources without provisioning Cloud resources.
+
 ## Code generation and migrations
 
 ### Local HTTP smoke

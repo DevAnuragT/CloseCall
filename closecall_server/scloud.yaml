@@ -1,0 +1,7 @@
+# Public project link only. Never add credentials or generation hooks here.
+project:
+  projectId: closecall
+  dartSdk: 3.13.5
+  scripts:
+    pre_deploy: []
+    post_deploy: []

@@ -61,12 +61,11 @@ two-device acceptance remain outstanding. See `serverpod-setup.md` for commands.
 
 ## Manual intervention now required
 
-- Serverpod Cloud CLI login is verified. No Cloud projects exist. Read-only
-  Growth provisioning check returned `paymentMethodRequired`; the plan API
-  supplied neither a trial length nor a trial end date. Free-trial eligibility
-  is therefore unverified. No subscription/project was created or deployment
-  performed. Confirm the trial/credit terms in the Cloud console before enabling
-  billing; paid charges are not authorised.
+- Serverpod Cloud project `closecall` exists on Starter. Its profile confirms
+  trial expiry on 3 November 2026; no upgrade or paid changes are authorised.
+  Starter adaptation is tested: DB schedules/foreground streams and Android
+  cached transitions do not depend on future-call wakes. Deployment is pending
+  verification; transactional email and physical devices still need validation.
 - Verify transactional email and Cloud production secrets before deploy.
 - For new closed-app delivery, configure a Firebase service account through
   secure server secret management (never commit it or paste it into chat).

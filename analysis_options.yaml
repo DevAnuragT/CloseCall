@@ -12,6 +12,8 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+    # Cloud CLI ZIP helper is checked with its isolated CLI package context.
+    - scripts/test_cloud_archive.dart
 include: package:flutter_lints/flutter.yaml
 
 linter:

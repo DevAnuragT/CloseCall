@@ -1,0 +1,4 @@
+# Never upload the Flutter repository. Prepare the allowlisted stage first:
+# python3 scripts/prepare_cloud_deploy.py
+# Deploy preparation must target .tooling/cloud-deploy/closecall_server.
+**

@@ -1,0 +1,3 @@
+# Direct uploads omit the sibling shared library and are intentionally blocked.
+# Use scripts/prepare_cloud_deploy.py and the generated deployment workspace.
+**

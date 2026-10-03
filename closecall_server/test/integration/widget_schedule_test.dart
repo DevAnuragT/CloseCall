@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:clock/clock.dart';
 import 'package:closecall_server/src/generated/protocol.dart';
 import 'package:closecall_server/src/widget/widget_schedule_endpoint.dart';
+import 'package:closecall_server/src/widget/widget_schedule_policy.dart';
 import 'package:closecall_server/src/widget/widget_timeline_service.dart';
 import 'package:image/image.dart' as image;
 import 'package:serverpod/serverpod.dart';
@@ -544,6 +545,115 @@ void main() {
       );
 
       test(
+        'disabled durable wakes preserve atomic create, idempotency, cancellation and privacy',
+        () async {
+          await pair('alice', 'bob');
+          await pair('charlie', 'dave');
+          final asset = await photo('alice');
+          final foreignAsset = await photo('charlie');
+          final session = builder.build();
+          final service = WidgetTimelineService(
+            policy: const WidgetSchedulePolicy(futureCallsEnabled: false),
+          );
+          // A failing INSERT trigger proves disabled mode never even attempts
+          // a durable wake write, rather than inserting and cleaning it up.
+          await session.db.unsafeSimpleExecute(
+            r"CREATE FUNCTION closecall_reject_disabled_wake() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'unexpected disabled wake'; END; $$;",
+          );
+          await session.db.unsafeExecute(
+            'CREATE TRIGGER closecall_reject_disabled_wake BEFORE INSERT ON serverpod_future_call '
+            'FOR EACH ROW EXECUTE FUNCTION closecall_reject_disabled_wake()',
+          );
+          final request = uuid();
+          Future<WidgetScheduleEntry> disabledCreate({
+            String? user,
+            String? id,
+            String? requestId,
+            DateTime? until,
+          }) => service.create(
+            session,
+            user ?? 'alice',
+            id ?? asset.assetId,
+            reference,
+            until ?? reference.add(const Duration(hours: 1)),
+            requestId ?? request,
+          );
+          try {
+            await withClock(Clock.fixed(reference), () async {
+              final entries = await Future.wait(
+                List.generate(8, (_) => disabledCreate()),
+              );
+              final original = entries.first;
+              expect(entries.map((e) => e.scheduleId).toSet(), hasLength(1));
+              expect(await WidgetScheduleRecord.db.count(session), 1);
+              expect(await FutureCallEntry.db.count(session), 0);
+              expect(
+                (await service.timeline(session, 'bob')).currentAssetId,
+                asset.assetId,
+              );
+              expect(
+                (await service.timeline(session, 'charlie')).schedules,
+                isEmpty,
+              );
+              await expectLater(
+                disabledCreate(
+                  until: reference.add(
+                    const Duration(hours: 1, microseconds: 1),
+                  ),
+                ),
+                throwsA(failure('request_conflict')),
+              );
+              for (final id in [foreignAsset.assetId, uuid(), 'bad']) {
+                await expectLater(
+                  disabledCreate(id: id, requestId: uuid()),
+                  throwsA(failure('asset_not_found')),
+                );
+              }
+              await expectLater(
+                disabledCreate(user: 'stranger', requestId: uuid()),
+                throwsA(failure('not_paired')),
+              );
+              for (final id in [original.scheduleId, uuid(), 'bad']) {
+                await expectLater(
+                  service.cancel(session, 'charlie', id),
+                  throwsA(failure('schedule_not_found')),
+                );
+              }
+              await service.cancel(session, 'bob', original.scheduleId);
+              await service.cancel(session, 'alice', original.scheduleId);
+              expect((await disabledCreate()).scheduleId, original.scheduleId);
+              expect(
+                (await service.timeline(session, 'bob')).schedules,
+                isEmpty,
+              );
+              await withClock(
+                Clock.fixed(reference.add(const Duration(days: 1))),
+                () async {
+                  expect(
+                    (await disabledCreate()).scheduleId,
+                    original.scheduleId,
+                  );
+                  await expectLater(
+                    disabledCreate(requestId: uuid()),
+                    throwsA(failure('invalid_window')),
+                  );
+                },
+              );
+              expect(await WidgetScheduleRecord.db.count(session), 1);
+              expect(await FutureCallEntry.db.count(session), 0);
+            });
+          } finally {
+            await session.db.unsafeExecute(
+              'DROP TRIGGER closecall_reject_disabled_wake ON serverpod_future_call',
+            );
+            await session.db.unsafeExecute(
+              'DROP FUNCTION closecall_reject_disabled_wake()',
+            );
+          }
+        },
+      );
+
+      test(
         'future call write failure rolls back schedule plus earlier wake atomically',
         () async {
           await pair('alice', 'bob');
@@ -662,85 +772,100 @@ void main() {
         },
       );
 
-      test(
-        'watch initial/current isolation, DB-only changes, start/end, membership loss, cancellation',
-        () async {
-          await pair('alice', 'bob');
-          final fallback = await photo('bob');
-          final surprise = await photo('alice', 11);
-          final otherSession = builder.build();
-          final ownSession = asUser('bob').build();
-          // Direct endpoint stream has the same production lifecycle, permitting
-          // explicit cancellation assertions without test transport buffering.
-          final iterator = StreamIterator(
-            WidgetScheduleEndpoint().watchTimeline(ownSession),
-          );
-          expect(
-            await iterator.moveNext().timeout(const Duration(seconds: 5)),
-            isTrue,
-          );
-          expect(iterator.current.recipientId, 'bob');
-          expect(iterator.current.currentAssetId, isNull);
-          var changed = iterator.moveNext();
-          final bob = await member('bob');
-          await WidgetFallbackRecord.db.insertRow(
-            otherSession,
-            WidgetFallbackRecord(
-              coupleId: bob.coupleId,
-              recipientMemberId: bob.id!,
-              assetId: UuidValue.fromString(fallback.assetId),
-            ),
-          ); // No local event.
-          expect(await changed.timeout(const Duration(seconds: 5)), isTrue);
-          expect(iterator.current.currentAssetId, fallback.assetId);
-          final now = DateTime.now().toUtc();
-          changed = iterator.moveNext();
-          await create(
-            'alice',
-            surprise.assetId,
-            from: now.add(const Duration(seconds: 2)),
-            until: now.add(const Duration(seconds: 4)),
-          );
-          expect(await changed.timeout(const Duration(seconds: 5)), isTrue);
-          expect(iterator.current.currentAssetId, fallback.assetId);
-          expect(iterator.current.schedules.single.recipientId, 'bob');
-          final senderView = await endpoints.widgetSchedule
-              .watchTimeline(asUser('alice'))
-              .first;
-          expect(senderView.recipientId, 'alice');
-          expect(senderView.schedules, isEmpty);
-          expect(senderView.currentAssetId, isNull);
-          expect(
-            await iterator.moveNext().timeout(const Duration(seconds: 5)),
-            isTrue,
-          );
-          expect(iterator.current.currentAssetId, surprise.assetId);
-          expect(
-            await iterator.moveNext().timeout(const Duration(seconds: 5)),
-            isTrue,
-          );
-          expect(iterator.current.currentAssetId, fallback.assetId);
-          expect(iterator.current.schedules, isEmpty);
-          changed = iterator.moveNext();
-          await CoupleMember.db.deleteRow(otherSession, bob);
-          await expectLater(
-            changed.timeout(const Duration(seconds: 5)),
-            throwsA(failure('not_paired')),
-          );
-          await iterator.cancel().timeout(const Duration(seconds: 2));
-          await ownSession.close();
-          // A fresh complete membership can open and immediately cancel a watcher.
-          await pair('charlie', 'dave');
-          final cancellable = asUser('charlie').build();
-          final watch = StreamIterator(
-            WidgetScheduleEndpoint().watchTimeline(cancellable),
-          );
-          await watch.moveNext();
-          await watch.cancel().timeout(const Duration(seconds: 2));
-          await cancellable.close();
-          await otherSession.close();
-        },
-      );
+      for (final futureCallsEnabled in [true, false]) {
+        test(
+          'watch initial/current isolation, DB-only changes, start/end, membership loss, cancellation (durable wakes: $futureCallsEnabled)',
+          () async {
+            await pair('alice', 'bob');
+            final fallback = await photo('bob');
+            final surprise = await photo('alice', 11);
+            final otherSession = builder.build();
+            final ownSession = asUser('bob').build();
+            final service = WidgetTimelineService(
+              policy: WidgetSchedulePolicy(
+                futureCallsEnabled: futureCallsEnabled,
+              ),
+            );
+            // Direct endpoint stream has the same production lifecycle, permitting
+            // explicit cancellation assertions without test transport buffering.
+            final iterator = StreamIterator(
+              WidgetScheduleEndpoint(
+                service: service,
+              ).watchTimeline(ownSession),
+            );
+            expect(
+              await iterator.moveNext().timeout(const Duration(seconds: 5)),
+              isTrue,
+            );
+            expect(iterator.current.recipientId, 'bob');
+            expect(iterator.current.currentAssetId, isNull);
+            var changed = iterator.moveNext();
+            final bob = await member('bob');
+            await WidgetFallbackRecord.db.insertRow(
+              otherSession,
+              WidgetFallbackRecord(
+                coupleId: bob.coupleId,
+                recipientMemberId: bob.id!,
+                assetId: UuidValue.fromString(fallback.assetId),
+              ),
+            ); // No local event.
+            expect(await changed.timeout(const Duration(seconds: 5)), isTrue);
+            expect(iterator.current.currentAssetId, fallback.assetId);
+            final now = DateTime.now().toUtc();
+            changed = iterator.moveNext();
+            await service.create(
+              otherSession,
+              'alice',
+              surprise.assetId,
+              now.add(const Duration(seconds: 2)),
+              now.add(const Duration(seconds: 4)),
+              uuid(),
+            );
+            expect(
+              await FutureCallEntry.db.count(otherSession),
+              futureCallsEnabled ? 2 : 0,
+            );
+            expect(await changed.timeout(const Duration(seconds: 5)), isTrue);
+            expect(iterator.current.currentAssetId, fallback.assetId);
+            expect(iterator.current.schedules.single.recipientId, 'bob');
+            final senderView = await endpoints.widgetSchedule
+                .watchTimeline(asUser('alice'))
+                .first;
+            expect(senderView.recipientId, 'alice');
+            expect(senderView.schedules, isEmpty);
+            expect(senderView.currentAssetId, isNull);
+            expect(
+              await iterator.moveNext().timeout(const Duration(seconds: 5)),
+              isTrue,
+            );
+            expect(iterator.current.currentAssetId, surprise.assetId);
+            expect(
+              await iterator.moveNext().timeout(const Duration(seconds: 5)),
+              isTrue,
+            );
+            expect(iterator.current.currentAssetId, fallback.assetId);
+            expect(iterator.current.schedules, isEmpty);
+            changed = iterator.moveNext();
+            await CoupleMember.db.deleteRow(otherSession, bob);
+            await expectLater(
+              changed.timeout(const Duration(seconds: 5)),
+              throwsA(failure('not_paired')),
+            );
+            await iterator.cancel().timeout(const Duration(seconds: 2));
+            await ownSession.close();
+            // A fresh complete membership can open and immediately cancel a watcher.
+            await pair('charlie', 'dave');
+            final cancellable = asUser('charlie').build();
+            final watch = StreamIterator(
+              WidgetScheduleEndpoint().watchTimeline(cancellable),
+            );
+            await watch.moveNext();
+            await watch.cancel().timeout(const Duration(seconds: 2));
+            await cancellable.close();
+            await otherSession.close();
+          },
+        );
+      }
 
       test(
         'database FK/check invariants reject cross-couple assets/members and malformed windows',
@@ -910,6 +1035,69 @@ void main() {
       futureCallExecutionEnabled: false,
       futureCall: const FutureCallConfig(enabled: true),
     ),
+    testServerOutputMode: TestServerOutputMode.silent,
+  );
+
+  withServerpod(
+    'Serverpod future-call feature disabled',
+    (builder, endpoints) {
+      test(
+        'official feature switch prevents wake writes even with enabled policy',
+        () async {
+          TestSessionBuilder asUser(String id) => builder.copyWith(
+            authentication: AuthenticationOverride.authenticationInfo(id, {}),
+          );
+          final pending = await endpoints.pairing.createCouple(asUser('alice'));
+          await endpoints.pairing.joinByCode(
+            asUser('bob'),
+            pending.pairingCode!,
+          );
+          final pixels = image.Image(width: 2, height: 2)
+            ..setPixelRgb(0, 0, 10, 20, 30);
+          final asset = await endpoints.media.uploadPhoto(
+            asUser('alice'),
+            ByteData.sublistView(image.encodePng(pixels)),
+            uuid(),
+          );
+          final session = builder.build();
+          expect(session.serverpod.config.futureCall.enabled, isFalse);
+          final now = DateTime.now().toUtc();
+          await endpoints.widgetSchedule.createSchedule(
+            asUser('alice'),
+            asset.assetId,
+            now,
+            now.add(const Duration(hours: 1)),
+            uuid(),
+          );
+          await WidgetTimelineService(
+            policy: const WidgetSchedulePolicy(),
+          ).create(
+            session,
+            'alice',
+            asset.assetId,
+            now,
+            now.add(const Duration(hours: 1)),
+            uuid(),
+          );
+          expect(await WidgetScheduleRecord.db.count(session), 2);
+          expect(await FutureCallEntry.db.count(session), 0);
+          expect(
+            (await endpoints.widgetSchedule.currentTimeline(
+              asUser('bob'),
+            )).currentAssetId,
+            asset.assetId,
+          );
+          await session.serverpod.storage['private']!.deleteFile(
+            session: session,
+            path: (await MediaRecord.db.find(session)).single.storagePath,
+          );
+        },
+      );
+    },
+    rollbackDatabase: RollbackDatabase.disabled,
+    ephemeralDatabase: true,
+    configOverride: (config) =>
+        config.copyWith(futureCall: const FutureCallConfig(enabled: false)),
     testServerOutputMode: TestServerOutputMode.silent,
   );
 }
