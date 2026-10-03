@@ -4,7 +4,8 @@ import '../domain/couple.dart';
 import '../../pairing/domain/pairing_code.dart';
 import 'couple_repository.dart';
 
-/// Supabase-backed pairing. Tables and RLS live in `supabase/migrations`.
+/// Legacy Supabase-backed pairing, not selected by app startup.
+/// Tables and RLS live in `supabase/migrations`.
 ///
 /// The `couples` row carries `member_ids uuid[]` and a nullable, unique
 /// `pairing_code` that is set while the couple is pending and cleared once the

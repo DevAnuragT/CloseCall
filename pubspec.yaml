@@ -19,7 +19,8 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.5
+  sdk: ^3.12.2
+  flutter: '>=3.44.4'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -39,7 +40,12 @@ dependencies:
   meta: ^1.15.0
   firebase_core: ^4.15.0
   supabase_flutter: ^2.18.0
-  flutter_dotenv: ^6.0.1
+  serverpod_flutter: 4.0.3
+  serverpod_auth_idp_flutter: 4.0.3
+  closecall_client:
+    path: closecall_client
+  home_widget: ^0.10.0
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
@@ -62,11 +68,6 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-
-  # Local secrets, loaded at runtime via flutter_dotenv. Gitignored; see
-  # .env.example for the required keys.
-  assets:
-    - .env
 
   # To add assets to your application, add an assets section, like this:
   # assets:

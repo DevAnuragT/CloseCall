@@ -12,7 +12,19 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.6'
           cache: true
       - run: flutter pub get
+      - run: dart pub get
+        working-directory: closecall_client
+      - run: dart pub get
+        working-directory: closecall_server
+      - run: dart run scripts/bootstrap_serverpod.dart
       - run: flutter analyze
       - run: flutter test
+      - run: dart analyze
+        working-directory: closecall_client
+      - run: dart analyze
+        working-directory: closecall_server
+      - run: dart test
+        working-directory: closecall_server

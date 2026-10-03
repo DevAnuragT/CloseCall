@@ -1,0 +1,8 @@
+anonymousIdp:
+  - login:
+jwtRefresh:
+  - refreshAccessToken:
+pairing:
+  - createCouple:
+  - joinByCode:
+  - currentCouple:

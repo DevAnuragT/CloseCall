@@ -1,0 +1,22 @@
+# Supply real external hosts here or through SERVERPOD_* configuration overrides.
+# No dataPath: production must use managed/external PostgreSQL.
+apiServer:
+  port: 8080
+  publicHost: api.closecall.invalid
+  publicPort: 443
+  publicScheme: https
+insightsServer:
+  port: 8081
+  publicHost: insights.closecall.invalid
+  publicPort: 443
+  publicScheme: https
+database:
+  host: database.closecall.invalid
+  port: 5432
+  name: closecall
+  user: closecall
+  requireSsl: true
+sessionLogs:
+  persistentEnabled: false
+  consoleEnabled: true
+maxRequestSize: 524288

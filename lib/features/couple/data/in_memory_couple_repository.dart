@@ -6,7 +6,9 @@ import 'couple_repository.dart';
 
 /// In-memory [CoupleRepository] for tests and offline demos. Not persistent.
 class InMemoryCoupleRepository implements CoupleRepository {
-  InMemoryCoupleRepository({Random? random}) : _random = random;
+  InMemoryCoupleRepository({Random? random}) : this._(random);
+
+  InMemoryCoupleRepository._(this._random);
 
   final Random? _random;
 
@@ -49,9 +51,7 @@ class InMemoryCoupleRepository implements CoupleRepository {
     if (couple.memberIds.contains(userId)) {
       throw const PairingException(PairingError.cannotPairWithSelf);
     }
-    final updated = couple.copyWith(
-      memberIds: [...couple.memberIds, userId],
-    );
+    final updated = couple.copyWith(memberIds: [...couple.memberIds, userId]);
     _couples[coupleId] = updated;
     _pendingCodes.remove(normalized);
     return updated;

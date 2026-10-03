@@ -2,9 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
 
-/// Initializes the Supabase client once at startup. Safe to call when config
-/// is missing — it simply no-ops so the app (and widget tests) still run with
-/// mock data until credentials are wired in.
+/// Legacy, explicitly invoked Supabase initialization. The app startup does
+/// not select this backend; live pairing uses Serverpod instead.
 abstract final class SupabaseBootstrap {
   static bool _initialized = false;
 

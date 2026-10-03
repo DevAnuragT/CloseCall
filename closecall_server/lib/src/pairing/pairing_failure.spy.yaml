@@ -1,0 +1,4 @@
+# Stable codes: invalid_code, code_not_found, already_paired, cannot_pair_with_self.
+exception: PairingFailure
+fields:
+  code: String

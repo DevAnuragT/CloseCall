@@ -1,20 +1,37 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+/// Build-time configuration; no secrets file or bundled .env is required.
+class AppConfig {
+  AppConfig({String serverpodUrl = ''})
+    : serverpodUrl = _normalizeUrl(serverpodUrl);
 
-/// Runtime configuration, loaded from a gitignored `.env` file at startup
-/// (see `.env.example` for the keys). Nothing sensitive lives in source
-/// control.
-///
-/// The Supabase *publishable/anon* key is safe to ship in a client **only
-/// because every table is protected by Row Level Security** (see
-/// `supabase/migrations`). It is not a service-role key.
-abstract final class AppConfig {
-  static String _get(String key) =>
-      dotenv.isInitialized ? (dotenv.maybeGet(key) ?? '') : '';
+  factory AppConfig.fromEnvironment() =>
+      AppConfig(serverpodUrl: const String.fromEnvironment('SERVERPOD_URL'));
 
-  static String get supabaseUrl => _get('SUPABASE_URL');
-  static String get supabaseAnonKey => _get('SUPABASE_ANON_KEY');
+  /// null means intentional, offline demo mode. Invalid URLs throw instead.
+  final String? serverpodUrl;
+  bool get isDemo => serverpodUrl == null;
 
-  /// True when both Supabase values were provided in `.env`.
+  static String? _normalizeUrl(String raw) {
+    if (raw.trim().isEmpty) return null;
+    final uri = Uri.tryParse(raw.trim());
+    if (uri == null ||
+        !['http', 'https'].contains(uri.scheme) ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw const FormatException(
+        'SERVERPOD_URL must be an absolute HTTP(S) URL without credentials, '
+        'query parameters, or a fragment.',
+      );
+    }
+    final url = uri.toString();
+    return url.endsWith('/') ? url : '$url/';
+  }
+
+  // Retained only for explicitly invoked legacy Supabase code. Startup never
+  // reads these or initializes Supabase.
+  static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
   static bool get hasSupabase =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 }

@@ -1,0 +1,8 @@
+class: PairingState
+fields:
+  coupleId: String
+  memberIds: List<String>
+  partnerNickname: String?
+  anniversary: DateTime?
+  themeKey: String, default='blush'
+  pairingCode: String?

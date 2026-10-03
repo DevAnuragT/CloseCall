@@ -1,0 +1,143 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import '../../auth/data/auth_session.dart';
+import '../../couple/data/couple_repository.dart';
+import '../../couple/domain/couple.dart';
+
+/// Owns async lifecycle; never uses mocks to mask a backend failure.
+class PairingController extends ChangeNotifier {
+  PairingController({required this.session, required this.repository})
+    : _identity = session.userId {
+    session.addListener(_authChanged);
+  }
+
+  final AuthSession session;
+  final CoupleRepository repository;
+  String? _identity;
+  int _authRevision = 0;
+  bool _disposed = false;
+  bool _reloadAfter = false;
+  bool initialized = false;
+  bool hasLoadedPairing = false;
+  bool busy = false;
+  Object? error;
+  Couple? couple;
+  String? inviteCode;
+  Future<void> Function()? _retry;
+
+  String? get userId => session.userId;
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  void _authChanged() {
+    if (_identity == userId) return; // Token refresh is not an identity change.
+    _identity = userId;
+    _authRevision++;
+    couple = null;
+    inviteCode = null;
+    hasLoadedPairing = false;
+    error = null;
+    _retry = null;
+    _notify();
+    if (!initialized || userId == null) return;
+    if (busy) {
+      _reloadAfter = true;
+    } else {
+      unawaited(refresh());
+    }
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (busy || _disposed) return;
+    busy = true;
+    error = null;
+    _retry = action;
+    _notify();
+    try {
+      await action();
+      _retry = null;
+    } catch (failure) {
+      error = failure;
+      _retry = action;
+    } finally {
+      busy = false;
+      _notify();
+      if (_reloadAfter && !_disposed) {
+        _reloadAfter = false;
+        unawaited(refresh());
+      }
+    }
+  }
+
+  Future<void> initialize() => _run(() async {
+    await session.initialize();
+    initialized = true;
+    await _load();
+  });
+
+  Future<void> signIn() => _run(() async {
+    // If sign-in succeeded but loading pairing failed, retry only the read;
+    // never create a second guest identity as a network recovery mechanism.
+    if (userId == null) await session.signInAnonymously();
+    await _load();
+  });
+
+  Future<void> signOut() => _run(session.signOut);
+
+  Future<void> refresh() => _run(_load);
+
+  Future<void> retry() async {
+    final action = _retry;
+    if (action != null) await _run(action);
+  }
+
+  Future<void> _load() async {
+    _reloadAfter = false;
+    final id = userId;
+    final revision = _authRevision;
+    if (id == null) return;
+    final result = await repository.coupleForUser(id);
+    if (!_isCurrent(id, revision)) return;
+    couple = result;
+    hasLoadedPairing = true;
+    inviteCode = repository is PairingCodeReader
+        ? (repository as PairingCodeReader).currentInviteCode
+        : null;
+  }
+
+  bool _isCurrent(String id, int revision) =>
+      !_disposed && id == userId && revision == _authRevision;
+
+  Future<void> createInvite() => _run(() async {
+    final id = userId;
+    final revision = _authRevision;
+    if (id == null) throw StateError('Sign in before pairing.');
+    final result = await repository.createCouple(id);
+    if (!_isCurrent(id, revision)) return;
+    couple = result.couple;
+    inviteCode = result.code;
+    hasLoadedPairing = true;
+  });
+
+  Future<void> join(String code) => _run(() async {
+    final id = userId;
+    final revision = _authRevision;
+    if (id == null) throw StateError('Sign in before pairing.');
+    final result = await repository.joinByCode(id, code);
+    if (!_isCurrent(id, revision)) return;
+    couple = result;
+    inviteCode = null;
+    hasLoadedPairing = true;
+  });
+
+  @override
+  void dispose() {
+    _disposed = true;
+    session.removeListener(_authChanged);
+    super.dispose();
+  }
+}

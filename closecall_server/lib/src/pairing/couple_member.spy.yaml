@@ -1,0 +1,16 @@
+class: CoupleMember
+table: closecall_couple_member
+serverOnly: true
+fields:
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  userIdentifier: String
+  # A non-null boolean gives exactly two possible slots, without a SQL CHECK.
+  # Combined with the unique index, a third member is impossible even via SQL.
+  creatorSlot: bool
+indexes:
+  closecall_member_user_unique:
+    fields: userIdentifier
+    unique: true
+  closecall_member_slot_unique:
+    fields: coupleId, creatorSlot
+    unique: true

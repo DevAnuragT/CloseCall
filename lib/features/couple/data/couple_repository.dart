@@ -25,7 +25,7 @@ class PairingResult {
 }
 
 /// Reads and mutates couple/pairing state. The in-memory implementation backs
-/// tests and offline demos; the Supabase implementation backs production.
+/// tests and offline demos; the Serverpod implementation backs live pairing.
 abstract interface class CoupleRepository {
   /// Starts a pairing for [userId], returning a fresh invite code. If the user
   /// already has a pending couple, its existing code is returned.
@@ -37,4 +37,9 @@ abstract interface class CoupleRepository {
 
   /// The couple [userId] belongs to, or null if unpaired.
   Future<Couple?> coupleForUser(String userId);
+}
+
+/// Invite code returned by the most recent server pairing response.
+abstract interface class PairingCodeReader {
+  String? get currentInviteCode;
 }

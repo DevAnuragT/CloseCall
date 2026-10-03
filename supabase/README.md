@@ -1,5 +1,9 @@
 # CloseCall — Supabase setup
 
+> Legacy setup, retained for migration reference. The app now selects Serverpod
+> through `SERVERPOD_URL` and never initializes Supabase at startup. `.env` is no
+> longer loaded or bundled. See `../docs/serverpod-setup.md` for current setup.
+
 ## 1. Run the migrations
 
 In the Supabase dashboard → **SQL Editor**, run these in order:

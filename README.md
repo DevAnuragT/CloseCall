@@ -1,17 +1,96 @@
-# closecall
+# CloseCall
 
-A new Flutter project.
+A private couples app: decorate a photo and, eventually, schedule it on your
+partner's home-screen widget. Flutter frontend; Serverpod authoritative backend.
 
-## Getting Started
+## Current status
 
-This project is a starting point for a Flutter application.
+- Implemented: Flutter navigation/theme, sample dashboard, image editor/export,
+  shape previews, local Android widget bridge, tested widget schedule resolver.
+- Implemented backend: JWT guest authentication for development/test, PostgreSQL
+  couple membership, authenticated create/join/read pairing APIs, database
+  constraints and concurrent-invite redemption tests, generated Dart client.
+- Implemented frontend integration: explicit demo/live modes, persisted secure
+  session, Profile pairing flow, loading/error/retry and manual refresh.
+- Not implemented: recoverable production sign-in, private photo upload,
+  partner-device delivery, live widget schedules, native background expiry,
+  live mood/reminders, Moments, cloud deployment, or iOS widgets.
 
-A few resources to get you started if this is your first Flutter project:
+The widget editor currently updates the **same device**, not a partner's device.
+Live Home intentionally shows no sample mood/reminder/widget state as real data.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Packages
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```text
+lib/                  Existing Flutter app
+closecall_client/     Generated Serverpod client
+closecall_server/     Auth, pairing, database config and migrations
+supabase/             Legacy migrations retained during transition
+docs/                 Migration plan and setup guide
+```
+
+## Requirements
+
+Flutter **3.47.6** is pinned in `.fvmrc`; Serverpod packages are pinned to **4.0.3**.
+Serverpod 4's minimum is Flutter 3.44.4 / Dart 3.12.2. Use Flutter's bundled Dart.
+Development/test use Serverpod's embedded PostgreSQL; Docker is not required.
+
+This workspace has an ignored SDK at `.tooling/flutter`. It does not change
+machine-wide Flutter. On a fresh clone, install the pinned version independently
+using [Flutter's official archive](https://docs.flutter.dev/install/archive), or
+use FVM if you already have it. Never commit SDK binaries.
+
+## Quick start (existing isolated SDK)
+
+From the repository root:
+
+```sh
+export PATH="$PWD/.tooling/flutter/bin:$PATH"
+flutter pub get
+(cd closecall_client && dart pub get)
+(cd closecall_server && dart pub get)
+dart run scripts/bootstrap_serverpod.dart
+```
+
+Terminal 1, repository root:
+
+```sh
+cd closecall_server
+../.tooling/flutter/bin/dart run bin/main.dart --apply-migrations
+```
+
+Terminal 2, repository root (Android emulator):
+
+```sh
+.tooling/flutter/bin/flutter run \
+  --dart-define=SERVERPOD_URL=http://10.0.2.2:8080/
+```
+
+Open **Profile**, continue as a development guest, then create an invite on one
+device and join by code on the other. Use **Refresh pairing** on the creator
+device; automatic partner subscriptions are a later milestone.
+
+Omit `SERVERPOD_URL` for explicitly labelled offline demo mode. A configured but
+unreachable/invalid server never silently selects demo data. `.env` is not
+required and is no longer bundled or loaded.
+
+## Tests
+
+```sh
+.tooling/flutter/bin/flutter analyze --no-pub
+.tooling/flutter/bin/flutter test --no-pub
+(cd closecall_client && ../.tooling/flutter/bin/dart analyze)
+(cd closecall_server && ../.tooling/flutter/bin/dart analyze)
+(cd closecall_server && ../.tooling/flutter/bin/dart test)
+```
+
+CI pins Flutter, resolves all three packages, generates fresh ignored local
+secrets, and runs frontend/client/server analysis plus Flutter and backend tests.
+
+## Continue
+
+- [Serverpod setup, network addresses, secrets and code generation](docs/serverpod-setup.md)
+- [Migration milestones and acceptance criteria](docs/serverpod-migration-plan.md)
+- `get started.pdf`: hackathon resource sheet; linked official rules require a
+  working full-stack Serverpod backend, run instructions and a demo video under
+  two minutes. AI-assisted development must be disclosed.

@@ -1,0 +1,13 @@
+class: Couple
+table: closecall_couple
+serverOnly: true
+fields:
+  id: UuidValue?, defaultPersist=random
+  partnerNickname: String?
+  anniversary: DateTime?
+  themeKey: String, default='blush'
+  pairingCode: String?
+indexes:
+  closecall_couple_pairing_code_unique:
+    fields: pairingCode
+    unique: true

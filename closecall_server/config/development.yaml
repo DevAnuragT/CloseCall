@@ -1,0 +1,20 @@
+apiServer:
+  port: 8080
+  publicHost: localhost
+  publicPort: 8080
+  publicScheme: http
+insightsServer:
+  port: 8081
+  publicHost: localhost
+  publicPort: 8081
+  publicScheme: http
+database:
+  host: localhost
+  port: 8090
+  name: closecall
+  user: postgres
+  dataPath: .serverpod/development/pgdata
+sessionLogs:
+  persistentEnabled: true
+  consoleEnabled: true
+maxRequestSize: 524288

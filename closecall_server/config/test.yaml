@@ -1,0 +1,21 @@
+apiServer:
+  port: 0
+  publicHost: localhost
+  publicPort: 0
+  publicScheme: http
+insightsServer:
+  port: 0
+  publicHost: localhost
+  publicPort: 0
+  publicScheme: http
+database:
+  host: localhost
+  port: 9090
+  name: closecall_test
+  user: postgres
+  dataPath: .serverpod/test/pgdata
+sessionLogs:
+  persistentEnabled: false
+  consoleEnabled: true
+futureCall:
+  enabled: false
