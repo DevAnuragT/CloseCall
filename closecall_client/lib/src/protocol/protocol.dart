@@ -23,11 +23,17 @@ import 'media/media_asset.dart' as _ijjfwapm;
 import 'media/media_failure.dart' as _iuzipihh;
 import 'pairing/pairing_failure.dart' as _ium95mnn;
 import 'pairing/pairing_state.dart' as _iyyqlhox;
+import 'widget/schedule_failure.dart' as _ipjphtkx;
+import 'widget/widget_schedule_entry.dart' as _iro0jbgj;
+import 'widget/widget_timeline.dart' as _i8hd5s9w;
 export 'auth/account_state.dart';
 export 'media/media_asset.dart';
 export 'media/media_failure.dart';
 export 'pairing/pairing_failure.dart';
 export 'pairing/pairing_state.dart';
+export 'widget/schedule_failure.dart';
+export 'widget/widget_schedule_entry.dart';
+export 'widget/widget_timeline.dart';
 export 'client.dart';
 
 class Protocol extends _isc.SerializationManager {
@@ -76,6 +82,15 @@ class Protocol extends _isc.SerializationManager {
     if (t == _iyyqlhox.PairingState) {
       return _iyyqlhox.PairingState.fromJson(data) as T;
     }
+    if (t == _ipjphtkx.ScheduleFailure) {
+      return _ipjphtkx.ScheduleFailure.fromJson(data) as T;
+    }
+    if (t == _iro0jbgj.WidgetScheduleEntry) {
+      return _iro0jbgj.WidgetScheduleEntry.fromJson(data) as T;
+    }
+    if (t == _i8hd5s9w.WidgetTimeline) {
+      return _i8hd5s9w.WidgetTimeline.fromJson(data) as T;
+    }
     if (t == _isc.getType<_ib26upii.AccountState?>()) {
       return (data != null ? _ib26upii.AccountState.fromJson(data) : null) as T;
     }
@@ -92,8 +107,28 @@ class Protocol extends _isc.SerializationManager {
     if (t == _isc.getType<_iyyqlhox.PairingState?>()) {
       return (data != null ? _iyyqlhox.PairingState.fromJson(data) : null) as T;
     }
+    if (t == _isc.getType<_ipjphtkx.ScheduleFailure?>()) {
+      return (data != null ? _ipjphtkx.ScheduleFailure.fromJson(data) : null)
+          as T;
+    }
+    if (t == _isc.getType<_iro0jbgj.WidgetScheduleEntry?>()) {
+      return (data != null
+              ? _iro0jbgj.WidgetScheduleEntry.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _isc.getType<_i8hd5s9w.WidgetTimeline?>()) {
+      return (data != null ? _i8hd5s9w.WidgetTimeline.fromJson(data) : null)
+          as T;
+    }
     if (t == List<String>) {
       return (data as List).map((e) => deserialize<String>(e)).toList() as T;
+    }
+    if (t == List<_iro0jbgj.WidgetScheduleEntry>) {
+      return (data as List)
+              .map((e) => deserialize<_iro0jbgj.WidgetScheduleEntry>(e))
+              .toList()
+          as T;
     }
     if (t == List<_i7z5ta07.MediaAsset>) {
       return (data as List)
@@ -117,6 +152,9 @@ class Protocol extends _isc.SerializationManager {
       _iuzipihh.MediaFailure => 'MediaFailure',
       _ium95mnn.PairingFailure => 'PairingFailure',
       _iyyqlhox.PairingState => 'PairingState',
+      _ipjphtkx.ScheduleFailure => 'ScheduleFailure',
+      _iro0jbgj.WidgetScheduleEntry => 'WidgetScheduleEntry',
+      _i8hd5s9w.WidgetTimeline => 'WidgetTimeline',
       _ => null,
     };
   }
@@ -141,6 +179,12 @@ class Protocol extends _isc.SerializationManager {
         return 'PairingFailure';
       case _iyyqlhox.PairingState():
         return 'PairingState';
+      case _ipjphtkx.ScheduleFailure():
+        return 'ScheduleFailure';
+      case _iro0jbgj.WidgetScheduleEntry():
+        return 'WidgetScheduleEntry';
+      case _i8hd5s9w.WidgetTimeline():
+        return 'WidgetTimeline';
     }
     className = _iacc.Protocol().getClassNameForObject(data);
     if (className != null) {
@@ -177,6 +221,15 @@ class Protocol extends _isc.SerializationManager {
     }
     if (dataClassName == 'PairingState') {
       return deserialize<_iyyqlhox.PairingState>(data['data']);
+    }
+    if (dataClassName == 'ScheduleFailure') {
+      return deserialize<_ipjphtkx.ScheduleFailure>(data['data']);
+    }
+    if (dataClassName == 'WidgetScheduleEntry') {
+      return deserialize<_iro0jbgj.WidgetScheduleEntry>(data['data']);
+    }
+    if (dataClassName == 'WidgetTimeline') {
+      return deserialize<_i8hd5s9w.WidgetTimeline>(data['data']);
     }
     if (dataClassName.startsWith('serverpod_auth_core.')) {
       data['className'] = dataClassName.substring(20);

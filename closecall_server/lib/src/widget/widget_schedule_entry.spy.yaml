@@ -1,0 +1,9 @@
+class: WidgetScheduleEntry
+fields:
+  scheduleId: String
+  assetId: String
+  senderId: String
+  recipientId: String
+  activeFrom: DateTime
+  activeUntil: DateTime
+  createdAt: DateTime

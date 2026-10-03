@@ -20,6 +20,8 @@ import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
 import 'package:serverpod_auth_idp_server/serverpod_auth_idp_server.dart'
     as _iais;
 import 'auth/account_state.dart' as _ib26upii;
+import 'future_calls_generated_models/widget_timeline_future_call_wake_model.dart'
+    as _iesct24i;
 import 'media/media_asset.dart' as _ijjfwapm;
 import 'media/media_failure.dart' as _iuzipihh;
 import 'media/media_record.dart' as _i6kv8n64;
@@ -27,6 +29,12 @@ import 'pairing/couple.dart' as _iz3xjlbz;
 import 'pairing/couple_member.dart' as _ijn3tadz;
 import 'pairing/pairing_failure.dart' as _ium95mnn;
 import 'pairing/pairing_state.dart' as _iyyqlhox;
+import 'widget/schedule_failure.dart' as _ipjphtkx;
+import 'widget/timeline_notice.dart' as _iulii77s;
+import 'widget/widget_fallback_record.dart' as _i7xena83;
+import 'widget/widget_schedule_entry.dart' as _iro0jbgj;
+import 'widget/widget_schedule_record.dart' as _ipbmbdsw;
+import 'widget/widget_timeline.dart' as _i8hd5s9w;
 export 'auth/account_state.dart';
 export 'media/media_asset.dart';
 export 'media/media_failure.dart';
@@ -35,6 +43,12 @@ export 'pairing/couple.dart';
 export 'pairing/couple_member.dart';
 export 'pairing/pairing_failure.dart';
 export 'pairing/pairing_state.dart';
+export 'widget/schedule_failure.dart';
+export 'widget/timeline_notice.dart';
+export 'widget/widget_fallback_record.dart';
+export 'widget/widget_schedule_entry.dart';
+export 'widget/widget_schedule_record.dart';
+export 'widget/widget_timeline.dart';
 
 class Protocol extends _is.DatabaseSerializationManager {
   Protocol._();
@@ -147,6 +161,23 @@ class Protocol extends _is.DatabaseSerializationManager {
       ],
       indexes: [
         _isp.IndexDefinition(
+          indexName: 'closecall_member_couple_id_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'coupleId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'id',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
           indexName: 'closecall_member_user_unique',
           tableSpace: null,
           elements: [
@@ -256,6 +287,23 @@ class Protocol extends _is.DatabaseSerializationManager {
       ],
       indexes: [
         _isp.IndexDefinition(
+          indexName: 'closecall_media_couple_asset_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'coupleId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'id',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
           indexName: 'closecall_media_request_unique',
           tableSpace: null,
           elements: [
@@ -270,6 +318,242 @@ class Protocol extends _is.DatabaseSerializationManager {
           ],
           type: 'btree',
           isUnique: true,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
+    _isp.TableDefinition(
+      name: 'closecall_widget_fallback',
+      dartName: 'WidgetFallbackRecord',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int?',
+          columnDefault: 'serial',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'recipientMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'assetId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_fallback_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_fallback_fk_1',
+          columns: ['recipientMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_fallback_fk_2',
+          columns: ['assetId'],
+          referenceTable: 'closecall_media',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_widget_fallback_recipient_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'recipientMemberId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
+    _isp.TableDefinition(
+      name: 'closecall_widget_schedule',
+      dartName: 'WidgetScheduleRecord',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue?',
+          columnDefault: 'random',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'assetId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'senderMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'recipientMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'activeFrom',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+        ),
+        _isp.ColumnDefinition(
+          name: 'activeUntil',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+        ),
+        _isp.ColumnDefinition(
+          name: 'createdAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'requestId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'payloadHash',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'cancelledAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_schedule_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_schedule_fk_1',
+          columns: ['assetId'],
+          referenceTable: 'closecall_media',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_schedule_fk_2',
+          columns: ['senderMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_schedule_fk_3',
+          columns: ['recipientMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_widget_request_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'senderMemberId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'requestId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
+          indexName: 'closecall_widget_recipient_idx',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'recipientMemberId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'activeUntil',
+            ),
+          ],
+          type: 'btree',
+          isUnique: false,
           isPrimary: false,
         ),
       ],
@@ -307,6 +591,9 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == _ib26upii.AccountState) {
       return _ib26upii.AccountState.fromJson(data) as T;
     }
+    if (t == _iesct24i.WidgetTimelineFutureCallWakeModel) {
+      return _iesct24i.WidgetTimelineFutureCallWakeModel.fromJson(data) as T;
+    }
     if (t == _ijjfwapm.MediaAsset) {
       return _ijjfwapm.MediaAsset.fromJson(data) as T;
     }
@@ -328,8 +615,32 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == _iyyqlhox.PairingState) {
       return _iyyqlhox.PairingState.fromJson(data) as T;
     }
+    if (t == _ipjphtkx.ScheduleFailure) {
+      return _ipjphtkx.ScheduleFailure.fromJson(data) as T;
+    }
+    if (t == _iulii77s.TimelineNotice) {
+      return _iulii77s.TimelineNotice.fromJson(data) as T;
+    }
+    if (t == _i7xena83.WidgetFallbackRecord) {
+      return _i7xena83.WidgetFallbackRecord.fromJson(data) as T;
+    }
+    if (t == _iro0jbgj.WidgetScheduleEntry) {
+      return _iro0jbgj.WidgetScheduleEntry.fromJson(data) as T;
+    }
+    if (t == _ipbmbdsw.WidgetScheduleRecord) {
+      return _ipbmbdsw.WidgetScheduleRecord.fromJson(data) as T;
+    }
+    if (t == _i8hd5s9w.WidgetTimeline) {
+      return _i8hd5s9w.WidgetTimeline.fromJson(data) as T;
+    }
     if (t == _is.getType<_ib26upii.AccountState?>()) {
       return (data != null ? _ib26upii.AccountState.fromJson(data) : null) as T;
+    }
+    if (t == _is.getType<_iesct24i.WidgetTimelineFutureCallWakeModel?>()) {
+      return (data != null
+              ? _iesct24i.WidgetTimelineFutureCallWakeModel.fromJson(data)
+              : null)
+          as T;
     }
     if (t == _is.getType<_ijjfwapm.MediaAsset?>()) {
       return (data != null ? _ijjfwapm.MediaAsset.fromJson(data) : null) as T;
@@ -353,8 +664,44 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == _is.getType<_iyyqlhox.PairingState?>()) {
       return (data != null ? _iyyqlhox.PairingState.fromJson(data) : null) as T;
     }
+    if (t == _is.getType<_ipjphtkx.ScheduleFailure?>()) {
+      return (data != null ? _ipjphtkx.ScheduleFailure.fromJson(data) : null)
+          as T;
+    }
+    if (t == _is.getType<_iulii77s.TimelineNotice?>()) {
+      return (data != null ? _iulii77s.TimelineNotice.fromJson(data) : null)
+          as T;
+    }
+    if (t == _is.getType<_i7xena83.WidgetFallbackRecord?>()) {
+      return (data != null
+              ? _i7xena83.WidgetFallbackRecord.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _is.getType<_iro0jbgj.WidgetScheduleEntry?>()) {
+      return (data != null
+              ? _iro0jbgj.WidgetScheduleEntry.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _is.getType<_ipbmbdsw.WidgetScheduleRecord?>()) {
+      return (data != null
+              ? _ipbmbdsw.WidgetScheduleRecord.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _is.getType<_i8hd5s9w.WidgetTimeline?>()) {
+      return (data != null ? _i8hd5s9w.WidgetTimeline.fromJson(data) : null)
+          as T;
+    }
     if (t == List<String>) {
       return (data as List).map((e) => deserialize<String>(e)).toList() as T;
+    }
+    if (t == List<_iro0jbgj.WidgetScheduleEntry>) {
+      return (data as List)
+              .map((e) => deserialize<_iro0jbgj.WidgetScheduleEntry>(e))
+              .toList()
+          as T;
     }
     if (t == List<_ibuid3ro.MediaAsset>) {
       return (data as List)
@@ -377,6 +724,8 @@ class Protocol extends _is.DatabaseSerializationManager {
   static String? getClassNameForType(Type type) {
     return switch (type) {
       _ib26upii.AccountState => 'AccountState',
+      _iesct24i.WidgetTimelineFutureCallWakeModel =>
+        'WidgetTimelineFutureCallWakeModel',
       _ijjfwapm.MediaAsset => 'MediaAsset',
       _iuzipihh.MediaFailure => 'MediaFailure',
       _i6kv8n64.MediaRecord => 'MediaRecord',
@@ -384,6 +733,12 @@ class Protocol extends _is.DatabaseSerializationManager {
       _ijn3tadz.CoupleMember => 'CoupleMember',
       _ium95mnn.PairingFailure => 'PairingFailure',
       _iyyqlhox.PairingState => 'PairingState',
+      _ipjphtkx.ScheduleFailure => 'ScheduleFailure',
+      _iulii77s.TimelineNotice => 'TimelineNotice',
+      _i7xena83.WidgetFallbackRecord => 'WidgetFallbackRecord',
+      _iro0jbgj.WidgetScheduleEntry => 'WidgetScheduleEntry',
+      _ipbmbdsw.WidgetScheduleRecord => 'WidgetScheduleRecord',
+      _i8hd5s9w.WidgetTimeline => 'WidgetTimeline',
       _ => null,
     };
   }
@@ -400,6 +755,8 @@ class Protocol extends _is.DatabaseSerializationManager {
     switch (data) {
       case _ib26upii.AccountState():
         return 'AccountState';
+      case _iesct24i.WidgetTimelineFutureCallWakeModel():
+        return 'WidgetTimelineFutureCallWakeModel';
       case _ijjfwapm.MediaAsset():
         return 'MediaAsset';
       case _iuzipihh.MediaFailure():
@@ -414,6 +771,18 @@ class Protocol extends _is.DatabaseSerializationManager {
         return 'PairingFailure';
       case _iyyqlhox.PairingState():
         return 'PairingState';
+      case _ipjphtkx.ScheduleFailure():
+        return 'ScheduleFailure';
+      case _iulii77s.TimelineNotice():
+        return 'TimelineNotice';
+      case _i7xena83.WidgetFallbackRecord():
+        return 'WidgetFallbackRecord';
+      case _iro0jbgj.WidgetScheduleEntry():
+        return 'WidgetScheduleEntry';
+      case _ipbmbdsw.WidgetScheduleRecord():
+        return 'WidgetScheduleRecord';
+      case _i8hd5s9w.WidgetTimeline():
+        return 'WidgetTimeline';
     }
     className = _iacs.Protocol().getClassNameForObject(data);
     if (className != null) {
@@ -443,6 +812,11 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (dataClassName == 'AccountState') {
       return deserialize<_ib26upii.AccountState>(data['data']);
     }
+    if (dataClassName == 'WidgetTimelineFutureCallWakeModel') {
+      return deserialize<_iesct24i.WidgetTimelineFutureCallWakeModel>(
+        data['data'],
+      );
+    }
     if (dataClassName == 'MediaAsset') {
       return deserialize<_ijjfwapm.MediaAsset>(data['data']);
     }
@@ -463,6 +837,24 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (dataClassName == 'PairingState') {
       return deserialize<_iyyqlhox.PairingState>(data['data']);
+    }
+    if (dataClassName == 'ScheduleFailure') {
+      return deserialize<_ipjphtkx.ScheduleFailure>(data['data']);
+    }
+    if (dataClassName == 'TimelineNotice') {
+      return deserialize<_iulii77s.TimelineNotice>(data['data']);
+    }
+    if (dataClassName == 'WidgetFallbackRecord') {
+      return deserialize<_i7xena83.WidgetFallbackRecord>(data['data']);
+    }
+    if (dataClassName == 'WidgetScheduleEntry') {
+      return deserialize<_iro0jbgj.WidgetScheduleEntry>(data['data']);
+    }
+    if (dataClassName == 'WidgetScheduleRecord') {
+      return deserialize<_ipbmbdsw.WidgetScheduleRecord>(data['data']);
+    }
+    if (dataClassName == 'WidgetTimeline') {
+      return deserialize<_i8hd5s9w.WidgetTimeline>(data['data']);
     }
     if (dataClassName.startsWith('serverpod_auth_core.')) {
       data['className'] = dataClassName.substring(20);
@@ -511,6 +903,10 @@ class Protocol extends _is.DatabaseSerializationManager {
         return _iz3xjlbz.Couple.t;
       case _ijn3tadz.CoupleMember:
         return _ijn3tadz.CoupleMember.t;
+      case _i7xena83.WidgetFallbackRecord:
+        return _i7xena83.WidgetFallbackRecord.t;
+      case _ipbmbdsw.WidgetScheduleRecord:
+        return _ipbmbdsw.WidgetScheduleRecord.t;
     }
     return null;
   }

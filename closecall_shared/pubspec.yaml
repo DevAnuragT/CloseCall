@@ -1,0 +1,8 @@
+name: closecall_shared
+description: Pure Dart widget schedule and resolver shared by CloseCall clients and server.
+version: 1.0.0
+publish_to: none
+environment:
+  sdk: ^3.12.2
+dependencies:
+  meta: ^1.17.0

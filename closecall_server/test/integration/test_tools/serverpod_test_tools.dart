@@ -16,10 +16,17 @@ import 'dart:io' as _idi;
 import 'dart:typed_data' as _idt;
 import 'package:closecall_server/src/generated/auth/account_state.dart'
     as _iafuimoa;
+import 'package:closecall_server/src/generated/future_calls.dart' as _inx26qnf;
+import 'package:closecall_server/src/generated/future_calls_generated_models/widget_timeline_future_call_wake_model.dart'
+    as _ihjesomv;
 import 'package:closecall_server/src/generated/media/media_asset.dart'
     as _ibuid3ro;
 import 'package:closecall_server/src/generated/pairing/pairing_state.dart'
     as _iye5whdh;
+import 'package:closecall_server/src/generated/widget/widget_schedule_entry.dart'
+    as _i8asvb62;
+import 'package:closecall_server/src/generated/widget/widget_timeline.dart'
+    as _ikemxydo;
 import 'package:serverpod/serverpod.dart' as _is;
 import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
     as _iacs;
@@ -157,6 +164,8 @@ void withServerpod(
 }
 
 class TestEndpoints {
+  late final futureCalls = _FutureCalls();
+
   late final _AccountEndpoint account;
 
   late final _AnonymousIdpEndpoint anonymousIdp;
@@ -168,6 +177,8 @@ class TestEndpoints {
   late final _MediaEndpoint media;
 
   late final _PairingEndpoint pairing;
+
+  late final _WidgetScheduleEndpoint widgetSchedule;
 }
 
 class _InternalTestEndpoints extends TestEndpoints
@@ -183,7 +194,12 @@ class _InternalTestEndpoints extends TestEndpoints
     jwtRefresh = _JwtRefreshEndpoint(endpoints, serializationManager);
     media = _MediaEndpoint(endpoints, serializationManager);
     pairing = _PairingEndpoint(endpoints, serializationManager);
+    widgetSchedule = _WidgetScheduleEndpoint(endpoints, serializationManager);
   }
+}
+
+class _FutureCalls {
+  late final widgetTimeline = _WidgetTimelineFutureCall();
 }
 
 class _AccountEndpoint {
@@ -775,5 +791,224 @@ class _PairingEndpoint {
         await _localUniqueSession.close();
       }
     });
+  }
+}
+
+class _WidgetScheduleEndpoint {
+  _WidgetScheduleEndpoint(this._endpointDispatch, this._serializationManager);
+
+  final _is.EndpointDispatch _endpointDispatch;
+
+  final _is.SerializationManager _serializationManager;
+
+  _ida.Future<_ikemxydo.WidgetTimeline> currentTimeline(
+    _ist.TestSessionBuilder sessionBuilder,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetSchedule',
+            method: 'currentTimeline',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetSchedule',
+          methodName: 'currentTimeline',
+          parameters: _ist.testObjectToJson({}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_ikemxydo.WidgetTimeline>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_ikemxydo.WidgetTimeline> partnerTimeline(
+    _ist.TestSessionBuilder sessionBuilder,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetSchedule',
+            method: 'partnerTimeline',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetSchedule',
+          methodName: 'partnerTimeline',
+          parameters: _ist.testObjectToJson({}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_ikemxydo.WidgetTimeline>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_i8asvb62.WidgetScheduleEntry> createSchedule(
+    _ist.TestSessionBuilder sessionBuilder,
+    String assetId,
+    DateTime activeFrom,
+    DateTime activeUntil,
+    String requestId,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetSchedule',
+            method: 'createSchedule',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetSchedule',
+          methodName: 'createSchedule',
+          parameters: _ist.testObjectToJson({
+            'assetId': assetId,
+            'activeFrom': activeFrom,
+            'activeUntil': activeUntil,
+            'requestId': requestId,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_i8asvb62.WidgetScheduleEntry>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_ikemxydo.WidgetTimeline> setFallback(
+    _ist.TestSessionBuilder sessionBuilder,
+    String assetId,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetSchedule',
+            method: 'setFallback',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetSchedule',
+          methodName: 'setFallback',
+          parameters: _ist.testObjectToJson({'assetId': assetId}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_ikemxydo.WidgetTimeline>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<void> cancelSchedule(
+    _ist.TestSessionBuilder sessionBuilder,
+    String scheduleId,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetSchedule',
+            method: 'cancelSchedule',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetSchedule',
+          methodName: 'cancelSchedule',
+          parameters: _ist.testObjectToJson({'scheduleId': scheduleId}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<void>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Stream<_ikemxydo.WidgetTimeline> watchTimeline(
+    _ist.TestSessionBuilder sessionBuilder,
+  ) {
+    var _localTestStreamManager =
+        _ist.TestStreamManager<_ikemxydo.WidgetTimeline>();
+    _ist.callStreamFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetSchedule',
+            method: 'watchTimeline',
+          );
+      var _localCallContext = await _endpointDispatch
+          .getMethodStreamCallContext(
+            createSessionCallback: (_) => _localUniqueSession,
+            endpointPath: 'widgetSchedule',
+            methodName: 'watchTimeline',
+            arguments: {},
+            requestedInputStreams: [],
+            serializationManager: _serializationManager,
+          );
+      await _localTestStreamManager.callStreamMethod(
+        _localCallContext,
+        _localUniqueSession,
+        {},
+      );
+    }, _localTestStreamManager.outputStreamController);
+    return _localTestStreamManager.outputStreamController.stream;
+  }
+}
+
+class _WidgetTimelineFutureCall {
+  Future<void> wake(
+    _ist.TestSessionBuilder sessionBuilder,
+    String scheduleId,
+  ) async {
+    var object = _ihjesomv.WidgetTimelineFutureCallWakeModel(
+      scheduleId: scheduleId,
+    );
+    var _localUniqueSession =
+        (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild();
+    try {
+      await _inx26qnf.WidgetTimelineWakeFutureCall().invoke(
+        _localUniqueSession,
+        object,
+      );
+    } finally {
+      await _localUniqueSession.close();
+    }
   }
 }

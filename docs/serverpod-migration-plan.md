@@ -19,10 +19,13 @@ Supabase is a legacy implementation during migration, not the target backend.
    email delivery and physical-device validation remain pending.
 3. **Private media (implemented, locally verified):** pick a photo, export the editor image, upload through
    authorised Serverpod endpoints, and retrieve it only as a couple member.
-4. **Schedules:** store UTC windows and fallback assets; reuse the tested resolver
-   rules; publish transitions through Serverpod and cache schedules on devices.
-5. **Two-device delivery:** recipient refresh, native Android widget updates,
-   background expiry/revert, offline recovery, and reboot testing.
+4. **Schedules (implemented, locally verified):** store UTC windows and fallback
+   assets; reuse shared resolver rules; publish transitions through Serverpod,
+   durable future-call wakes, live foreground timelines, and opt-in local cache
+   sync. Closed-app delivery remains pending.
+5. **Two-device delivery:** recipient refresh and foreground Android widget
+   application are implemented. Background expiry/revert, offline recovery,
+   reboot testing and physical-device validation remain pending.
 6. **Submission:** cloud deployment, reproducible test build, real two-device demo,
    English setup instructions, AI-use disclosure, and a public video under two
    minutes. Submit before 14 October 2026 23:59 CEST / 15 October 03:29 IST.

@@ -53,13 +53,14 @@ class _LiveApp extends StatefulWidget {
   State<_LiveApp> createState() => _LiveAppState();
 }
 
-class _LiveAppState extends State<_LiveApp> {
+class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
   ServerpodBootstrap? _backend;
   Object? _error;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _connect();
   }
 
@@ -75,8 +76,14 @@ class _LiveAppState extends State<_LiveApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _backend?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _backend?.schedules.setForeground(state == AppLifecycleState.resumed);
   }
 
   @override
@@ -114,6 +121,7 @@ class _LiveAppState extends State<_LiveApp> {
         pairing: backend.pairing,
         account: backend.account,
         media: backend.media,
+        schedules: backend.schedules,
       ),
     );
   }

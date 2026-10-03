@@ -8,6 +8,9 @@ fields:
   # Combined with the unique index, a third member is impossible even via SQL.
   creatorSlot: bool
 indexes:
+  closecall_member_couple_id_unique:
+    fields: coupleId, id
+    unique: true
   closecall_member_user_unique:
     fields: userIdentifier
     unique: true

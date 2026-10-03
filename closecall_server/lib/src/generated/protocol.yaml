@@ -21,3 +21,10 @@ pairing:
   - createCouple:
   - joinByCode:
   - currentCouple:
+widgetSchedule:
+  - currentTimeline:
+  - partnerTimeline:
+  - createSchedule:
+  - setFallback:
+  - cancelSchedule:
+  - watchTimeline:

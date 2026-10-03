@@ -12,6 +12,9 @@ fields:
   contentHash: String
   storagePath: String
 indexes:
+  closecall_media_couple_asset_unique:
+    fields: coupleId, id
+    unique: true
   closecall_media_request_unique:
     fields: coupleId, requestId
     unique: true

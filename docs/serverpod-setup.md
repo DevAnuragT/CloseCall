@@ -63,7 +63,8 @@ production. Email accounts are recoverable; they do not automatically acquire
 an existing guest's couple/media data. Actual deployed email delivery still
 requires Serverpod Cloud email access or a configured alternative provider.
 Pairing and private photo sharing are live. Widget application is explicit and
-local; automatic partner updates and schedules are subsequent milestones.
+local. Foreground schedule timelines and opt-in auto-sync are live while app is
+open. Closed-app automatic delivery is not implemented.
 
 ## Code generation and migrations
 
@@ -112,6 +113,9 @@ pairing schema; Supabase SQL is not applied to the Serverpod database.
   account unlink/deletion behaviour before public release.
 - Implement scheduling and automatic recipient refresh. Database-backed private
   media works locally; choose appropriate object storage for deployment scale.
+- Schedules use durable Serverpod future-call wakeups plus foreground stream/DB
+  reconciliation. Verify Serverpod Cloud plan supports future calls; Starter
+  currently disables them.
 - Verify the hosting plan supports future calls; Starter currently disables them.
 - Verify physical-device/release networking, secure session restoration and the
   genuine two-device widget flow before claiming end-to-end readiness.

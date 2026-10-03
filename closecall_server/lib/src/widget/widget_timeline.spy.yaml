@@ -1,0 +1,9 @@
+class: WidgetTimeline
+fields:
+  coupleId: String
+  recipientId: String
+  fallbackAssetId: String?
+  currentAssetId: String?
+  nextTransition: DateTime?
+  schedules: List<WidgetScheduleEntry>
+  serverTime: DateTime

@@ -88,6 +88,13 @@ packages:
       relative: true
     source: path
     version: "1.0.0"
+  closecall_shared:
+    dependency: "direct main"
+    description:
+      path: closecall_shared
+      relative: true
+    source: path
+    version: "1.0.0"
   code_assets:
     dependency: transitive
     description:

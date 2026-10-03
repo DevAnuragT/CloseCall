@@ -1,0 +1,3 @@
+exception: ScheduleFailure
+fields:
+  code: String

@@ -1,0 +1,24 @@
+class: WidgetScheduleRecord
+table: closecall_widget_schedule
+serverOnly: true
+# The appended scheduling migration adds composite same-couple foreign keys
+# and window/distinct-member CHECKs, unsupported by the model DSL. Preserve
+# those SQL constraints when reviewing subsequent migrations/repairs.
+fields:
+  id: UuidValue?, defaultPersist=random
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  assetId: UuidValue, relation(parent=closecall_media, onDelete=Cascade)
+  senderMemberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  recipientMemberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  activeFrom: DateTime
+  activeUntil: DateTime
+  createdAt: DateTime, default=now
+  requestId: String
+  payloadHash: String
+  cancelledAt: DateTime?
+indexes:
+  closecall_widget_request_unique:
+    fields: senderMemberId, requestId
+    unique: true
+  closecall_widget_recipient_idx:
+    fields: recipientMemberId, activeUntil

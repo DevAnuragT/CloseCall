@@ -7,6 +7,9 @@ environment:
   sdk: ^3.12.2
 
 dependencies:
+  closecall_shared:
+    path: ../closecall_shared
+  clock: 1.1.2
   crypto: 3.0.7
   image: 4.10.1
   serverpod: 4.0.3

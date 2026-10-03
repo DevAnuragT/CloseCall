@@ -1,0 +1,4 @@
+class: TimelineNotice
+serverOnly: true
+fields:
+  recipientId: String

@@ -18,12 +18,16 @@ jobs:
       - run: dart pub get
         working-directory: closecall_client
       - run: dart pub get
+        working-directory: closecall_shared
+      - run: dart pub get
         working-directory: closecall_server
       - run: dart run scripts/bootstrap_serverpod.dart
       - run: flutter analyze
       - run: flutter test
       - run: dart analyze
         working-directory: closecall_client
+      - run: dart analyze
+        working-directory: closecall_shared
       - run: dart analyze
         working-directory: closecall_server
       - run: dart test

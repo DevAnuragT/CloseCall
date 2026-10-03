@@ -18,6 +18,10 @@ import 'package:closecall_client/src/protocol/media/media_asset.dart'
     as _i7z5ta07;
 import 'package:closecall_client/src/protocol/pairing/pairing_state.dart'
     as _i9hl8iq9;
+import 'package:closecall_client/src/protocol/widget/widget_schedule_entry.dart'
+    as _ipgzv14b;
+import 'package:closecall_client/src/protocol/widget/widget_timeline.dart'
+    as _ic1bjjnb;
 import 'package:http/http.dart' as _i85jenna;
 import 'package:serverpod_auth_core_client/serverpod_auth_core_client.dart'
     as _iacc;
@@ -315,6 +319,65 @@ class EndpointPairing extends _isc.EndpointRef {
       );
 }
 
+/// {@category Endpoint}
+class EndpointWidgetSchedule extends _isc.EndpointRef {
+  EndpointWidgetSchedule(_isc.EndpointCaller caller) : super(caller);
+
+  @override
+  String get name => 'widgetSchedule';
+
+  _ida.Future<_ic1bjjnb.WidgetTimeline> currentTimeline() =>
+      caller.callServerEndpoint<_ic1bjjnb.WidgetTimeline>(
+        'widgetSchedule',
+        'currentTimeline',
+        {},
+      );
+
+  _ida.Future<_ic1bjjnb.WidgetTimeline> partnerTimeline() =>
+      caller.callServerEndpoint<_ic1bjjnb.WidgetTimeline>(
+        'widgetSchedule',
+        'partnerTimeline',
+        {},
+      );
+
+  _ida.Future<_ipgzv14b.WidgetScheduleEntry> createSchedule(
+    String assetId,
+    DateTime activeFrom,
+    DateTime activeUntil,
+    String requestId,
+  ) => caller.callServerEndpoint<_ipgzv14b.WidgetScheduleEntry>(
+    'widgetSchedule',
+    'createSchedule',
+    {
+      'assetId': assetId,
+      'activeFrom': activeFrom,
+      'activeUntil': activeUntil,
+      'requestId': requestId,
+    },
+  );
+
+  _ida.Future<_ic1bjjnb.WidgetTimeline> setFallback(String assetId) =>
+      caller.callServerEndpoint<_ic1bjjnb.WidgetTimeline>(
+        'widgetSchedule',
+        'setFallback',
+        {'assetId': assetId},
+      );
+
+  _ida.Future<void> cancelSchedule(String scheduleId) =>
+      caller.callServerEndpoint<void>('widgetSchedule', 'cancelSchedule', {
+        'scheduleId': scheduleId,
+      });
+
+  /// Local notifications reduce latency, precise timers handle boundaries, and
+  /// one-second DB reconciliation covers missed events/restarts/other pods.
+  /// Every snapshot rechecks the CURRENT user's complete membership.
+  _ida.Stream<_ic1bjjnb.WidgetTimeline> watchTimeline() =>
+      caller.callStreamingServerEndpoint<
+        _ida.Stream<_ic1bjjnb.WidgetTimeline>,
+        _ic1bjjnb.WidgetTimeline
+      >('widgetSchedule', 'watchTimeline', {}, {});
+}
+
 class Modules {
   Modules(Client client) {
     serverpod_auth_core = _iacc.Caller(client);
@@ -354,6 +417,7 @@ class Client extends _isc.ServerpodClientShared {
     jwtRefresh = EndpointJwtRefresh(this);
     media = EndpointMedia(this);
     pairing = EndpointPairing(this);
+    widgetSchedule = EndpointWidgetSchedule(this);
     modules = Modules(this);
   }
 
@@ -369,6 +433,8 @@ class Client extends _isc.ServerpodClientShared {
 
   late final EndpointPairing pairing;
 
+  late final EndpointWidgetSchedule widgetSchedule;
+
   late final Modules modules;
 
   @override
@@ -379,6 +445,7 @@ class Client extends _isc.ServerpodClientShared {
     'jwtRefresh': jwtRefresh,
     'media': media,
     'pairing': pairing,
+    'widgetSchedule': widgetSchedule,
   };
 
   @override

@@ -7,6 +7,8 @@ import '../../media/presentation/media_controller.dart';
 import '../data/home_widget_service.dart';
 import 'editor/widget_editor_screen.dart';
 import 'widget_preview_screen.dart';
+import 'schedule_controller.dart';
+import 'schedule_panel.dart';
 
 /// Private upload and this device's widget update are separate, explicit actions.
 class WidgetTabScreen extends StatefulWidget {
@@ -16,11 +18,13 @@ class WidgetTabScreen extends StatefulWidget {
     this.liveMode = false,
     this.pickPhoto,
     this.applyLocalPhoto,
+    this.schedules,
   });
   final MediaController? media;
   final bool liveMode;
   final Future<Uint8List?> Function()? pickPhoto;
   final Future<void> Function(Uint8List)? applyLocalPhoto;
+  final ScheduleController? schedules;
   @override
   State<WidgetTabScreen> createState() => _WidgetTabScreenState();
 }
@@ -87,7 +91,7 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
             confirmLabel: upload ? 'Upload private photo' : 'Set widget photo',
             actionDescription: upload
                 ? 'Upload to your couple’s private server storage only. '
-                      'No automatic home-screen delivery or scheduling.'
+                      'Scheduling is a separate action; no background delivery.'
                 : 'Update this device only. This photo will not be uploaded.',
           ),
         ),
@@ -98,6 +102,8 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
       } else {
         if (widget.applyLocalPhoto != null) {
           await widget.applyLocalPhoto!(prepared);
+        } else if (widget.schedules != null) {
+          await widget.schedules!.applyManualPhoto(prepared);
         } else {
           await HomeWidgetService.setPhoto(prepared);
         }
@@ -125,7 +131,8 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
             Text('Widget', style: Theme.of(context).textTheme.headlineMedium),
             const Text(
               'Decorate photos, preview widget shapes, then choose an explicit action. '
-              'Background delivery and schedules are not available yet.',
+              'Server schedules require separate foreground auto-sync opt-in. '
+              'Background delivery is not available.',
             ),
             const SizedBox(height: 16),
             FilledButton(
@@ -213,6 +220,8 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                   trailing: const Icon(Icons.download),
                   onTap: busy ? null : () => media.download(asset),
                 ),
+            if (widget.schedules != null && media != null)
+              SchedulePanel(controller: widget.schedules!, media: media),
           ],
         ),
       );

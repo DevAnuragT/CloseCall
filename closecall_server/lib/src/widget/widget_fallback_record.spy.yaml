@@ -1,0 +1,13 @@
+class: WidgetFallbackRecord
+table: closecall_widget_fallback
+serverOnly: true
+# Composite same-couple member/asset foreign keys live in the scheduling
+# migration because the Serverpod model DSL represents single-column FKs.
+fields:
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  recipientMemberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  assetId: UuidValue, relation(parent=closecall_media, onDelete=Cascade)
+indexes:
+  closecall_widget_fallback_recipient_unique:
+    fields: recipientMemberId
+    unique: true

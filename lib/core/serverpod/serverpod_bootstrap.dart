@@ -10,6 +10,9 @@ import '../../features/media/data/serverpod_media_repository.dart';
 import '../../features/media/presentation/media_controller.dart';
 import '../config/app_config.dart';
 import '../../features/widget/data/home_widget_service.dart';
+import '../../features/widget/data/local_widget_writer.dart';
+import '../../features/widget/data/serverpod_schedule_repository.dart';
+import '../../features/widget/presentation/schedule_controller.dart';
 
 /// One client and secure persisted session per configured app instance.
 class ServerpodBootstrap {
@@ -27,13 +30,24 @@ class ServerpodBootstrap {
       ),
     );
     account = AccountController(session);
-    media = MediaController(
-      pairing: pairing,
-      repository: ServerpodMediaRepository(client),
-      applyLocalPhoto: (bytes) async {
+    final mediaRepository = ServerpodMediaRepository(client);
+    final writer = LocalWidgetWriter(
+      applyPhoto: (bytes) async {
         await HomeWidgetService.setPhoto(bytes);
       },
-      clearLocalPhoto: HomeWidgetService.clear,
+      clearPhoto: HomeWidgetService.clear,
+    );
+    schedules = ScheduleController(
+      pairing: pairing,
+      repository: ServerpodScheduleRepository(client),
+      mediaRepository: mediaRepository,
+      localWriter: writer,
+    );
+    media = MediaController(
+      pairing: pairing,
+      repository: mediaRepository,
+      applyLocalPhoto: schedules.applyManualPhoto,
+      // ScheduleController owns shared auth/couple cleanup and the native queue.
     );
   }
 
@@ -42,9 +56,11 @@ class ServerpodBootstrap {
   late final PairingController pairing;
   late final AccountController account;
   late final MediaController media;
+  late final ScheduleController schedules;
 
   void dispose() {
     media.dispose();
+    schedules.dispose();
     account.dispose();
     pairing.dispose();
     session.dispose();

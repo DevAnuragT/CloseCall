@@ -26,6 +26,7 @@ Live Home intentionally shows no sample mood/reminder/widget state as real data.
 ```text
 lib/                  Existing Flutter app
 closecall_client/     Generated Serverpod client
+closecall_shared/     Shared schedule model/resolver used by server and app
 closecall_server/     Auth, pairing, database config and migrations
 supabase/             Legacy migrations retained during transition
 docs/                 Migration plan and setup guide
@@ -80,6 +81,11 @@ Cloud deployments require actual transactional email access.
 The Widget tab now picks/decorates a photo and uploads it privately. Your partner
 can refresh, download, and explicitly apply it to their own Android widget.
 Photos are limited to 2 MiB / 2048 pixels per dimension; 50 assets per couple.
+
+When paired, Widget also supports private-photo fallback selection, partner
+schedules (UTC windows, overlap resolution, cancel), live foreground timeline
+updates, and explicit foreground auto-sync. Auto-sync is opt-in per couple and
+does not run with the app closed yet. It never overwrites a manual local choice.
 
 Omit `SERVERPOD_URL` for explicitly labelled offline demo mode. A configured but
 unreachable/invalid server never silently selects demo data. `.env` is not

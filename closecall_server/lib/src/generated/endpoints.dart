@@ -11,6 +11,7 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:typed_data' as _idt;
+import 'package:closecall_server/src/generated/future_calls.dart' as _inx26qnf;
 import 'package:serverpod/serverpod.dart' as _is;
 import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
     as _iacs;
@@ -22,6 +23,8 @@ import '../auth/email_idp_endpoint.dart' as _iuc1hd5t;
 import '../auth/jwt_refresh_endpoint.dart' as _inwq3ztq;
 import '../media/media_endpoint.dart' as _i9ppd1x8;
 import '../pairing/pairing_endpoint.dart' as _iku2870h;
+import '../widget/widget_schedule_endpoint.dart' as _iiq50v3t;
+export 'future_calls.dart' show ServerpodFutureCallsGetter;
 
 class Endpoints extends _is.EndpointDispatch {
   @override
@@ -38,6 +41,8 @@ class Endpoints extends _is.EndpointDispatch {
       'media': _i9ppd1x8.MediaEndpoint()..initialize(server, 'media', null),
       'pairing': _iku2870h.PairingEndpoint()
         ..initialize(server, 'pairing', null),
+      'widgetSchedule': _iiq50v3t.WidgetScheduleEndpoint()
+        ..initialize(server, 'widgetSchedule', null),
     };
     connectors['account'] = _is.EndpointConnector(
       name: 'account',
@@ -330,9 +335,109 @@ class Endpoints extends _is.EndpointDispatch {
         ),
       },
     );
+    connectors['widgetSchedule'] = _is.EndpointConnector(
+      name: 'widgetSchedule',
+      endpoint: endpoints['widgetSchedule']!,
+      methodConnectors: {
+        'currentTimeline': _is.MethodConnector(
+          name: 'currentTimeline',
+          params: {},
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetSchedule'] as _iiq50v3t.WidgetScheduleEndpoint)
+                  .currentTimeline(session),
+        ),
+        'partnerTimeline': _is.MethodConnector(
+          name: 'partnerTimeline',
+          params: {},
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetSchedule'] as _iiq50v3t.WidgetScheduleEndpoint)
+                  .partnerTimeline(session),
+        ),
+        'createSchedule': _is.MethodConnector(
+          name: 'createSchedule',
+          params: {
+            'assetId': _is.ParameterDescription(
+              name: 'assetId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'activeFrom': _is.ParameterDescription(
+              name: 'activeFrom',
+              type: _is.getType<DateTime>(),
+              nullable: false,
+            ),
+            'activeUntil': _is.ParameterDescription(
+              name: 'activeUntil',
+              type: _is.getType<DateTime>(),
+              nullable: false,
+            ),
+            'requestId': _is.ParameterDescription(
+              name: 'requestId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetSchedule'] as _iiq50v3t.WidgetScheduleEndpoint)
+                  .createSchedule(
+                    session,
+                    params['assetId'],
+                    params['activeFrom'],
+                    params['activeUntil'],
+                    params['requestId'],
+                  ),
+        ),
+        'setFallback': _is.MethodConnector(
+          name: 'setFallback',
+          params: {
+            'assetId': _is.ParameterDescription(
+              name: 'assetId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetSchedule'] as _iiq50v3t.WidgetScheduleEndpoint)
+                  .setFallback(session, params['assetId']),
+        ),
+        'cancelSchedule': _is.MethodConnector(
+          name: 'cancelSchedule',
+          params: {
+            'scheduleId': _is.ParameterDescription(
+              name: 'scheduleId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetSchedule'] as _iiq50v3t.WidgetScheduleEndpoint)
+                  .cancelSchedule(session, params['scheduleId']),
+        ),
+        'watchTimeline': _is.MethodStreamConnector(
+          name: 'watchTimeline',
+          params: {},
+          streamParams: {},
+          returnType: _is.MethodStreamReturnType.streamType,
+          call:
+              (
+                _is.Session session,
+                Map<String, dynamic> params,
+                Map<String, Stream> streamParams,
+              ) =>
+                  (endpoints['widgetSchedule']
+                          as _iiq50v3t.WidgetScheduleEndpoint)
+                      .watchTimeline(session),
+        ),
+      },
+    );
     modules['serverpod_auth_core'] = _iacs.Endpoints()
       ..initializeEndpoints(server);
     modules['serverpod_auth_idp'] = _iais.Endpoints()
       ..initializeEndpoints(server);
+  }
+
+  @override
+  _is.FutureCallDispatch? get futureCalls {
+    return _inx26qnf.FutureCalls();
   }
 }

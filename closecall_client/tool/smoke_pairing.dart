@@ -82,8 +82,30 @@ Future<void> main() async {
       private = error.code == 'asset_not_found';
     }
     check(private, 'Stranger cannot download private media.');
+    final now = DateTime.now().toUtc();
+    final scheduled = await clients[0].widgetSchedule.createSchedule(
+      photo.assetId,
+      now.add(const Duration(seconds: 1)),
+      now.add(const Duration(seconds: 20)),
+      Uuid().v4(),
+    );
+    final partnerTimeline = await clients[1].widgetSchedule.currentTimeline();
+    check(
+      partnerTimeline.schedules.any(
+        (entry) => entry.scheduleId == scheduled.scheduleId,
+      ),
+      'Partner timeline contains schedule.',
+    );
+    await clients[1].widgetSchedule.cancelSchedule(scheduled.scheduleId);
+    final cancelled = await clients[1].widgetSchedule.currentTimeline();
+    check(
+      cancelled.schedules.every(
+        (entry) => entry.scheduleId != scheduled.scheduleId,
+      ),
+      'Cancelled schedule leaves timeline.',
+    );
     print(
-      'HTTP smoke passed: auth, pairing, private upload/download, idempotency, isolation.',
+      'HTTP smoke passed: auth, pairing, private media, schedule, cancel, idempotency, isolation.',
     );
   } finally {
     for (final client in clients) {

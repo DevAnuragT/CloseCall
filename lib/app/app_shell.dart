@@ -8,6 +8,7 @@ import '../features/widget/presentation/widget_tab_screen.dart';
 import 'placeholder_screen.dart';
 import '../features/auth/presentation/account_controller.dart';
 import '../features/media/presentation/media_controller.dart';
+import '../features/widget/presentation/schedule_controller.dart';
 
 /// Root navigation: the four product tabs (Home, Moments, Widget, Profile).
 class AppShell extends StatefulWidget {
@@ -17,9 +18,11 @@ class AppShell extends StatefulWidget {
     this.pairing,
     this.account,
     this.media,
+    this.schedules,
   });
   final AccountController? account;
   final MediaController? media;
+  final ScheduleController? schedules;
 
   /// Injectable for tests; falls back to deterministic mock data.
   final DashboardSnapshot? snapshot;
@@ -72,7 +75,11 @@ class _AppShellState extends State<AppShell> {
         pairing == null
             ? 'Local widget editor — not synced to your partner.'
             : 'Private server photos and separate local widget updates.',
-        WidgetTabScreen(media: widget.media, liveMode: pairing != null),
+        WidgetTabScreen(
+          media: widget.media,
+          liveMode: pairing != null,
+          schedules: widget.schedules,
+        ),
       ),
       if (pairing != null)
         PairingScreen(controller: pairing, account: widget.account)
