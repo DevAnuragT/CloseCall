@@ -17,6 +17,10 @@ dependencies:
   serverpod_auth_idp_server: 4.0.3
 
 dev_dependencies:
+  analyzer: ^10.2.0
+  dart_style: ^3.1.7
+  serverpod_database: 4.0.3
+  serverpod_cli: 4.0.3
   lints: ^6.0.0
   serverpod_test: 4.0.3
   test: ^1.25.5

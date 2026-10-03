@@ -1,0 +1,130 @@
+{
+  "__className__": "serverpod.DatabaseMigration",
+  "actions": [
+    {
+      "__className__": "serverpod.DatabaseMigrationAction",
+      "type": "alterTable",
+      "alterTable": {
+        "__className__": "serverpod.TableMigration",
+        "name": "closecall_widget_schedule",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "warnings": [],
+        "deleteForeignKeys": [
+          "closecall_widget_schedule_same_couple_asset",
+          "closecall_widget_schedule_same_couple_sender",
+          "closecall_widget_schedule_same_couple_recipient"
+        ],
+        "addForeignKeys": [
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_schedule_same_couple_asset",
+            "columns": [
+              "coupleId",
+              "assetId"
+            ],
+            "referenceTable": "closecall_media",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_schedule_same_couple_sender",
+            "columns": [
+              "coupleId",
+              "senderMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_schedule_same_couple_recipient",
+            "columns": [
+              "coupleId",
+              "recipientMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          }
+        ]
+      }
+    },
+    {
+      "__className__": "serverpod.DatabaseMigrationAction",
+      "type": "alterTable",
+      "alterTable": {
+        "__className__": "serverpod.TableMigration",
+        "name": "closecall_widget_fallback",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "warnings": [],
+        "deleteForeignKeys": [
+          "closecall_widget_fallback_same_couple_asset",
+          "closecall_widget_fallback_same_couple_recipient"
+        ],
+        "addForeignKeys": [
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_fallback_same_couple_asset",
+            "columns": [
+              "coupleId",
+              "assetId"
+            ],
+            "referenceTable": "closecall_media",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_fallback_same_couple_recipient",
+            "columns": [
+              "coupleId",
+              "recipientMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": [],
+  "migrationApiVersion": 1
+}

@@ -22,6 +22,9 @@ jobs:
       - run: dart pub get
         working-directory: closecall_server
       - run: dart run scripts/bootstrap_serverpod.dart
+      - run: PUB_CACHE="$PWD/.tooling/pub-cache" dart pub global activate serverpod_cli 4.0.3
+      - run: dart run tool/generate.dart --check
+        working-directory: closecall_server
       - run: flutter analyze
       - run: flutter test
       - run: dart analyze
@@ -30,5 +33,7 @@ jobs:
         working-directory: closecall_shared
       - run: dart analyze
         working-directory: closecall_server
-      - run: dart test
+      - run: dart test -j 1
         working-directory: closecall_server
+      - run: dart test
+        working-directory: closecall_shared
