@@ -11,16 +11,26 @@
 // ignore_for_file: dead_code, unnecessary_type_check
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
+import 'package:closecall_server/src/generated/media/media_asset.dart'
+    as _ibuid3ro;
 import 'package:serverpod/protocol.dart' as _isp;
 import 'package:serverpod/serverpod.dart' as _is;
 import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
     as _iacs;
 import 'package:serverpod_auth_idp_server/serverpod_auth_idp_server.dart'
     as _iais;
+import 'auth/account_state.dart' as _ib26upii;
+import 'media/media_asset.dart' as _ijjfwapm;
+import 'media/media_failure.dart' as _iuzipihh;
+import 'media/media_record.dart' as _i6kv8n64;
 import 'pairing/couple.dart' as _iz3xjlbz;
 import 'pairing/couple_member.dart' as _ijn3tadz;
 import 'pairing/pairing_failure.dart' as _ium95mnn;
 import 'pairing/pairing_state.dart' as _iyyqlhox;
+export 'auth/account_state.dart';
+export 'media/media_asset.dart';
+export 'media/media_failure.dart';
+export 'media/media_record.dart';
 export 'pairing/couple.dart';
 export 'pairing/couple_member.dart';
 export 'pairing/pairing_failure.dart';
@@ -169,6 +179,102 @@ class Protocol extends _is.DatabaseSerializationManager {
       ],
       managed: true,
     ),
+    _isp.TableDefinition(
+      name: 'closecall_media',
+      dartName: 'MediaRecord',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue?',
+          columnDefault: 'random',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'uploaderId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'createdAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'width',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'height',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'requestId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'contentHash',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'storagePath',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_media_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_media_request_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'coupleId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'requestId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
     ..._iacs.Protocol.targetTableDefinitions,
     ..._iais.Protocol.targetTableDefinitions,
     ..._isp.Protocol.targetTableDefinitions,
@@ -198,6 +304,18 @@ class Protocol extends _is.DatabaseSerializationManager {
       }
     }
 
+    if (t == _ib26upii.AccountState) {
+      return _ib26upii.AccountState.fromJson(data) as T;
+    }
+    if (t == _ijjfwapm.MediaAsset) {
+      return _ijjfwapm.MediaAsset.fromJson(data) as T;
+    }
+    if (t == _iuzipihh.MediaFailure) {
+      return _iuzipihh.MediaFailure.fromJson(data) as T;
+    }
+    if (t == _i6kv8n64.MediaRecord) {
+      return _i6kv8n64.MediaRecord.fromJson(data) as T;
+    }
     if (t == _iz3xjlbz.Couple) {
       return _iz3xjlbz.Couple.fromJson(data) as T;
     }
@@ -209,6 +327,18 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (t == _iyyqlhox.PairingState) {
       return _iyyqlhox.PairingState.fromJson(data) as T;
+    }
+    if (t == _is.getType<_ib26upii.AccountState?>()) {
+      return (data != null ? _ib26upii.AccountState.fromJson(data) : null) as T;
+    }
+    if (t == _is.getType<_ijjfwapm.MediaAsset?>()) {
+      return (data != null ? _ijjfwapm.MediaAsset.fromJson(data) : null) as T;
+    }
+    if (t == _is.getType<_iuzipihh.MediaFailure?>()) {
+      return (data != null ? _iuzipihh.MediaFailure.fromJson(data) : null) as T;
+    }
+    if (t == _is.getType<_i6kv8n64.MediaRecord?>()) {
+      return (data != null ? _i6kv8n64.MediaRecord.fromJson(data) : null) as T;
     }
     if (t == _is.getType<_iz3xjlbz.Couple?>()) {
       return (data != null ? _iz3xjlbz.Couple.fromJson(data) : null) as T;
@@ -226,6 +356,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == List<String>) {
       return (data as List).map((e) => deserialize<String>(e)).toList() as T;
     }
+    if (t == List<_ibuid3ro.MediaAsset>) {
+      return (data as List)
+              .map((e) => deserialize<_ibuid3ro.MediaAsset>(e))
+              .toList()
+          as T;
+    }
     try {
       return _iacs.Protocol().deserialize<T>(data, t);
     } on _is.DeserializationTypeNotFoundException catch (_) {}
@@ -240,6 +376,10 @@ class Protocol extends _is.DatabaseSerializationManager {
 
   static String? getClassNameForType(Type type) {
     return switch (type) {
+      _ib26upii.AccountState => 'AccountState',
+      _ijjfwapm.MediaAsset => 'MediaAsset',
+      _iuzipihh.MediaFailure => 'MediaFailure',
+      _i6kv8n64.MediaRecord => 'MediaRecord',
       _iz3xjlbz.Couple => 'Couple',
       _ijn3tadz.CoupleMember => 'CoupleMember',
       _ium95mnn.PairingFailure => 'PairingFailure',
@@ -258,6 +398,14 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
 
     switch (data) {
+      case _ib26upii.AccountState():
+        return 'AccountState';
+      case _ijjfwapm.MediaAsset():
+        return 'MediaAsset';
+      case _iuzipihh.MediaFailure():
+        return 'MediaFailure';
+      case _i6kv8n64.MediaRecord():
+        return 'MediaRecord';
       case _iz3xjlbz.Couple():
         return 'Couple';
       case _ijn3tadz.CoupleMember():
@@ -291,6 +439,18 @@ class Protocol extends _is.DatabaseSerializationManager {
     var dataClassName = data['className'];
     if (dataClassName is! String) {
       return super.deserializeByClassName(data);
+    }
+    if (dataClassName == 'AccountState') {
+      return deserialize<_ib26upii.AccountState>(data['data']);
+    }
+    if (dataClassName == 'MediaAsset') {
+      return deserialize<_ijjfwapm.MediaAsset>(data['data']);
+    }
+    if (dataClassName == 'MediaFailure') {
+      return deserialize<_iuzipihh.MediaFailure>(data['data']);
+    }
+    if (dataClassName == 'MediaRecord') {
+      return deserialize<_i6kv8n64.MediaRecord>(data['data']);
     }
     if (dataClassName == 'Couple') {
       return deserialize<_iz3xjlbz.Couple>(data['data']);
@@ -345,6 +505,8 @@ class Protocol extends _is.DatabaseSerializationManager {
       }
     }
     switch (t) {
+      case _i6kv8n64.MediaRecord:
+        return _i6kv8n64.MediaRecord.t;
       case _iz3xjlbz.Couple:
         return _iz3xjlbz.Couple.t;
       case _ijn3tadz.CoupleMember:

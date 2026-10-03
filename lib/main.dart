@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:serverpod_auth_idp_flutter/serverpod_auth_idp_flutter.dart';
 
 import 'app/app_shell.dart';
 import 'core/config/app_config.dart';
 import 'core/serverpod/serverpod_bootstrap.dart';
 import 'core/theme/app_theme.dart';
+import 'features/auth/presentation/auth_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,6 +96,25 @@ class _LiveAppState extends State<_LiveApp> {
         ),
       );
     }
-    return AppShell(pairing: _backend!.pairing);
+    final backend = _backend!;
+    return AuthGate(
+      pairing: backend.pairing,
+      emailBuilder: (_) => EmailSignInWidget(
+        client: backend.client,
+        startScreen: EmailFlowScreen.login,
+        onError: (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Email authentication failed: $error')),
+            );
+          }
+        },
+      ),
+      signedInBuilder: (_) => AppShell(
+        pairing: backend.pairing,
+        account: backend.account,
+        media: backend.media,
+      ),
+    );
   }
 }

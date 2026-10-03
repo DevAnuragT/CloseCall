@@ -1,13 +1,15 @@
 import 'package:serverpod/serverpod.dart';
 import 'package:serverpod_auth_idp_server/core.dart';
 import 'package:serverpod_auth_idp_server/providers/anonymous.dart';
+import 'package:serverpod_auth_idp_server/providers/email.dart';
 
-/// Anonymous accounts are only a local development/test bootstrap.
-/// A recoverable identity provider must be configured before a real deployment.
+/// Cloud handles transactional email in staging/production; the official
+/// development/test config logs codes only on the locally running server.
 void configureAuthentication(Serverpod pod) {
   pod.initializeAuthServices(
     tokenManagerBuilders: [JwtConfigFromPasswords()],
     identityProviderBuilders: [
+      ServerpodCloudEmailIdpConfig(appDisplayName: 'CloseCall'),
       AnonymousIdpConfig(
         onBeforeAnonymousAccountCreated:
             (session, {token, required transaction}) {

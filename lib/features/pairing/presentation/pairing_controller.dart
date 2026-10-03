@@ -8,12 +8,16 @@ import '../../couple/domain/couple.dart';
 
 /// Owns async lifecycle; never uses mocks to mask a backend failure.
 class PairingController extends ChangeNotifier {
-  PairingController({required this.session, required this.repository})
-    : _identity = session.userId {
+  PairingController({
+    required this.session,
+    required this.repository,
+    this.allowDevGuest = false,
+  }) : _identity = session.userId {
     session.addListener(_authChanged);
   }
 
   final AuthSession session;
+  final bool allowDevGuest;
   final CoupleRepository repository;
   String? _identity;
   int _authRevision = 0;
@@ -28,6 +32,7 @@ class PairingController extends ChangeNotifier {
   Future<void> Function()? _retry;
 
   String? get userId => session.userId;
+  int get authRevision => _authRevision;
 
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -80,6 +85,9 @@ class PairingController extends ChangeNotifier {
   });
 
   Future<void> signIn() => _run(() async {
+    if (!allowDevGuest) {
+      throw StateError('Development guest sign-in is disabled.');
+    }
     // If sign-in succeeded but loading pairing failed, retry only the read;
     // never create a second guest identity as a network recovery mechanism.
     if (userId == null) await session.signInAnonymously();
@@ -100,7 +108,13 @@ class PairingController extends ChangeNotifier {
     final id = userId;
     final revision = _authRevision;
     if (id == null) return;
-    final result = await repository.coupleForUser(id);
+    Couple? result;
+    try {
+      result = await repository.coupleForUser(id);
+    } catch (_) {
+      if (_isCurrent(id, revision)) rethrow;
+      return;
+    }
     if (!_isCurrent(id, revision)) return;
     couple = result;
     hasLoadedPairing = true;

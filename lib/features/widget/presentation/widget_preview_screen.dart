@@ -23,12 +23,19 @@ enum WidgetShape {
 enum WidgetShapeClip { rounded, circle }
 
 /// Confirmation screen shown after decorating: previews the photo across widget
-/// shapes and asks before it replaces what's on the partner's home screen.
+/// shapes and asks before the caller's explicit local update or private upload.
 /// Pops `true` to confirm, `false`/null to keep editing.
 class WidgetPreviewScreen extends StatelessWidget {
-  const WidgetPreviewScreen({super.key, required this.photo});
+  const WidgetPreviewScreen({
+    super.key,
+    required this.photo,
+    this.confirmLabel = 'Set widget photo',
+    this.actionDescription,
+  });
 
   final Uint8List photo;
+  final String confirmLabel;
+  final String? actionDescription;
 
   @override
   Widget build(BuildContext context) {
@@ -62,8 +69,9 @@ class WidgetPreviewScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Your photo crops to each home-screen shape. '
-              'Set it when it feels right.',
+              actionDescription ??
+                  'Your photo crops to each home-screen shape. '
+                      'Set it when it feels right.',
               style: TextStyle(
                 fontSize: 16,
                 height: 1.4,
@@ -91,6 +99,7 @@ class WidgetPreviewScreen extends StatelessWidget {
         ),
       ),
       bottomNavigationBar: _ConfirmBar(
+        label: confirmLabel,
         onConfirm: () => Navigator.of(context).pop(true),
         onCancel: () => Navigator.of(context).pop(false),
       ),
@@ -124,8 +133,7 @@ class _ShapeFrame extends StatelessWidget {
       children: [
         DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius:
-                shape.clip == WidgetShapeClip.circle ? null : radius,
+            borderRadius: shape.clip == WidgetShapeClip.circle ? null : radius,
             shape: shape.clip == WidgetShapeClip.circle
                 ? BoxShape.circle
                 : BoxShape.rectangle,
@@ -159,7 +167,12 @@ class _ShapeFrame extends StatelessWidget {
 
 /// The persistent confirm/cancel footer.
 class _ConfirmBar extends StatelessWidget {
-  const _ConfirmBar({required this.onConfirm, required this.onCancel});
+  const _ConfirmBar({
+    required this.onConfirm,
+    required this.onCancel,
+    required this.label,
+  });
+  final String label;
 
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
@@ -181,10 +194,10 @@ class _ConfirmBar extends StatelessWidget {
             child: FilledButton(
               key: const Key('preview-confirm'),
               onPressed: onConfirm,
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
                 child: Text(
-                  'Set widget photo',
+                  label,
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),

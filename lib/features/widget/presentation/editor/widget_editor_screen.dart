@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -44,6 +45,7 @@ class _WidgetEditorScreenState extends State<WidgetEditorScreen> {
   ];
   static const _emojis = ['❤️', '😘', '✨', '🥺', '😊', '🌙', '💛', '🔥'];
   String _sticker = '❤️';
+  bool _exporting = false;
 
   @override
   void dispose() {
@@ -67,23 +69,48 @@ class _WidgetEditorScreenState extends State<WidgetEditorScreen> {
       context: context,
       builder: (context) => const _TextInputDialog(),
     );
-    if (text != null) _c.addText(text, at);
+    if (text != null && mounted) _c.addText(text, at);
   }
 
   /// Flattens the editor surface to PNG bytes.
   Future<Uint8List?> export({double pixelRatio = 3}) async {
-    final boundary = _boundaryKey.currentContext?.findRenderObject()
-        as RenderRepaintBoundary?;
+    final boundary =
+        _boundaryKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
     if (boundary == null) return null;
-    final image = await boundary.toImage(pixelRatio: pixelRatio);
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    return data?.buffer.asUint8List();
+    final boundedRatio = math.min(
+      pixelRatio,
+      2048 / math.max(boundary.size.width, boundary.size.height),
+    );
+    final image = await boundary.toImage(pixelRatio: boundedRatio);
+    try {
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      return data?.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    } finally {
+      image.dispose();
+    }
   }
 
   Future<void> _handleDone() async {
-    final bytes = await export();
-    if (bytes != null) widget.onExport?.call(bytes);
-    if (mounted) Navigator.of(context).maybePop(bytes);
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final bytes = await export();
+      if (!mounted) return;
+      if (bytes == null) {
+        throw StateError('Photo export was unavailable. Try again.');
+      }
+      widget.onExport?.call(bytes);
+      Navigator.of(context).maybePop(bytes);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not export PNG: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   @override
@@ -116,8 +143,7 @@ class _WidgetEditorScreenState extends State<WidgetEditorScreen> {
                 child: AspectRatio(
                   aspectRatio: 16 / 10,
                   child: ClipRRect(
-                    borderRadius:
-                        BorderRadius.circular(AppSpacing.radiusMd),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                     child: RepaintBoundary(
                       key: _boundaryKey,
                       child: Stack(
@@ -241,11 +267,10 @@ class _Toolbar extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(AppSpacing.sm),
                           decoration: BoxDecoration(
-                            color: e == selectedEmoji
-                                ? AppColors.cream
-                                : null,
+                            color: e == selectedEmoji ? AppColors.cream : null,
                             borderRadius: BorderRadius.circular(
-                                AppSpacing.radiusSm),
+                              AppSpacing.radiusSm,
+                            ),
                           ),
                           child: Text(e, style: const TextStyle(fontSize: 24)),
                         ),

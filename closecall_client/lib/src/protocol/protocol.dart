@@ -11,13 +11,21 @@
 // ignore_for_file: dead_code, unnecessary_type_check
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
+import 'package:closecall_client/src/protocol/media/media_asset.dart'
+    as _i7z5ta07;
 import 'package:serverpod_auth_core_client/serverpod_auth_core_client.dart'
     as _iacc;
 import 'package:serverpod_auth_idp_client/serverpod_auth_idp_client.dart'
     as _iaic;
 import 'package:serverpod_client/serverpod_client.dart' as _isc;
+import 'auth/account_state.dart' as _ib26upii;
+import 'media/media_asset.dart' as _ijjfwapm;
+import 'media/media_failure.dart' as _iuzipihh;
 import 'pairing/pairing_failure.dart' as _ium95mnn;
 import 'pairing/pairing_state.dart' as _iyyqlhox;
+export 'auth/account_state.dart';
+export 'media/media_asset.dart';
+export 'media/media_failure.dart';
 export 'pairing/pairing_failure.dart';
 export 'pairing/pairing_state.dart';
 export 'client.dart';
@@ -53,11 +61,29 @@ class Protocol extends _isc.SerializationManager {
       }
     }
 
+    if (t == _ib26upii.AccountState) {
+      return _ib26upii.AccountState.fromJson(data) as T;
+    }
+    if (t == _ijjfwapm.MediaAsset) {
+      return _ijjfwapm.MediaAsset.fromJson(data) as T;
+    }
+    if (t == _iuzipihh.MediaFailure) {
+      return _iuzipihh.MediaFailure.fromJson(data) as T;
+    }
     if (t == _ium95mnn.PairingFailure) {
       return _ium95mnn.PairingFailure.fromJson(data) as T;
     }
     if (t == _iyyqlhox.PairingState) {
       return _iyyqlhox.PairingState.fromJson(data) as T;
+    }
+    if (t == _isc.getType<_ib26upii.AccountState?>()) {
+      return (data != null ? _ib26upii.AccountState.fromJson(data) : null) as T;
+    }
+    if (t == _isc.getType<_ijjfwapm.MediaAsset?>()) {
+      return (data != null ? _ijjfwapm.MediaAsset.fromJson(data) : null) as T;
+    }
+    if (t == _isc.getType<_iuzipihh.MediaFailure?>()) {
+      return (data != null ? _iuzipihh.MediaFailure.fromJson(data) : null) as T;
     }
     if (t == _isc.getType<_ium95mnn.PairingFailure?>()) {
       return (data != null ? _ium95mnn.PairingFailure.fromJson(data) : null)
@@ -68,6 +94,12 @@ class Protocol extends _isc.SerializationManager {
     }
     if (t == List<String>) {
       return (data as List).map((e) => deserialize<String>(e)).toList() as T;
+    }
+    if (t == List<_i7z5ta07.MediaAsset>) {
+      return (data as List)
+              .map((e) => deserialize<_i7z5ta07.MediaAsset>(e))
+              .toList()
+          as T;
     }
     try {
       return _iacc.Protocol().deserialize<T>(data, t);
@@ -80,6 +112,9 @@ class Protocol extends _isc.SerializationManager {
 
   static String? getClassNameForType(Type type) {
     return switch (type) {
+      _ib26upii.AccountState => 'AccountState',
+      _ijjfwapm.MediaAsset => 'MediaAsset',
+      _iuzipihh.MediaFailure => 'MediaFailure',
       _ium95mnn.PairingFailure => 'PairingFailure',
       _iyyqlhox.PairingState => 'PairingState',
       _ => null,
@@ -96,6 +131,12 @@ class Protocol extends _isc.SerializationManager {
     }
 
     switch (data) {
+      case _ib26upii.AccountState():
+        return 'AccountState';
+      case _ijjfwapm.MediaAsset():
+        return 'MediaAsset';
+      case _iuzipihh.MediaFailure():
+        return 'MediaFailure';
       case _ium95mnn.PairingFailure():
         return 'PairingFailure';
       case _iyyqlhox.PairingState():
@@ -121,6 +162,15 @@ class Protocol extends _isc.SerializationManager {
     var dataClassName = data['className'];
     if (dataClassName is! String) {
       return super.deserializeByClassName(data);
+    }
+    if (dataClassName == 'AccountState') {
+      return deserialize<_ib26upii.AccountState>(data['data']);
+    }
+    if (dataClassName == 'MediaAsset') {
+      return deserialize<_ijjfwapm.MediaAsset>(data['data']);
+    }
+    if (dataClassName == 'MediaFailure') {
+      return deserialize<_iuzipihh.MediaFailure>(data['data']);
     }
     if (dataClassName == 'PairingFailure') {
       return deserialize<_ium95mnn.PairingFailure>(data['data']);

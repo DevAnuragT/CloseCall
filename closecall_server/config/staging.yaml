@@ -19,4 +19,4 @@ database:
 sessionLogs:
   persistentEnabled: false
   consoleEnabled: true
-maxRequestSize: 524288
+maxRequestSize: 4194304

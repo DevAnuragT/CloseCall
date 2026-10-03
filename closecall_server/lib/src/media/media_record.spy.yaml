@@ -1,0 +1,17 @@
+class: MediaRecord
+table: closecall_media
+serverOnly: true
+fields:
+  id: UuidValue?, defaultPersist=random
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  uploaderId: String
+  createdAt: DateTime, default=now
+  width: int
+  height: int
+  requestId: String
+  contentHash: String
+  storagePath: String
+indexes:
+  closecall_media_request_unique:
+    fields: coupleId, requestId
+    unique: true

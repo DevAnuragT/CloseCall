@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../couple/data/couple_repository.dart';
 import 'pairing_controller.dart';
+import '../../auth/presentation/account_controller.dart';
 
 class PairingScreen extends StatefulWidget {
-  const PairingScreen({super.key, required this.controller});
+  const PairingScreen({super.key, required this.controller, this.account});
   final PairingController controller;
+  final AccountController? account;
 
   @override
   State<PairingScreen> createState() => _PairingScreenState();
@@ -22,7 +24,7 @@ class _PairingScreenState extends State<PairingScreen> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.controller,
+    listenable: Listenable.merge([widget.controller, widget.account]),
     builder: (context, _) {
       final c = widget.controller;
       final couple = c.couple;
@@ -34,11 +36,34 @@ class _PairingScreenState extends State<PairingScreen> {
             const SizedBox(height: 16),
             const Text('Live Serverpod pairing'),
             const SizedBox(height: 12),
-            const Text(
-              'Development guest account — device-only access. '
-              'Signing out, deleting the app, or losing this device can '
-              'permanently lose access. No account recovery or linking yet.',
-            ),
+            if (widget.account == null ||
+                widget.account!.account?.isGuest == true)
+              const Text(
+                'Development guest account — device-only access. '
+                'Signing out, deleting the app, or losing this device can '
+                'permanently lose access. No account recovery or linking yet.',
+              ),
+            if (widget.account != null && widget.account!.account == null)
+              const Text(
+                'Account status is unknown. If this is a device-only guest, '
+                'signing out can permanently lose access. Refresh account status first. '
+                'Guest data is not linked to a new email account.',
+              ),
+            if (widget.account != null) ...[
+              if (widget.account!.busy) const Text('Loading account status…'),
+              if (widget.account!.account?.isGuest == false)
+                Text(
+                  'Email account: ${widget.account!.account!.email ?? 'Email registered'}',
+                ),
+              if (widget.account!.error != null)
+                Text('Account status unavailable: ${widget.account!.error}'),
+              TextButton(
+                onPressed: widget.account!.busy
+                    ? null
+                    : widget.account!.refresh,
+                child: const Text('Refresh account status'),
+              ),
+            ],
             const SizedBox(height: 16),
             if (c.busy) const LinearProgressIndicator(),
             if (c.error != null) ...[
@@ -54,7 +79,7 @@ class _PairingScreenState extends State<PairingScreen> {
                 onPressed: c.initialize,
                 child: const Text('Connect to server'),
               ),
-            if (c.initialized && c.userId == null)
+            if (c.initialized && c.userId == null && c.allowDevGuest)
               FilledButton(
                 onPressed: c.busy ? null : c.signIn,
                 child: const Text('Continue as development guest'),
@@ -120,12 +145,21 @@ class _PairingScreenState extends State<PairingScreen> {
   );
 
   Future<void> _confirmSignOut(BuildContext context) async {
+    if (widget.account?.guestOrUnknown == false) {
+      await widget.controller.signOut();
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Lose guest account access?'),
+        title: Text(
+          widget.account != null && widget.account!.account == null
+              ? 'Sign out with unknown account status?'
+              : 'Lose guest account access?',
+        ),
         content: const Text(
-          'This device-only guest account cannot be recovered after sign-out.',
+          'A device-only guest account cannot be recovered after sign-out. '
+          'Guest data will not be linked to a new email account.',
         ),
         actions: [
           TextButton(

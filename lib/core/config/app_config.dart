@@ -1,5 +1,6 @@
 /// Build-time configuration; no secrets file or bundled .env is required.
 class AppConfig {
+  static const allowDevGuest = bool.fromEnvironment('ALLOW_DEV_GUEST');
   AppConfig({String serverpodUrl = ''})
     : serverpodUrl = _normalizeUrl(serverpodUrl);
 

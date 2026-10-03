@@ -7,12 +7,14 @@ partner's home-screen widget. Flutter frontend; Serverpod authoritative backend.
 
 - Implemented: Flutter navigation/theme, sample dashboard, image editor/export,
   shape previews, local Android widget bridge, tested widget schedule resolver.
-- Implemented backend: JWT guest authentication for development/test, PostgreSQL
+- Implemented backend: recoverable email accounts plus optional development guests, PostgreSQL
   couple membership, authenticated create/join/read pairing APIs, database
-  constraints and concurrent-invite redemption tests, generated Dart client.
+  constraints and concurrent-invite redemption tests, generated Dart client,
+  validated private PNG storage with membership checks and idempotent uploads.
 - Implemented frontend integration: explicit demo/live modes, persisted secure
-  session, Profile pairing flow, loading/error/retry and manual refresh.
-- Not implemented: recoverable production sign-in, private photo upload,
+  session, email registration/login/reset, Profile pairing, photo picking,
+  private upload/list/download, loading/error/retry and manual refresh.
+- Not implemented: production email delivery verification,
   partner-device delivery, live widget schedules, native background expiry,
   live mood/reminders, Moments, cloud deployment, or iOS widgets.
 
@@ -66,9 +68,18 @@ Terminal 2, repository root (Android emulator):
   --dart-define=SERVERPOD_URL=http://10.0.2.2:8080/
 ```
 
-Open **Profile**, continue as a development guest, then create an invite on one
+Register/sign in with email, then open **Profile** and create an invite on one
 device and join by code on the other. Use **Refresh pairing** on the creator
 device; automatic partner subscriptions are a later milestone.
+
+Development email codes appear only in the local server terminal. Use them in
+the app, not in chat or repository files. Guest sign-in is hidden by default;
+enable it explicitly with `--dart-define=ALLOW_DEV_GUEST=true` for local tests.
+Cloud deployments require actual transactional email access.
+
+The Widget tab now picks/decorates a photo and uploads it privately. Your partner
+can refresh, download, and explicitly apply it to their own Android widget.
+Photos are limited to 2 MiB / 2048 pixels per dimension; 50 assets per couple.
 
 Omit `SERVERPOD_URL` for explicitly labelled offline demo mode. A configured but
 unreachable/invalid server never silently selects demo data. `.env` is not

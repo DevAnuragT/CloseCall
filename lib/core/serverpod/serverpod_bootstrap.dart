@@ -5,6 +5,11 @@ import 'package:serverpod_flutter/serverpod_flutter.dart';
 import '../../features/auth/data/auth_session.dart';
 import '../../features/couple/data/serverpod_couple_repository.dart';
 import '../../features/pairing/presentation/pairing_controller.dart';
+import '../../features/auth/presentation/account_controller.dart';
+import '../../features/media/data/serverpod_media_repository.dart';
+import '../../features/media/presentation/media_controller.dart';
+import '../config/app_config.dart';
+import '../../features/widget/data/home_widget_service.dart';
 
 /// One client and secure persisted session per configured app instance.
 class ServerpodBootstrap {
@@ -14,19 +19,33 @@ class ServerpodBootstrap {
       ..authSessionManager = FlutterAuthSessionManager();
     session = ServerpodAuthSession(client);
     pairing = PairingController(
+      allowDevGuest: AppConfig.allowDevGuest,
       session: session,
       repository: ServerpodCoupleRepository(
         client,
         userId: () => session.userId,
       ),
     );
+    account = AccountController(session);
+    media = MediaController(
+      pairing: pairing,
+      repository: ServerpodMediaRepository(client),
+      applyLocalPhoto: (bytes) async {
+        await HomeWidgetService.setPhoto(bytes);
+      },
+      clearLocalPhoto: HomeWidgetService.clear,
+    );
   }
 
   late final Client client;
   late final ServerpodAuthSession session;
   late final PairingController pairing;
+  late final AccountController account;
+  late final MediaController media;
 
   void dispose() {
+    media.dispose();
+    account.dispose();
     pairing.dispose();
     session.dispose();
     client.close();
@@ -55,7 +74,13 @@ class ServerpodAuthSession extends AuthSession {
   }
 
   @override
+  Future<AccountState?> currentAccount() => client.account.currentAccount();
+
+  @override
   Future<void> signInAnonymously() async {
+    if (!AppConfig.allowDevGuest) {
+      throw StateError('Development guest sign-in is disabled.');
+    }
     final auth = await client.anonymousIdp.login();
     await client.auth.updateSignedInUser(auth);
   }
@@ -65,7 +90,7 @@ class ServerpodAuthSession extends AuthSession {
     if (!await client.auth.signOutDevice()) {
       throw StateError(
         'Signed out locally, but server session revocation failed. '
-        'The guest account cannot be recovered after local sign-out.',
+        'Sign in again when online to verify your account.',
       );
     }
   }

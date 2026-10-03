@@ -6,15 +6,25 @@ import '../features/pairing/presentation/pairing_controller.dart';
 import '../features/pairing/presentation/pairing_screen.dart';
 import '../features/widget/presentation/widget_tab_screen.dart';
 import 'placeholder_screen.dart';
+import '../features/auth/presentation/account_controller.dart';
+import '../features/media/presentation/media_controller.dart';
 
 /// Root navigation: the four product tabs (Home, Moments, Widget, Profile).
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, this.snapshot, this.pairing});
+  const AppShell({
+    super.key,
+    this.snapshot,
+    this.pairing,
+    this.account,
+    this.media,
+  });
+  final AccountController? account;
+  final MediaController? media;
 
   /// Injectable for tests; falls back to deterministic mock data.
   final DashboardSnapshot? snapshot;
 
-  /// Non-null selects live mode. Widget editor remains a local-only feature.
+  /// Non-null selects live mode, never substituting demo data on errors.
   final PairingController? pairing;
 
   @override
@@ -49,7 +59,8 @@ class _AppShellState extends State<AppShell> {
             message: pairing.error != null
                 ? 'Server request failed: ${pairing.error}. Open Profile to retry.'
                 : 'Manage live pairing in Profile. '
-                      'Mood, reminders, and shared widget data are not connected yet.',
+                      'Mood and reminders are not connected yet. '
+                      'Open Widget for private photos; local updates are explicit.',
           ),
         ),
       const PlaceholderScreen(
@@ -58,11 +69,13 @@ class _AppShellState extends State<AppShell> {
         message: 'Your private shared scrapbook lives here.',
       ),
       _label(
-        'Local widget editor — not synced to your partner.',
-        const WidgetTabScreen(),
+        pairing == null
+            ? 'Local widget editor — not synced to your partner.'
+            : 'Private server photos and separate local widget updates.',
+        WidgetTabScreen(media: widget.media, liveMode: pairing != null),
       ),
       if (pairing != null)
-        PairingScreen(controller: pairing)
+        PairingScreen(controller: pairing, account: widget.account)
       else
         const PlaceholderScreen(
           title: 'Profile',

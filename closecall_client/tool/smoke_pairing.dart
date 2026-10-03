@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:closecall_client/closecall_client.dart';
 
 // Development-only smoke: creates three fresh local guest identities.
@@ -47,8 +49,41 @@ Future<void> main() async {
       consumed = error.code == 'code_not_found';
     }
     check(consumed, 'Consumed invite must be rejected over HTTP.');
+    final account = await clients[0].account.currentAccount();
+    check(account.isGuest && account.email == null, 'Guest account status.');
+    final png = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4v+rMfwAIlgN1QhRUCQAAAABJRU5ErkJggg==',
+    );
+    final requestId = Uuid().v4();
+    final photo = await clients[0].media.uploadPhoto(
+      ByteData.sublistView(png),
+      requestId,
+    );
+    final retry = await clients[0].media.uploadPhoto(
+      ByteData.sublistView(png),
+      requestId,
+    );
+    check(photo.assetId == retry.assetId, 'Upload retry must be idempotent.');
+    final listed = await clients[1].media.listAssets();
+    check(
+      listed.any((a) => a.assetId == photo.assetId),
+      'Partner lists photo.',
+    );
+    final downloaded = await clients[1].media.downloadPhoto(photo.assetId);
+    final bytes = downloaded.buffer.asUint8List(
+      downloaded.offsetInBytes,
+      downloaded.lengthInBytes,
+    );
+    check(base64Encode(bytes) == base64Encode(png), 'Partner downloads PNG.');
+    var private = false;
+    try {
+      await clients[2].media.downloadPhoto(photo.assetId);
+    } on MediaFailure catch (error) {
+      private = error.code == 'asset_not_found';
+    }
+    check(private, 'Stranger cannot download private media.');
     print(
-      'HTTP smoke passed: JWT auth, pairing, isolation, invite consumption.',
+      'HTTP smoke passed: auth, pairing, private upload/download, idempotency, isolation.',
     );
   } finally {
     for (final client in clients) {

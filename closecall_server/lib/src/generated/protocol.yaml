@@ -1,7 +1,22 @@
+account:
+  - currentAccount:
 anonymousIdp:
   - login:
+emailIdp:
+  - login:
+  - startRegistration:
+  - verifyRegistrationCode:
+  - finishRegistration:
+  - startPasswordReset:
+  - verifyPasswordResetCode:
+  - finishPasswordReset:
+  - hasAccount:
 jwtRefresh:
   - refreshAccessToken:
+media:
+  - uploadPhoto:
+  - listAssets:
+  - downloadPhoto:
 pairing:
   - createCouple:
   - joinByCode:

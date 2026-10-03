@@ -22,7 +22,8 @@ cd closecall_server
 
 The bootstrap creates cryptographically random development/test values in the
 ignored `config/passwords.yaml`, does not print secrets, and never replaces an
-existing file. Keep that file private. Do not copy development values into a
+existing secret value. Missing local keys (including the email pepper) are added
+under a file lock. Keep that file private. Do not copy development values into a
 production deployment. API listens on port 8080, Insights on 8081, and embedded
 development PostgreSQL on 8090. Do not expose Insights or database ports publicly.
 
@@ -47,7 +48,10 @@ remain visible errors; they never silently substitute sample data.
 ## Pairing verification
 
 1. Start the backend and two app instances with the correct API URL.
-2. In Profile, create a development guest identity on each device.
+2. Register/sign in with an email account on each device. Development verification
+   codes are visible in the local server terminal only; never paste them in chat
+   or commit them. Alternatively, explicitly enable local guests with
+   `--dart-define=ALLOW_DEV_GUEST=true`.
 3. One device creates an invite; the other joins using that code.
 4. Refresh pairing on the first device: both should show the same couple and
    exactly two members, with no remaining invite code.
@@ -55,9 +59,11 @@ remain visible errors; they never silently substitute sample data.
 
 **Guest accounts are development-only and cannot be recovered after sign-out,
 app deletion or device loss.** Anonymous creation fails closed in staging and
-production. Configure a recoverable Serverpod identity provider before deployment.
-Pairing is live; the widget editor is still local-only. Dashboard, media and
-automatic partner updates are subsequent milestones.
+production. Email accounts are recoverable; they do not automatically acquire
+an existing guest's couple/media data. Actual deployed email delivery still
+requires Serverpod Cloud email access or a configured alternative provider.
+Pairing and private photo sharing are live. Widget application is explicit and
+local; automatic partner updates and schedules are subsequent milestones.
 
 ## Code generation and migrations
 
@@ -71,7 +77,8 @@ cd closecall_client
 ```
 
 This creates three fresh local guest accounts and checks actual HTTP/JWT calls,
-identity isolation, idempotent creation, joining, and consumed-invite rejection.
+identity isolation, idempotent creation, joining, consumed-invite rejection,
+private upload/list/download, stranger rejection, and upload retry idempotency.
 No token or invite value is printed or stored by the smoke command.
 
 ### Regeneration
@@ -94,7 +101,8 @@ pairing schema; Supabase SQL is not applied to the Serverpod database.
 
 ## Before production
 
-- Configure a recoverable identity provider; guest creation is intentionally
+- Verify actual email delivery; `scloudAuthEmailKey` is provisioned by Serverpod
+  Cloud. Self-hosting requires a real email provider. Guest creation remains
   blocked outside development/test.
 - Replace `.invalid` hosts in production/staging config with deployment values.
 - Provision external PostgreSQL with TLS and apply reviewed migrations.
@@ -102,7 +110,8 @@ pairing schema; Supabase SQL is not applied to the Serverpod database.
   management; never include them in app builds or repository files.
 - Add pairing-attempt throttling/abuse protection and decide invite expiry and
   account unlink/deletion behaviour before public release.
-- Implement private media authorization, scheduling and recipient refresh.
+- Implement scheduling and automatic recipient refresh. Database-backed private
+  media works locally; choose appropriate object storage for deployment scale.
 - Verify the hosting plan supports future calls; Starter currently disables them.
 - Verify physical-device/release networking, secure session restoration and the
   genuine two-device widget flow before claiming end-to-end readiness.
@@ -113,9 +122,10 @@ startup. Existing private `.env` and Firebase files have not been removed.
 ## Validation recorded on 3 October 2026
 
 - App, generated client and backend analysis: clean.
-- Flutter tests: 80 passed; backend tests: 13 passed, including real PostgreSQL
+- Flutter tests: 107 passed; backend tests: 37 passed, including real PostgreSQL
   concurrency and authentication tests.
 - Local HTTP/JWT smoke: passed.
 - Clean source copy without `.env` or inherited secrets: Flutter/backend tests
   passed after fresh local-secret bootstrap.
-- Physical devices, native builds and deployed Cloud environments: not verified.
+- Android debug APK build: passed (`build/app/outputs/flutter-apk/app-debug.apk`).
+- Physical devices, native iOS and deployed Cloud environments: not verified.

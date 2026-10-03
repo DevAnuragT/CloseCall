@@ -1,0 +1,8 @@
+class: MediaAsset
+fields:
+  assetId: String
+  coupleId: String
+  uploaderId: String
+  createdAt: DateTime
+  width: int
+  height: int

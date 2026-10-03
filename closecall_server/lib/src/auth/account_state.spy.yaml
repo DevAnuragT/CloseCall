@@ -1,0 +1,5 @@
+class: AccountState
+fields:
+  userId: String
+  isGuest: bool
+  email: String?

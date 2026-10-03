@@ -19,3 +19,4 @@ sessionLogs:
   consoleEnabled: true
 futureCall:
   enabled: false
+maxRequestSize: 4194304

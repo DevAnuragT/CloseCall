@@ -15,8 +15,9 @@ Supabase is a legacy implementation during migration, not the target backend.
 2. **Development authentication and pairing (implemented, locally verified):** Serverpod authentication, persisted
    couple membership, authenticated create/join/read endpoints, atomic invite
    consumption, generated client adapter, and a Flutter connection/pairing flow.
-   Recoverable production identity and physical-device validation remain pending.
-3. **Private media:** pick a photo, export the editor image, upload through
+   Email registration/login/password recovery are locally verified. Actual Cloud
+   email delivery and physical-device validation remain pending.
+3. **Private media (implemented, locally verified):** pick a photo, export the editor image, upload through
    authorised Serverpod endpoints, and retrieve it only as a couple member.
 4. **Schedules:** store UTC windows and fallback assets; reuse the tested resolver
    rules; publish transitions through Serverpod and cache schedules on devices.

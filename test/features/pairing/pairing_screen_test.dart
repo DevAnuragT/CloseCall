@@ -72,7 +72,11 @@ void main() {
   setUp(() {
     session = FakeSession();
     repository = FakeRepository();
-    controller = PairingController(session: session, repository: repository);
+    controller = PairingController(
+      session: session,
+      repository: repository,
+      allowDevGuest: true,
+    );
   });
   tearDown(() {
     controller.dispose();
