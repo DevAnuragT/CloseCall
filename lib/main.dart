@@ -109,6 +109,13 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
       emailBuilder: (_) => EmailSignInWidget(
         client: backend.client,
         startScreen: EmailFlowScreen.login,
+        passwordRequirements: [
+          PasswordRequirement.minLength(8),
+          PasswordRequirement.containsUppercase(),
+          PasswordRequirement.containsLowercase(),
+          PasswordRequirement.containsNumber(),
+          PasswordRequirement.containsSpecialCharacter(),
+        ],
         onError: (error) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
