@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import 'widget_ui_components.dart';
 
 /// A widget shape to preview the photo in. Mirrors the real home-screen sizes
 /// a launcher can present, so there are no surprises after sending.
@@ -43,58 +44,88 @@ class WidgetPreviewScreen extends StatelessWidget {
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
+          tooltip: 'Close preview',
           icon: const Icon(Icons.close_rounded),
           onPressed: () => Navigator.of(context).pop(false),
         ),
+        title: const Text('Widget preview'),
       ),
       body: SafeArea(
         top: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xl,
-            0,
-            AppSpacing.xl,
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
             AppSpacing.xl,
           ),
           children: [
+            Row(
+              children: const [
+                WidgetPill(
+                  label: 'PREVIEW',
+                  icon: Icons.visibility_outlined,
+                  color: AppColors.plum,
+                ),
+                Spacer(),
+                WidgetPill(
+                  label: 'CROPS INCLUDED',
+                  icon: Icons.crop_free_rounded,
+                  color: AppColors.clay,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
             const Text(
               'How it will look',
               style: TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w700,
                 height: 1.1,
+                letterSpacing: -0.4,
                 color: AppColors.ink,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               actionDescription ??
-                  'Your photo crops to each home-screen shape. '
-                      'Set it when it feels right.',
-              style: TextStyle(
-                fontSize: 16,
+                  'Your photo crops to each home-screen shape. Set it when it feels right.',
+              style: const TextStyle(
+                fontSize: 15,
                 height: 1.4,
                 color: AppColors.inkMuted,
               ),
             ),
-            const SizedBox(height: AppSpacing.xxl),
-            // Hero: the common wide shape, shown large.
-            _ShapeFrame(shape: WidgetShape.medium, photo: photo, hero: true),
             const SizedBox(height: AppSpacing.xl),
-            // The remaining shapes, side by side.
+            WidgetCard(
+              eyebrow: 'Most common',
+              title: 'A wide little moment',
+              icon: Icons.web_asset_rounded,
+              accent: AppColors.blush,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: _ShapeFrame(
+                shape: WidgetShape.medium,
+                photo: photo,
+                hero: true,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: _ShapeFrame(shape: WidgetShape.small, photo: photo),
                 ),
-                const SizedBox(width: AppSpacing.lg),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: _ShapeFrame(shape: WidgetShape.circle, photo: photo),
                 ),
               ],
             ),
+            const SizedBox(height: AppSpacing.lg),
+            _ShapeFrame(shape: WidgetShape.large, photo: photo),
           ],
         ),
       ),
@@ -123,7 +154,7 @@ class _ShapeFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final image = Image.memory(photo, fit: BoxFit.cover, gaplessPlayback: true);
-    final radius = BorderRadius.circular(hero ? 28 : 22);
+    final radius = BorderRadius.circular(hero ? 24 : 18);
     final clipped = shape.clip == WidgetShapeClip.circle
         ? ClipOval(child: image)
         : ClipRRect(borderRadius: radius, child: image);
@@ -133,32 +164,33 @@ class _ShapeFrame extends StatelessWidget {
       children: [
         DecoratedBox(
           decoration: BoxDecoration(
+            color: AppColors.cream,
             borderRadius: shape.clip == WidgetShapeClip.circle ? null : radius,
             shape: shape.clip == WidgetShapeClip.circle
                 ? BoxShape.circle
                 : BoxShape.rectangle,
             boxShadow: [
               BoxShadow(
-                color: AppColors.plum.withValues(alpha: 0.18),
-                blurRadius: hero ? 32 : 20,
-                offset: Offset(0, hero ? 14 : 8),
+                color: AppColors.plum.withValues(alpha: 0.16),
+                blurRadius: hero ? 28 : 18,
+                offset: Offset(0, hero ? 12 : 7),
               ),
             ],
           ),
           child: AspectRatio(aspectRatio: shape.aspectRatio, child: clipped),
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
         Text(
           shape.label,
           style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
             color: AppColors.ink,
           ),
         ),
         Text(
           shape.sub,
-          style: TextStyle(fontSize: 13, color: AppColors.inkMuted),
+          style: const TextStyle(fontSize: 12, color: AppColors.inkMuted),
         ),
       ],
     );
@@ -179,39 +211,57 @@ class _ConfirmBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      minimum: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        AppSpacing.sm,
-        AppSpacing.xl,
-        AppSpacing.lg,
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border(
+          top: BorderSide(color: AppColors.plum.withValues(alpha: 0.10)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.plum.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, -8),
+          ),
+        ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              key: const Key('preview-confirm'),
-              onPressed: onConfirm,
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                child: Text(
-                  label,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      child: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const Key('preview-confirm'),
+                onPressed: onConfirm,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          TextButton(
-            key: const Key('preview-cancel'),
-            onPressed: onCancel,
-            child: Text(
-              'Keep editing',
-              style: TextStyle(color: AppColors.inkMuted),
+            TextButton(
+              key: const Key('preview-cancel'),
+              onPressed: onCancel,
+              child: const Text(
+                'Keep editing',
+                style: TextStyle(color: AppColors.inkMuted),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -3,14 +3,37 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../mood/domain/mood.dart';
+import '../../pairing/presentation/pairing_controller.dart';
 import '../../reminders/domain/reminder.dart';
 import '../../widget/domain/widget_schedule_resolver.dart';
 import '../domain/dashboard_snapshot.dart';
 
-/// The emotional first screen: how your partner feels, what's on their home
-/// screen right now, and what's coming up — all glanceable.
+/// The emotional first screen. Demo snapshots remain available for previews,
+/// while live mode only renders state that came from the pairing controller.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, required this.snapshot});
+  const HomeScreen({super.key, this.snapshot, this.pairing, this.onOpenPairing})
+    : assert(snapshot != null || pairing != null);
+
+  final DashboardSnapshot? snapshot;
+  final PairingController? pairing;
+  final VoidCallback? onOpenPairing;
+
+  @override
+  Widget build(BuildContext context) {
+    final livePairing = pairing;
+    if (livePairing != null) {
+      return ListenableBuilder(
+        listenable: livePairing,
+        builder: (context, _) =>
+            _LiveHome(controller: livePairing, onOpenPairing: onOpenPairing),
+      );
+    }
+    return _DemoHome(snapshot: snapshot!);
+  }
+}
+
+class _DemoHome extends StatelessWidget {
+  const _DemoHome({required this.snapshot});
 
   final DashboardSnapshot snapshot;
 
@@ -18,9 +41,20 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: ListView(
-        padding: AppSpacing.screen,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.xxl,
+        ),
         children: [
-          _Greeting(nickname: snapshot.partnerNickname),
+          const _DemoBanner(),
+          const SizedBox(height: AppSpacing.xl),
+          _Header(
+            eyebrow: 'Thinking of',
+            title: snapshot.partnerNickname,
+            icon: Icons.favorite_rounded,
+          ),
           const SizedBox(height: AppSpacing.xl),
           _PartnerMoodCard(mood: snapshot.partnerMood),
           const SizedBox(height: AppSpacing.lg),
@@ -35,33 +69,413 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _Greeting extends StatelessWidget {
-  const _Greeting({required this.nickname});
-  final String nickname;
+class _LiveHome extends StatelessWidget {
+  const _LiveHome({required this.controller, this.onOpenPairing});
+
+  final PairingController controller;
+  final VoidCallback? onOpenPairing;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final couple = controller.couple;
+    final paired = couple?.isComplete == true;
+    final waiting = !controller.hasLoadedPairing || couple == null || !paired;
+
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.xxl,
+        ),
+        children: [
+          _Header(
+            eyebrow: paired ? 'Your little corner' : 'Welcome to CloseCall',
+            title: paired
+                ? 'Close, even from far away'
+                : 'Make it yours together',
+            icon: paired ? Icons.favorite_rounded : Icons.auto_awesome_rounded,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          if (controller.busy) ...[
+            const LinearProgressIndicator(minHeight: 3),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          if (controller.error != null) ...[
+            _LiveNotice(
+              title: 'We could not refresh your space',
+              message:
+                  'Your existing pairing is safe. Open Profile to try again.',
+              icon: Icons.cloud_off_rounded,
+              color: AppColors.error,
+              onPressed: controller.busy ? null : controller.retry,
+              actionLabel: 'Try again',
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+          if (waiting)
+            _PairingWelcomeCard(
+              hasLoadedPairing: controller.hasLoadedPairing,
+              onOpenPairing: onOpenPairing,
+            )
+          else ...[
+            _PairedHero(nickname: couple.partnerNickname),
+            const SizedBox(height: AppSpacing.lg),
+            const _LiveFeatureCard(
+              icon: Icons.auto_awesome_rounded,
+              title: 'Shared moments',
+              message:
+                  'Your private scrapbook is coming together. Moments are not connected yet.',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            const _LiveFeatureCard(
+              icon: Icons.schedule_rounded,
+              title: 'Little plans',
+              message: 'Mood and reminders are still being connected.',
+            ),
+          ],
+          const SizedBox(height: AppSpacing.xl),
+          const _PrivacyNote(),
+        ],
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.eyebrow,
+    required this.title,
+    required this.icon,
+  });
+
+  final String eyebrow;
+  final String title;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Thinking of',
-          style: TextStyle(color: AppColors.inkMuted, fontSize: 16),
-        ),
-        Text(
-          nickname,
-          style: const TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.w600,
-            color: AppColors.ink,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                eyebrow,
+                style: const TextStyle(
+                  color: AppColors.inkMuted,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 28,
+                  height: 1.1,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
+        ),
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppColors.cream,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: Icon(icon, color: AppColors.clay),
         ),
       ],
     );
   }
 }
 
-/// Rounded, soft card used across the dashboard.
+class _DemoBanner extends StatelessWidget {
+  const _DemoBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.visibility_outlined, size: 16, color: AppColors.plum),
+          SizedBox(width: AppSpacing.sm),
+          Text(
+            'Demo mode · sample data, not connected',
+            style: TextStyle(
+              color: AppColors.plum,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PairingWelcomeCard extends StatelessWidget {
+  const _PairingWelcomeCard({
+    required this.hasLoadedPairing,
+    this.onOpenPairing,
+  });
+
+  final bool hasLoadedPairing;
+  final VoidCallback? onOpenPairing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.blush.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.blush.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              color: AppColors.blush,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.favorite_rounded, color: Colors.white),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            hasLoadedPairing ? 'Start with an invite' : 'Connecting your space',
+            style: const TextStyle(
+              color: AppColors.ink,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            hasLoadedPairing
+                ? 'Create an invite for your person, or join theirs with a private code.'
+                : 'We are checking your pairing status. Your private space will be ready soon.',
+            style: const TextStyle(color: AppColors.inkMuted, height: 1.4),
+          ),
+          if (onOpenPairing != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            FilledButton.icon(
+              onPressed: onOpenPairing,
+              icon: const Icon(Icons.arrow_forward_rounded),
+              label: const Text('Open pairing'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PairedHero extends StatelessWidget {
+  const _PairedHero({this.nickname});
+
+  final String? nickname;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.plum,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.blush.withValues(alpha: 0.24),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.favorite_rounded,
+              color: Colors.white,
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Paired',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  nickname == null || nickname!.trim().isEmpty
+                      ? 'Your partner is connected.'
+                      : '${nickname!.trim()} is connected.',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.check_circle_rounded, color: AppColors.success),
+        ],
+      ),
+    );
+  }
+}
+
+class _LiveFeatureCard extends StatelessWidget {
+  const _LiveFeatureCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: AppSpacing.card,
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.clay),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: AppColors.inkMuted,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LiveNotice extends StatelessWidget {
+  const _LiveNotice({
+    required this.title,
+    required this.message,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+    required this.actionLabel,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onPressed;
+  final String actionLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: AppSpacing.card,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  message,
+                  style: const TextStyle(color: AppColors.inkMuted),
+                ),
+                TextButton(onPressed: onPressed, child: Text(actionLabel)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivacyNote extends StatelessWidget {
+  const _PrivacyNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(
+          Icons.lock_outline_rounded,
+          size: 15,
+          color: AppColors.inkMuted,
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Text(
+          'Your space is private by design',
+          style: TextStyle(color: AppColors.inkMuted, fontSize: 13),
+        ),
+      ],
+    );
+  }
+}
+
+/// Rounded, soft card used across the demo dashboard.
 class _SoftCard extends StatelessWidget {
   const _SoftCard({required this.child, this.color});
   final Widget child;
@@ -89,7 +503,7 @@ class _CardLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: TextStyle(
+      style: const TextStyle(
         color: AppColors.inkMuted,
         fontSize: 12,
         letterSpacing: 1.2,
@@ -128,7 +542,6 @@ class _PartnerMoodCard extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.ink,
                 ),
               ),
             ],
@@ -171,7 +584,7 @@ class _WidgetPreviewCard extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 widget.assetId,
-                style: TextStyle(color: AppColors.inkMuted),
+                style: const TextStyle(color: AppColors.inkMuted),
               ),
             ),
           ),
@@ -235,7 +648,6 @@ class _ReminderCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
                   ),
                 ),
               ],
@@ -247,8 +659,6 @@ class _ReminderCard extends StatelessWidget {
   }
 }
 
-/// The four quick actions from the product spec. Wired to real flows later;
-/// for now they surface the intent and keep the dashboard tappable.
 class _QuickActions extends StatelessWidget {
   const _QuickActions();
 
@@ -284,4 +694,3 @@ class _QuickActions extends StatelessWidget {
     );
   }
 }
-
