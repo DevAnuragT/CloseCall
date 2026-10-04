@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../pairing/presentation/pairing_controller.dart';
 
 /// The nested navigator is discarded on identity change, including open editors.
@@ -20,19 +22,95 @@ class AuthGate extends StatelessWidget {
     builder: (context, _) {
       if (!pairing.initialized) {
         return Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (pairing.busy) const CircularProgressIndicator(),
-                if (pairing.error != null)
-                  Text('Connection failed: ${pairing.error}'),
-                if (!pairing.busy)
-                  TextButton(
-                    onPressed: pairing.initialize,
-                    child: const Text('Retry connection'),
+          body: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.plum.withValues(alpha: 0.08),
+                        blurRadius: 28,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
                   ),
-              ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: AppColors.blush.withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.cloud_off_rounded,
+                          color: AppColors.clay,
+                          size: 30,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        pairing.busy ? 'Connecting you' : 'Connection paused',
+                        style: const TextStyle(
+                          color: AppColors.ink,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        pairing.busy
+                            ? 'Checking your private CloseCall space…'
+                            : 'We could not validate this session. Your account data is still safe; try again or start a fresh sign-in.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.inkMuted,
+                          height: 1.45,
+                        ),
+                      ),
+                      if (pairing.error != null) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          'Connection failed',
+                          style: TextStyle(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.xl),
+                      if (pairing.busy)
+                        const CircularProgressIndicator()
+                      else ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: pairing.initialize,
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Retry connection'),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        TextButton(
+                          onPressed: () async {
+                            await pairing.session.signOut();
+                            if (context.mounted) await pairing.initialize();
+                          },
+                          child: const Text('Start over with sign in'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         );
