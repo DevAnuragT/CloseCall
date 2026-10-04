@@ -101,9 +101,13 @@ Future<void> main(List<String> args) async {
     );
     require(
       name == 'pubspec.yaml' ||
-          name == 'pubspec.lock' ||
-          name == '.scloud/scloud_server_dir' ||
-          name.startsWith('closecall_server/') ||
+      name == 'pubspec.lock' ||
+      name == '.scloud/scloud_server_dir' ||
+      name == 'native/sqlite3/libsqlite3.x64.linux.so' ||
+      name == 'native/sqlite3/asset.json' ||
+      name == 'native/sqlite3/THIRD_PARTY_NOTICES.txt' ||
+      name == 'native/sqlite3/pubspec.yaml' ||
+      name.startsWith('closecall_server/') ||
           name.startsWith('closecall_shared/lib/') ||
           name == 'closecall_shared/pubspec.yaml',
       'Non-runtime archive entry: $name',

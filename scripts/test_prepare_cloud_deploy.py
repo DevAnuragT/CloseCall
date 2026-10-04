@@ -45,6 +45,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.3"
+  sqlite3:
+    dependency: transitive
+    description:
+      name: sqlite3
+      sha256: def
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.7.0"
 sdks:
   dart: ">=3.12.2 <4.0.0"
 """)

@@ -10,17 +10,85 @@ CLI 1.0.1 filters unused development lock entries when creating its ZIP.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 
 DART_SDK = "3.13.5"
 SERVERPOD_VERSION = "4.0.3"
 STAGE_PATH = Path(".tooling/cloud-deploy")
 MANIFEST = ".deploy-manifest.json"
+SQLITE_VERSION = "3.7.0"
+SQLITE_FILENAME = "libsqlite3.x64.linux.so"
+SQLITE_SHA256 = "0f947ebe629e8d9d02d7f408bef36e056bfc63ea47e02e0d45a7bae454f04ace"
+SQLITE_SIZE = 1788664
+SQLITE_URL = ("https://github.com/simolus3/sqlite3.dart/releases/download/"
+              "sqlite3-3.7.0/" + SQLITE_FILENAME)
+SQLITE_DIRECTORY = "native/sqlite3"
+SQLITE_PATH = SQLITE_DIRECTORY + "/" + SQLITE_FILENAME
+SQLITE_CACHE = Path(".tooling/cloud-asset-cache/sqlite3-3.7.0") / SQLITE_FILENAME
+ASSET_PACKAGE = "closecall_deploy_sqlite3_asset"
+FETCH_TIMEOUT = 30
+FETCH_DEADLINE = 60
+SQLITE_HOOKS = """hooks:
+  user_defines:
+    sqlite3:
+      source:
+        linux: test-sqlite3
+        default: sqlite3
+      directory: native/sqlite3/
+"""
+ASSET_PUBSPEC = """name: closecall_deploy_sqlite3_asset
+description: Verified deployment-only SQLite native asset; no Dart implementation.
+publish_to: none
+environment:
+  sdk: ^3.12.2
+resolution: workspace
+"""
+SQLITE_NOTICES = """SQLite native library
+---------------------
+This is the upstream SQLite binary, not SQLite3MultipleCiphers or SQLCipher.
+SQLite is in the public domain: https://sqlite.org/copyright.html
+Release source: https://github.com/simolus3/sqlite3.dart/releases/tag/sqlite3-3.7.0
+The sqlite3 Dart package's hook documentation identifies this build as upstream
+SQLite and documents its public-domain status:
+https://github.com/simolus3/sqlite3.dart/blob/sqlite3-3.7.0/sqlite3/doc/hook.md
+
+sqlite3 Dart library attribution (MIT)
+------------------------------------
+Source: https://pub.dev/packages/sqlite3/versions/3.7.0/license
+
+MIT License
+
+Copyright (c) 2020 Simon Binder
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 SCLOUD_CONFIG = """# Public project link only. Never add credentials or generation hooks here.
 project:
   projectId: closecall
@@ -36,6 +104,7 @@ environment:
 workspace:
   - closecall_server
   - closecall_shared
+  - native/sqlite3
 """
 MIGRATION_FILES = {
     "definition.json", "definition_project.json", "definition.sql",
@@ -123,6 +192,115 @@ def locked_packages(content):
                            content, re.M))
 
 
+def require_sqlite_lock(content):
+    block = locked_packages(content).get("sqlite3", "")
+    if (not re.search(r'^    version: "3\.7\.0"$', block, re.M)
+            or not re.search(r'^    source: hosted$', block, re.M)
+            or not re.search(r'^      name: sqlite3$', block, re.M)
+            or not re.search(r'^      url: "https://pub\.dev"$', block, re.M)):
+        raise ValueError("SQLite asset bundling requires locked hosted sqlite3 exactly 3.7.0")
+
+
+def verify_sqlite_asset(data):
+    if len(data) != SQLITE_SIZE:
+        raise ValueError("SQLite asset byte count mismatch")
+    if hashlib.sha256(data).hexdigest() != SQLITE_SHA256:
+        raise ValueError("SQLite asset SHA256 mismatch; refusing unverified bytes")
+    if (data[:7] != b"\x7fELF\x02\x01\x01"
+            or int.from_bytes(data[16:18], "little") != 3
+            or int.from_bytes(data[18:20], "little") != 62
+            or int.from_bytes(data[20:24], "little") != 1
+            or int.from_bytes(data[52:54], "little") != 64):
+        raise ValueError("SQLite asset is not an ELF64 little-endian x86-64 shared library")
+    return data
+
+
+def bounded_asset_read(stream, deadline=None):
+    data = bytearray()
+    while len(data) <= SQLITE_SIZE:
+        if deadline is not None and time.monotonic() > deadline:
+            raise ValueError("SQLite asset download deadline exceeded")
+        # HTTPResponse.read1 avoids an unbounded internal read loop for a slow
+        # response; each socket read also has FETCH_TIMEOUT applied.
+        reader = getattr(stream, "read1", stream.read)
+        chunk = reader(min(65536, SQLITE_SIZE + 1 - len(data)))
+        if not chunk:
+            break
+        data.extend(chunk)
+    return verify_sqlite_asset(bytes(data))
+
+
+def validate_asset_url(url):
+    parsed = urllib.parse.urlsplit(url)
+    if (parsed.scheme != "https" or parsed.hostname not in {
+            "github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"}
+            or parsed.username or parsed.password or parsed.port not in (None, 443)):
+        raise ValueError("Refusing non-official HTTPS SQLite asset redirect")
+
+
+class OfficialAssetRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, newurl):
+        validate_asset_url(newurl)
+        return super().redirect_request(request, fp, code, message, headers, newurl)
+
+
+def download_sqlite_asset():
+    request = urllib.request.Request(SQLITE_URL, headers={
+        "User-Agent": "CloseCall-deploy-preparation",
+        "Accept": "application/octet-stream",
+        "Accept-Encoding": "identity",
+    })
+    opener = urllib.request.build_opener(OfficialAssetRedirects())
+    deadline = time.monotonic() + FETCH_DEADLINE
+    try:
+        with opener.open(request, timeout=FETCH_TIMEOUT) as response:
+            validate_asset_url(response.geturl())
+            if response.status != 200:
+                raise ValueError("SQLite asset download did not return HTTP 200")
+            length = response.headers.get("Content-Length")
+            if length is not None and length != str(SQLITE_SIZE):
+                raise ValueError("SQLite asset Content-Length mismatch")
+            if response.headers.get("Content-Encoding", "identity") != "identity":
+                raise ValueError("SQLite asset response must be unencoded bytes")
+            return bounded_asset_read(response, deadline)
+    except (urllib.error.URLError, OSError) as error:
+        # Never log a redirect's signed URL or response body.
+        raise ValueError("SQLite asset download failed; no asset was cached") from error
+
+
+def verified_sqlite_asset(root):
+    """Download once to ignored cache; verify EVERY use, fail closed on damage."""
+    root = Path(root)
+    directory = root
+    for part in SQLITE_CACHE.parent.parts:
+        directory /= part
+        if directory.is_symlink():
+            raise ValueError("Refusing symlinked SQLite asset cache")
+        directory.mkdir(exist_ok=True)
+        if not directory.is_dir():
+            raise ValueError("SQLite asset cache parent is not a directory")
+    cached = root / SQLITE_CACHE
+    if cached.is_symlink():
+        raise ValueError("Refusing symlinked SQLite asset cache")
+    if cached.exists():
+        descriptor = os.open(cached, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size != SQLITE_SIZE:
+                raise ValueError("SQLite cached asset is not a regular file of the pinned size")
+            return bounded_asset_read(stream)
+    data = verify_sqlite_asset(download_sqlite_asset())
+    descriptor, scratch = tempfile.mkstemp(prefix="sqlite3-verified-", dir=directory)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+        os.replace(scratch, cached)
+    finally:
+        if os.path.exists(scratch):
+            os.unlink(scratch)
+    return data
+
+
 def verify_resolved_lock(original, resolved):
     """Resolution may prune/demote dependencies, never change pinned artifacts."""
     before, after = locked_packages(original), locked_packages(resolved)
@@ -134,6 +312,7 @@ def verify_resolved_lock(original, resolved):
             raise ValueError(f"Resolution changed a pinned dependency: {package}")
     if not after or 'version: "4.0.3"' not in after.get("serverpod", ""):
         raise ValueError("Missing pinned Serverpod dependency after resolution")
+    require_sqlite_lock(resolved)
 
 
 def cloud_ignore(files):
@@ -183,18 +362,46 @@ def prepare(root, replace=False):
         files[key] = runtime_pubspec(files[key].decode(), package).encode()
     files["pubspec.lock"] = workspace_lock(
         files.pop("closecall_server/pubspec.lock").decode()).encode()
+    # Guard the pin before configuring the hook or touching the asset cache.
+    require_sqlite_lock(files["pubspec.lock"].decode())
     files.pop("closecall_shared/pubspec.lock", None)
-    files["pubspec.yaml"] = ROOT_PUBSPEC.encode()
+    server_pubspec = files["closecall_server/pubspec.yaml"].decode()
+    if re.search(r"^hooks:|closecall_deploy_sqlite3_asset", server_pubspec, re.M):
+        raise ValueError("Review conflicting deployment-only hook/asset configuration")
+    # Cloud CLI only archives reachable workspace members. This generated
+    # resource package gets the root-level native/ directory into that set,
+    # without patching sqlite3 or changing any existing hosted lock entry.
+    server_pubspec = server_pubspec.replace(
+        "dependencies:\n", "dependencies:\n  " + ASSET_PACKAGE + ":\n"
+        "    path: ../native/sqlite3\n", 1)
+    files["closecall_server/pubspec.yaml"] = server_pubspec.encode()
+    files["pubspec.yaml"] = (ROOT_PUBSPEC + SQLITE_HOOKS).encode()
     # Use a known credential-free configuration, not arbitrary local CLI hooks.
     config = read_regular(root, "closecall_server/scloud.yaml")
     if config != SCLOUD_CONFIG.encode():
         raise ValueError("Review changed scloud.yaml before preparing deployment")
     files["closecall_server/scloud.yaml"] = config
+    files[SQLITE_PATH] = verified_sqlite_asset(root)
+    files[SQLITE_DIRECTORY + "/pubspec.yaml"] = ASSET_PUBSPEC.encode()
+    notice_path = SQLITE_DIRECTORY + "/THIRD_PARTY_NOTICES.txt"
+    files[notice_path] = SQLITE_NOTICES.encode()
+    asset_metadata = {
+        "package": "sqlite3", "packageVersion": SQLITE_VERSION,
+        "path": SQLITE_PATH, "sourceUrl": SQLITE_URL,
+        "sha256": SQLITE_SHA256, "sizeBytes": SQLITE_SIZE,
+        "target": "linux-x64", "noticePath": notice_path,
+        "licenses": {"nativeSQLite": "public domain", "sqlite3DartLibrary": "MIT"},
+        "licenseSources": ["https://sqlite.org/copyright.html",
+                           "https://pub.dev/packages/sqlite3/versions/3.7.0/license"],
+    }
+    metadata_path = SQLITE_DIRECTORY + "/asset.json"
+    files[metadata_path] = (json.dumps(asset_metadata, indent=2, sort_keys=True) + "\n").encode()
     files[".scloudignore"] = cloud_ignore(files).encode()
     manifest = {
         "format": "closecall-cloud-deploy-v1",
         "dartSdk": DART_SDK,
         "serverpod": SERVERPOD_VERSION,
+        "nativeAssets": [{**asset_metadata, "metadataPath": metadata_path}],
         "sourceSha256": source_hashes,
         "stagedSha256BeforePubGet": {p: hashlib.sha256(data).hexdigest()
                          for p, data in sorted(files.items())},
