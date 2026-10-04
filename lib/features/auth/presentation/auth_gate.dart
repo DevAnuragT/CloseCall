@@ -43,10 +43,10 @@ class AuthGate extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
-                const Text('CloseCall — email account'),
+                const Text('Sign in to CloseCall'),
                 const Text(
-                  'Register, sign in, or reset your password below. '
-                  'Guest data is not linked to a new email account.',
+                  'Create an account, sign in, or reset your password using '
+                  'email verification.',
                 ),
                 emailBuilder(context),
                 if (pairing.error != null)
