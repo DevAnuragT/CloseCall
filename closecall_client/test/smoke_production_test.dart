@@ -173,6 +173,23 @@ Future<void> main() async {
       expectedRequests: 7,
     );
   }
+  await scenario(
+    'rejects_login_network_error',
+    (request) async => request.url.path == '/anonymousIdp/login'
+        ? throw http.ClientException('private_credential')
+        : response(401),
+    false,
+    expectedRequests: 7,
+  );
+  await scenario(
+    'rejects_login_timeout',
+    (request) => request.url.path == '/anonymousIdp/login'
+        ? Completer<http.StreamedResponse>().future
+        : Future.value(response(401)),
+    false,
+    expectedRequests: 7,
+    timeout: const Duration(milliseconds: 20),
+  );
   final auth = AuthSuccess(
     authStrategy: 'jwt',
     token: 'private_access_token',

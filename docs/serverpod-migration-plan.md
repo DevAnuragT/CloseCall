@@ -15,8 +15,9 @@ Supabase is a legacy implementation during migration, not the target backend.
 2. **Development authentication and pairing (implemented, locally verified):** Serverpod authentication, persisted
    couple membership, authenticated create/join/read endpoints, atomic invite
    consumption, generated client adapter, and a Flutter connection/pairing flow.
-   Email registration/login/password recovery are locally verified. Actual Cloud
-   email delivery and physical-device validation remain pending.
+   Email registration/login/password recovery are locally verified. Cloud
+   deployment is live on Starter; actual transactional email delivery and
+   physical-device validation remain pending.
 3. **Private media (implemented, locally verified):** pick a photo, export the editor image, upload through
    authorised Serverpod endpoints, and retrieve it only as a couple member.
 4. **Schedules (implemented, locally verified):** store UTC windows and fallback
@@ -64,8 +65,10 @@ two-device acceptance remain outstanding. See `serverpod-setup.md` for commands.
 - Serverpod Cloud project `closecall` exists on Starter. Its profile confirms
   trial expiry on 3 November 2026; no upgrade or paid changes are authorised.
   Starter adaptation is tested: DB schedules/foreground streams and Android
-  cached transitions do not depend on future-call wakes. Deployment is pending
-  verification; transactional email and physical devices still need validation.
+  cached transitions do not depend on future-call wakes. Deployment succeeded;
+  production unauthenticated smoke passes at
+  `https://closecall.api.serverpod.space/`. Transactional email and physical
+  devices still need validation.
 - Verify transactional email and Cloud production secrets before deploy.
 - For new closed-app delivery, configure a Firebase service account through
   secure server secret management (never commit it or paste it into chat).

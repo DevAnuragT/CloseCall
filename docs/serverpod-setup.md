@@ -124,6 +124,12 @@ These optional integration tests use the isolated Cloud CLI package context at
 `.tooling/cloud-inspect/.dart_tool/package_config.json`. They inspect ZIP contents
 and compile staged Dart runtime sources without provisioning Cloud resources.
 
+Current deployment status: project `closecall`, Starter trial through 3 November
+2026, one ready podlet, migrations applied. API origin:
+`https://closecall.api.serverpod.space/`. Read-only production smoke passes all
+seven probes: six unauthenticated RPCs return 401 and anonymous login returns
+generic 500. This proves transport/auth guards, not transactional email delivery.
+
 ## Code generation and migrations
 
 ### Local HTTP smoke
@@ -193,10 +199,13 @@ startup. Existing private `.env` and Firebase files have not been removed.
 ## Validation recorded on 4 October 2026
 
 - App, generated client and backend analysis: clean.
-- Flutter tests: 155 passed; backend tests: 57 passed; shared resolver: 7 passed,
+- Flutter tests: 155 passed; backend tests: 73 passed; shared resolver: 7 passed,
   including real PostgreSQL
   concurrency and authentication tests.
 - Local HTTP/JWT smoke: passed.
+- Production HTTP smoke: passed against `https://closecall.api.serverpod.space/`.
+- Cloud packaging: 25 Python tests plus staged compile/archive validation passed;
+  verified SQLite Linux asset digest preserved.
 - Preserved original development database upgraded successfully; HTTP pairing,
   private media and scheduling smoke passed afterward.
 - Clean source copy without `.env` or inherited secrets: Flutter/backend tests
@@ -204,4 +213,5 @@ startup. Existing private `.env` and Firebase files have not been removed.
 - Android debug APK build: passed (`build/app/outputs/flutter-apk/app-debug.apk`).
 - Android JVM tests: 27 passed; native emulator instrumentation: 4 passed,
   including receiver-based fallback without launching Flutter.
-- Physical devices, native iOS and deployed Cloud environments: not verified.
+- Physical devices, native iOS, transactional email, and closed-app network
+  delivery: not verified. Cloud deployment itself is verified live.

@@ -32,9 +32,12 @@ String validateProductionApiUrl(String input) {
   }
 }
 
-/// Read-only RPC probes plus a production-guarded anonymous login probe.
-/// The server guard must reject login before account creation. A successful
-/// login is a failure; its response is discarded, never printed or installed.
+/// Read-only RPC probes plus an anonymous login denial probe.
+/// Run only against a deployment whose server guard rejects anonymous login
+/// before account creation. HTTP 500 confirms a generic server-error denial;
+/// it does not prove the guard's reason or independently verify no account was
+/// created. A successful login is a failure; its response is discarded, never
+/// printed or installed.
 /// No email registration, pairing mutation, upload, or schedule write is sent.
 /// Takes ownership of [client] and closes it even on failure or timeout.
 Future<bool> runProductionSmoke(
@@ -64,8 +67,8 @@ Future<bool> runProductionSmoke(
         return false;
       } catch (error) {
         final expected = probe.key == 'anonymousIdp.login'
-            // The production StateError guard is transported as HTTP 500.
-            // This checks the transport contract, not the private error body.
+            // Expected transport status for the production guard, but any
+            // generic HTTP 500 meets this check. Do not infer its cause.
             ? error is ServerpodClientInternalServerError &&
                   error.statusCode == 500
             : error is ServerpodClientUnauthorized && error.statusCode == 401;

@@ -17,9 +17,10 @@ partner's home-screen widget. Flutter frontend; Serverpod authoritative backend.
 - Implemented scheduling: private recipient timelines, overlap priority,
   own fallback, cancellation, live foreground streams, and opt-in Android
   cached transitions/revert with a 24-hour expiry.
-- Not implemented: production email delivery verification,
-  network delivery of new schedules while the app is closed,
-  live mood/reminders, Moments, cloud deployment, or iOS widgets.
+- Cloud deployment: Starter project `closecall` is live at
+  `https://closecall.api.serverpod.space/`; production unauthenticated smoke
+  passes. Email delivery, network delivery of new schedules while app is
+  closed, live mood/reminders, Moments, or iOS widgets remain unverified.
 
 Local editing updates the **same device**. Private sharing and schedules target
 the partner's timeline; the recipient must opt in to sync and cache it.
@@ -81,6 +82,13 @@ Development email codes appear only in the local server terminal. Use them in
 the app, not in chat or repository files. Guest sign-in is hidden by default;
 enable it explicitly with `--dart-define=ALLOW_DEV_GUEST=true` for local tests.
 Cloud deployments require actual transactional email access.
+
+Production API smoke:
+
+```sh
+(cd closecall_client && ../.tooling/flutter/bin/dart run \
+  tool/smoke_production.dart https://closecall.api.serverpod.space/)
+```
 
 The Widget tab now picks/decorates a photo and uploads it privately. Your partner
 can refresh, download, and explicitly apply it to their own Android widget.

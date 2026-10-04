@@ -1,13 +1,15 @@
 """Local deployment packaging tests; no Cloud API calls or secret reads."""
 
 import importlib.util
+import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,8 +18,27 @@ deploy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deploy)
 
 
+def synthetic_elf():
+    """Portable bytes for validation tests, never used in a real deploy stage."""
+    data = bytearray(128)
+    data[:7] = b"\x7fELF\x02\x01\x01"
+    data[16:18] = (3).to_bytes(2, "little")
+    data[18:20] = (62).to_bytes(2, "little")
+    data[20:24] = (1).to_bytes(4, "little")
+    data[52:54] = (64).to_bytes(2, "little")
+    return bytes(data)
+
+
 class PrepareTests(unittest.TestCase):
     def setUp(self):
+        self.asset = synthetic_elf()
+        asset_patch = patch.object(deploy, "verified_sqlite_asset", return_value=self.asset)
+        self.asset_fetch = asset_patch.start()
+        self.addCleanup(asset_patch.stop)
+        network_patch = patch.object(deploy.urllib.request, "build_opener",
+                                     side_effect=AssertionError("Unit tests must not access network"))
+        network_patch.start()
+        self.addCleanup(network_patch.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -161,17 +182,220 @@ sdks:
         with self.assertRaisesRegex(ValueError, "changed a pinned"):
             deploy.verify_resolved_lock(original, original.replace('version: "4.0.3"', 'version: "4.0.4"'))
 
+    def test_sqlite_version_drift_fails_before_asset_fetch_or_stage(self):
+        lock = self.root / "closecall_server/pubspec.lock"
+        lock.write_text(lock.read_text().replace('version: "3.7.0"', 'version: "3.7.1"'))
+        with self.assertRaisesRegex(ValueError, "sqlite3 exactly 3.7.0"):
+            deploy.prepare(self.root)
+        self.asset_fetch.assert_not_called()
+        self.assertFalse((self.root / deploy.STAGE_PATH).exists())
+
+    def test_stage_records_native_asset_and_license_metadata(self):
+        stage, _ = deploy.prepare(self.root)
+        self.assertEqual((stage / deploy.SQLITE_PATH).read_bytes(), self.asset)
+        self.assertIn(deploy.SQLITE_HOOKS, (stage / "pubspec.yaml").read_text())
+        metadata = json.loads((stage / "native/sqlite3/asset.json").read_text())
+        self.assertEqual(metadata["sha256"], deploy.SQLITE_SHA256)
+        self.assertEqual(metadata["sourceUrl"], deploy.SQLITE_URL)
+        self.assertEqual(metadata["sizeBytes"], deploy.SQLITE_SIZE)
+        self.assertEqual(metadata["licenses"], {
+            "nativeSQLite": "public domain", "sqlite3DartLibrary": "MIT"})
+        notices = (stage / metadata["noticePath"]).read_text()
+        self.assertIn("https://sqlite.org/copyright.html", notices)
+        self.assertIn("Copyright (c) 2020 Simon Binder", notices)
+        self.assertIn("THE SOFTWARE IS PROVIDED", notices)
+        manifest = json.loads((stage / deploy.MANIFEST).read_text())
+        self.assertEqual(manifest["nativeAssets"][0]["metadataPath"], "native/sqlite3/asset.json")
+        self.assertEqual(manifest["nativeAssets"][0]["sha256"], deploy.SQLITE_SHA256)
+
+
+class SqliteAssetTests(unittest.TestCase):
+    def setUp(self):
+        self.asset = synthetic_elf()
+        for name, value in (("SQLITE_SIZE", len(self.asset)),
+                            ("SQLITE_SHA256", hashlib.sha256(self.asset).hexdigest())):
+            patcher = patch.object(deploy, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.cache = self.root / deploy.SQLITE_CACHE
+        # All download tests inject a local response; an accidental live fetch
+        # anywhere else is an immediate failure, not a network-dependent test.
+        patcher = patch.object(deploy.urllib.request, "build_opener",
+                               side_effect=AssertionError("No network in unit tests"))
+        self.opener_factory = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def mock_response(self, data=None, status=200, url=None, headers=None):
+        response = io.BytesIO(self.asset if data is None else data)
+        response.status = status
+        response.headers = {"Content-Length": str(len(self.asset))} if headers is None else headers
+        response.geturl = lambda: deploy.SQLITE_URL if url is None else url
+        opener = Mock()
+        opener.open.return_value = response
+        self.opener_factory.side_effect = None
+        self.opener_factory.return_value = opener
+        return opener
+
+    def test_valid_digest_size_and_elf(self):
+        self.assertEqual(deploy.verify_sqlite_asset(self.asset), self.asset)
+
+    def test_invalid_digest_and_size(self):
+        for data, error in ((self.asset[:-1], "byte count"),
+                            (self.asset + b"x", "byte count"),
+                            (self.asset[:-1] + b"x", "SHA256")):
+            with self.subTest(error=error, size=len(data)):
+                with self.assertRaisesRegex(ValueError, error):
+                    deploy.verify_sqlite_asset(data)
+
+    def test_invalid_elf_header_even_with_matching_digest(self):
+        for offset, value in ((0, 0), (4, 1), (5, 2), (6, 0), (16, 2),
+                              (18, 183), (20, 0), (52, 0)):
+            data = bytearray(self.asset)
+            data[offset] = value
+            data = bytes(data)
+            with self.subTest(header_offset=offset):
+                with patch.object(deploy, "SQLITE_SHA256", hashlib.sha256(data).hexdigest()):
+                    with self.assertRaisesRegex(ValueError, "ELF64"):
+                        deploy.verify_sqlite_asset(data)
+
+    def test_bounded_read_stops_after_one_oversize_byte(self):
+        stream = io.BytesIO(self.asset + b"x" * 10000)
+        with self.assertRaisesRegex(ValueError, "byte count"):
+            deploy.bounded_asset_read(stream)
+        self.assertEqual(stream.tell(), len(self.asset) + 1)
+
+    def test_bounded_read_handles_chunks_and_rejects_expired_deadline(self):
+        class SmallChunks(io.BytesIO):
+            def read1(self, size):
+                return super().read(min(size, 7))
+        self.assertEqual(deploy.bounded_asset_read(SmallChunks(self.asset)), self.asset)
+        stream = io.BytesIO(self.asset)
+        with patch.object(deploy.time, "monotonic", return_value=100):
+            with self.assertRaisesRegex(ValueError, "deadline exceeded"):
+                deploy.bounded_asset_read(stream, deadline=99)
+        self.assertEqual(stream.tell(), 0)
+
+    def test_disallowed_redirects_fail_before_following(self):
+        handler = deploy.OfficialAssetRedirects()
+        request = deploy.urllib.request.Request(deploy.SQLITE_URL)
+        for url in ("http://github.com/asset", "https://evil.example/asset",
+                    "https://github.com.evil.example/asset", "https://user@github.com/asset",
+                    "https://github.com:444/asset", "file:///native/sqlite3/asset"):
+            with self.subTest(url=url):
+                with self.assertRaisesRegex(ValueError, "non-official HTTPS"):
+                    handler.redirect_request(request, None, 302, "Found", {}, url)
+        for url in (deploy.SQLITE_URL, "https://release-assets.githubusercontent.com/asset",
+                    "https://objects.githubusercontent.com/asset"):
+            deploy.validate_asset_url(url)
+
+    def test_download_uses_exact_url_timeout_and_identity_bytes(self):
+        opener = self.mock_response()
+        self.assertEqual(deploy.download_sqlite_asset(), self.asset)
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.full_url, deploy.SQLITE_URL)
+        self.assertEqual(request.get_header("Accept-encoding"), "identity")
+        self.assertEqual(opener.open.call_args.kwargs["timeout"], deploy.FETCH_TIMEOUT)
+
+    def test_download_rejects_invalid_response_metadata(self):
+        cases = [({"status": 206}, "HTTP 200"),
+                 ({"headers": {"Content-Length": "129"}}, "Content-Length"),
+                 ({"headers": {"Content-Encoding": "gzip"}}, "unencoded"),
+                 ({"url": "https://evil.example/asset"}, "non-official HTTPS")]
+        for parameters, message in cases:
+            with self.subTest(parameters=parameters):
+                self.mock_response(**parameters)
+                with self.assertRaisesRegex(ValueError, message):
+                    deploy.download_sqlite_asset()
+
+    def test_download_rejects_bad_body_with_no_length_header(self):
+        for data, message in ((b"html", "byte count"),
+                              (self.asset + b"x" * 10000, "byte count"),
+                              (self.asset[:-1] + b"x", "SHA256")):
+            with self.subTest(message=message, size=len(data)):
+                self.mock_response(data=data, headers={})
+                with self.assertRaisesRegex(ValueError, message):
+                    deploy.verified_sqlite_asset(self.root)
+                self.assertFalse(self.cache.exists())
+
+    def test_download_timeout_fails_without_cache_or_sensitive_url_logging(self):
+        self.opener_factory.side_effect = None
+        opener = Mock()
+        opener.open.side_effect = TimeoutError("https://signed.example/?token=do-not-log")
+        self.opener_factory.return_value = opener
+        with self.assertRaisesRegex(ValueError, "download failed") as result:
+            deploy.verified_sqlite_asset(self.root)
+        self.assertNotIn("token", str(result.exception))
+        self.assertFalse(self.cache.exists())
+
+    def test_download_caches_verified_bytes_and_rechecks_every_use(self):
+        with patch.object(deploy, "download_sqlite_asset", return_value=self.asset) as fetch:
+            self.assertEqual(deploy.verified_sqlite_asset(self.root), self.asset)
+            fetch.assert_called_once_with()
+            self.assertEqual(self.cache.read_bytes(), self.asset)
+            self.assertEqual(deploy.verified_sqlite_asset(self.root), self.asset)
+            fetch.assert_called_once_with()
+            corrupted = self.asset[:-1] + b"x"
+            self.cache.write_bytes(corrupted)
+            with self.assertRaisesRegex(ValueError, "SHA256"):
+                deploy.verified_sqlite_asset(self.root)
+            fetch.assert_called_once_with()
+            self.assertEqual(self.cache.read_bytes(), corrupted)
+
+    def test_corrupt_size_or_nonregular_cache_fails_without_redownload(self):
+        self.cache.parent.mkdir(parents=True)
+        with patch.object(deploy, "download_sqlite_asset") as fetch:
+            self.cache.write_bytes(b"truncated")
+            with self.assertRaisesRegex(ValueError, "regular file.*pinned size"):
+                deploy.verified_sqlite_asset(self.root)
+            self.cache.unlink()
+            self.cache.mkdir()
+            with self.assertRaises((ValueError, OSError)):
+                deploy.verified_sqlite_asset(self.root)
+            fetch.assert_not_called()
+
+    def test_cache_file_and_parent_symlinks_fail_closed(self):
+        target = self.root / "public-asset.so"
+        target.write_bytes(self.asset)
+        self.cache.parent.mkdir(parents=True)
+        self.cache.symlink_to(target)
+        with patch.object(deploy, "download_sqlite_asset") as fetch:
+            with self.assertRaisesRegex(ValueError, "symlinked"):
+                deploy.verified_sqlite_asset(self.root)
+            self.cache.unlink()
+            self.cache.parent.rmdir()
+            self.cache.parent.symlink_to(self.root, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "symlinked"):
+                deploy.verified_sqlite_asset(self.root)
+            fetch.assert_not_called()
+
+    def test_mock_download_is_still_verified_before_caching(self):
+        with patch.object(deploy, "download_sqlite_asset", return_value=self.asset[:-1] + b"x"):
+            with self.assertRaisesRegex(ValueError, "SHA256"):
+                deploy.verified_sqlite_asset(self.root)
+        self.assertFalse(self.cache.exists())
+
 
 @unittest.skipUnless(os.environ.get("CLOSECALL_DEPLOY_INTEGRATION") == "1",
                      "Set CLOSECALL_DEPLOY_INTEGRATION=1 for offline Dart compile/archive checks")
 class DartDeploymentTests(unittest.TestCase):
     def test_real_runtime_compiles_and_archive_is_allowlisted(self):
+        if not (ROOT / deploy.SQLITE_CACHE).exists():
+            self.skipTest("Offline integration requires the already-verified public SQLite asset cache")
+        with patch.object(deploy, "download_sqlite_asset",
+                          side_effect=AssertionError("Integration must use cache, never network")):
+            source_asset = deploy.verified_sqlite_asset(ROOT)
         dart = os.environ.get("DART", str(ROOT / ".tooling/flutter/bin/cache/dart-sdk/bin/dart"))
         version = subprocess.check_output([dart, "--version"], text=True, stderr=subprocess.STDOUT)
         self.assertIn("Dart SDK version: 3.13.5 ", version)
         # Use only public allowlisted runtime inputs to construct an isolated repo.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            cached = root / deploy.SQLITE_CACHE
+            cached.parent.mkdir(parents=True)
+            cached.write_bytes(source_asset)
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
             tracked = subprocess.check_output([
                 "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z",
@@ -185,7 +409,9 @@ class DartDeploymentTests(unittest.TestCase):
             config = root / "closecall_server/scloud.yaml"
             config.write_text(deploy.SCLOUD_CONFIG)
             subprocess.run(["git", "add", "closecall_server", "closecall_shared"], cwd=root, check=True)
-            stage, _ = deploy.prepare(root)
+            with patch.object(deploy, "download_sqlite_asset",
+                              side_effect=AssertionError("Integration must use cache, never network")):
+                stage, _ = deploy.prepare(root)
             original_lock = (stage / "pubspec.lock").read_text()
             subprocess.run([dart, "pub", "get", "--offline"], cwd=stage, check=True)
             resolved_lock = (stage / "pubspec.lock").read_text()
