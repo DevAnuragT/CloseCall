@@ -4,6 +4,8 @@ import 'package:closecall_client/closecall_client.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/permissions/notification_permission_service.dart';
+import '../../../core/permissions/widget_readiness_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../media/data/media_repository.dart';
@@ -29,6 +31,7 @@ class WidgetTabScreen extends StatefulWidget {
     this.schedules,
     this.pairing,
     this.onConnectPartner,
+    this.readiness,
   });
   final MediaController? media;
   final bool liveMode;
@@ -37,6 +40,7 @@ class WidgetTabScreen extends StatefulWidget {
   final ScheduleController? schedules;
   final PairingController? pairing;
   final VoidCallback? onConnectPartner;
+  final WidgetReadinessController? readiness;
   @override
   State<WidgetTabScreen> createState() => _WidgetTabScreenState();
 }
@@ -159,6 +163,7 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
     listenable: Listenable.merge([
       widget.media,
       widget.pairing ?? widget.media?.pairing,
+      widget.readiness,
     ]),
     builder: (context, _) {
       final media = widget.media;
@@ -205,6 +210,11 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
           children: [
             _WidgetHeader(liveMode: widget.liveMode),
             const SizedBox(height: AppSpacing.md),
+            if (widget.readiness != null &&
+                pairing?.couple?.isComplete == true) ...[
+              _WidgetReadinessCard(controller: widget.readiness!),
+              const SizedBox(height: AppSpacing.md),
+            ],
             if (widget.liveMode &&
                 widget.schedules != null &&
                 identical(widget.schedules!.pairing, pairing)) ...[
@@ -482,6 +492,131 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
   );
 }
 
+/// OS readiness is not partner-photo consent. None of these actions writes the
+/// user's partner-update preference or gates foreground sharing.
+class _WidgetReadinessCard extends StatelessWidget {
+  const _WidgetReadinessCard({required this.controller});
+  final WidgetReadinessController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final access = c.notificationAccess;
+    if (c.initialised &&
+        c.widgetInstalled &&
+        access == NotificationAccess.granted &&
+        c.error == null) {
+      return const Align(
+        alignment: Alignment.centerLeft,
+        child: Chip(
+          key: Key('widget-setup-ready'),
+          avatar: Icon(Icons.check_circle_outline_rounded, size: 18),
+          label: Text('Widget ready'),
+          backgroundColor: AppColors.cream,
+        ),
+      );
+    }
+    final disabled = c.busy || !c.initialised;
+    return WidgetCard(
+      key: const Key('widget-setup-card'),
+      title: 'Widget setup',
+      icon: Icons.widgets_outlined,
+      accent: AppColors.clay,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            !c.initialised
+                ? 'Checking this device…'
+                : c.widgetInstalled
+                ? 'Home widget: installed'
+                : 'Home widget: not added yet',
+            key: const Key('widget-install-status'),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(switch (access) {
+            NotificationAccess.granted => 'Notifications: allowed',
+            NotificationAccess.denied => 'Notifications: off',
+            NotificationAccess.permanentlyDenied =>
+              'Notifications: off — change in Settings',
+            NotificationAccess.unsupported =>
+              'Notifications: unavailable on this device',
+            NotificationAccess.unknown => 'Notifications: not checked yet',
+          }, key: const Key('widget-notification-status')),
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'Notifications aren’t required for live updates while the app is '
+            'open. Closed-app photo delivery is not available yet.',
+            style: TextStyle(color: AppColors.inkMuted, height: 1.35),
+          ),
+          if (access == NotificationAccess.denied ||
+              access == NotificationAccess.unknown ||
+              access == NotificationAccess.permanentlyDenied) ...[
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                key: const Key('widget-notifications-action'),
+                onPressed: disabled
+                    ? null
+                    : access == NotificationAccess.permanentlyDenied
+                    ? c.openSettings
+                    : c.requestNotifications,
+                child: Text(
+                  access == NotificationAccess.permanentlyDenied
+                      ? 'Open notification Settings'
+                      : 'Allow notifications',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ],
+          if (c.initialised && !c.widgetInstalled) ...[
+            const SizedBox(height: AppSpacing.sm),
+            if (c.pinSupported) ...[
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const Key('widget-add-action'),
+                  onPressed: disabled ? null : c.addWidget,
+                  child: const Text('Add widget'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              const Text(
+                'Confirm on your home screen, then return here to check.',
+                style: TextStyle(color: AppColors.inkMuted),
+              ),
+            ] else
+              const Text(
+                'Touch and hold an empty spot on your home screen, choose '
+                'Widgets, then add CloseCall.',
+                key: Key('widget-manual-instructions'),
+                style: TextStyle(color: AppColors.inkMuted, height: 1.35),
+              ),
+          ],
+          if (c.error != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'Could not check or change device setup. Please try again.',
+              key: Key('widget-readiness-error'),
+              style: TextStyle(color: AppColors.error),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.xs),
+          TextButton(
+            key: const Key('widget-check-setup'),
+            onPressed: disabled ? null : c.refresh,
+            child: const Text('Check setup'),
+          ),
+          if (c.busy) const LinearProgressIndicator(),
+        ],
+      ),
+    );
+  }
+}
+
 class _PartnerUpdatesCard extends StatefulWidget {
   const _PartnerUpdatesCard({super.key, required this.controller});
   final ScheduleController controller;
@@ -564,15 +699,16 @@ class _WidgetHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
-            const WidgetPill(
+            const _HeaderPill(
               label: 'HOME WIDGET',
               icon: Icons.widgets_outlined,
               color: AppColors.plum,
             ),
-            const Spacer(),
-            WidgetPill(
+            _HeaderPill(
               label: liveMode ? 'PRIVATE' : 'DEMO',
               icon: liveMode ? Icons.lock_outline : Icons.visibility_outlined,
               color: liveMode ? AppColors.success : AppColors.clay,
@@ -604,6 +740,47 @@ class _WidgetHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Unlike a single-line pill, this can wrap at large accessibility text sizes.
+class _HeaderPill extends StatelessWidget {
+  const _HeaderPill({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.sm,
+    ),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _DemoModeCard extends StatelessWidget {

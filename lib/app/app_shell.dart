@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/permissions/widget_readiness_controller.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_spacing.dart';
 import '../features/auth/presentation/account_controller.dart';
@@ -21,11 +22,13 @@ class AppShell extends StatefulWidget {
     this.account,
     this.media,
     this.schedules,
+    this.readiness,
   });
 
   final AccountController? account;
   final MediaController? media;
   final ScheduleController? schedules;
+  final WidgetReadinessController? readiness;
 
   /// Injectable for tests; falls back to deterministic mock data in demo mode.
   final DashboardSnapshot? snapshot;
@@ -61,6 +64,7 @@ class _AppShellState extends State<AppShell> {
         pairing: pairing,
         liveMode: liveMode,
         schedules: widget.schedules,
+        readiness: widget.readiness,
         onConnectPartner: _openProfile,
       ),
       if (pairing != null)

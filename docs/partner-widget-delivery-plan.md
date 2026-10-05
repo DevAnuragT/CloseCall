@@ -199,6 +199,18 @@ complete merely because Firebase config files exist.
 - Cloud-connected APK built at `build/app/outputs/flutter-apk/app-debug.apk`.
   Phone disconnected before installation; install attempt returned device not
   found, so the new delivery build is **not yet installed/verified on a phone**.
+- Added installation-scoped Android notification permission readiness. On first
+  app launch, CloseCall shows one explicit Allow/Not now prompt; denial is
+  remembered and does not block sign-in, pairing, foreground Send, or live
+  updates. No storage/camera/all-files permission is requested: Android's photo
+  picker handles gallery access.
+- After a complete pair is verified, Widget setup performs read-only checks for
+  notification access and the actual `CloseCallWidgetProvider` installation.
+  It offers Allow notifications, Settings, or Add widget as appropriate. This
+  never grants partner-update consent automatically; that remains a separate
+  explicit control. Returning from Settings refreshes the real OS state.
+- Android notification/widget readiness is now covered by the new permission and
+  widget UI tests; full Flutter suite after this change: **335 passed**.
 
 ### Remaining acceptance and external blocker
 

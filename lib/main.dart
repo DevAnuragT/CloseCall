@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:serverpod_auth_idp_flutter/serverpod_auth_idp_flutter.dart';
 
 import 'app/app_shell.dart';
 import 'core/config/app_config.dart';
+import 'core/permissions/notification_permission_service.dart';
+import 'core/permissions/permission_onboarding.dart';
+import 'core/permissions/widget_readiness_controller.dart';
 import 'core/serverpod/serverpod_bootstrap.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/auth_gate.dart';
@@ -55,6 +59,7 @@ class _LiveApp extends StatefulWidget {
 
 class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
   ServerpodBootstrap? _backend;
+  WidgetReadinessController? _readiness;
   Object? _error;
 
   @override
@@ -66,6 +71,11 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
 
   void _connect() {
     try {
+      _readiness?.bindPairing(null);
+      _readiness?.dispose();
+      _readiness = null;
+      _backend?.dispose();
+      _backend = null;
       _backend = ServerpodBootstrap(widget.serverUrl);
       _error = null;
       final foreground =
@@ -73,6 +83,15 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
       _backend!.pairing.enableForegroundSync(foreground: foreground);
       _backend!.schedules.setForeground(foreground);
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        _readiness = WidgetReadinessController(
+          service: AndroidWidgetPermissionService(),
+          promptStore: SharedPreferencesPermissionPromptStore(),
+        );
+        _readiness!.bindPairing(_backend!.pairing);
+        _readiness!.setForeground(foreground);
+        _readiness!.initialize();
+      }
       _backend!.pairing.initialize();
     } catch (error) {
       _error = error;
@@ -82,6 +101,8 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _readiness?.bindPairing(null);
+    _readiness?.dispose();
     _backend?.dispose();
     super.dispose();
   }
@@ -90,6 +111,8 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _backend?.pairing.setForeground(state == AppLifecycleState.resumed);
     _backend?.schedules.setForeground(state == AppLifecycleState.resumed);
+    _readiness?.setForeground(state == AppLifecycleState.resumed);
+    if (state == AppLifecycleState.resumed) _readiness?.refresh();
   }
 
   @override
@@ -110,7 +133,7 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
       );
     }
     final backend = _backend!;
-    return AuthGate(
+    final gate = AuthGate(
       pairing: backend.pairing,
       emailBuilder: (_) => EmailSignInWidget(
         client: backend.client,
@@ -135,7 +158,12 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
         account: backend.account,
         media: backend.media,
         schedules: backend.schedules,
+        readiness: _readiness,
       ),
     );
+    final readiness = _readiness;
+    return readiness == null
+        ? gate
+        : PermissionOnboarding(controller: readiness, child: gate);
   }
 }
