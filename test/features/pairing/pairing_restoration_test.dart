@@ -10,12 +10,14 @@ import '../../support/live_fakes.dart';
 class _CountingAuth extends FakeAuth {
   int initializations = 0;
   Object? initializationFailure;
+  bool clearOnInitialize = false;
   Completer<void>? pending;
   @override
   Future<void> initialize() async {
     initializations++;
     if (initializationFailure != null) throw initializationFailure!;
     if (pending != null) await pending!.future;
+    if (clearOnInitialize) change(null);
   }
 }
 
@@ -33,6 +35,27 @@ class _Couples extends FakeCouples {
 }
 
 void main() {
+  test(
+    'invalid restored session reaches signed-out gate rather than paused',
+    () async {
+      final auth = _CountingAuth()
+        ..change('expired')
+        ..clearOnInitialize = true;
+      final repository = _Couples();
+      final pairing = PairingController(session: auth, repository: repository);
+      addTearDown(() {
+        pairing.dispose();
+        auth.dispose();
+      });
+      await pairing.initialize();
+      expect(auth.userId, isNull);
+      expect(pairing.initialized, isTrue);
+      expect(pairing.busy, isFalse);
+      expect(pairing.error, isNull);
+      expect(repository.reads, 0);
+    },
+  );
+
   test(
     'failed revalidation cannot leave cached identity authorized in the gate',
     () async {

@@ -8,6 +8,53 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/live_fakes.dart';
 
 void main() {
+  testWidgets('uncertain upload shows safe recovery copy and explicit retry', (
+    tester,
+  ) async {
+    final auth = FakeAuth()..change('me');
+    final pairing = PairingController(session: auth, repository: FakeCouples());
+    await pairing.initialize();
+    final repository = FakeMedia()
+      ..uploadFailure = const ServerpodClientNetworkException(
+        'Request timed out: https://private.invalid?Authorization=hidden',
+      );
+    final media = MediaController(
+      pairing: pairing,
+      repository: repository,
+      prepare: (bytes) async => bytes,
+    );
+    addTearDown(() {
+      media.dispose();
+      pairing.dispose();
+      auth.dispose();
+    });
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: WidgetTabScreen(media: media, liveMode: true)),
+      ),
+    );
+    await media.uploadConfirmed(testPng);
+    await tester.pumpAndSettle();
+    expect(media.error, isA<ServerpodClientNetworkException>());
+    expect(find.textContaining('may have succeeded'), findsOneWidget);
+    expect(find.textContaining('Retry the same upload'), findsOneWidget);
+    expect(find.textContaining('private.invalid'), findsNothing);
+    expect(find.textContaining('Authorization'), findsNothing);
+    expect(repository.requestIds, hasLength(1));
+    repository.uploadFailure = null;
+    await tester.tap(find.text('Retry photo operation'));
+    await tester.pumpAndSettle();
+    expect(repository.requestIds, hasLength(2));
+    expect(repository.requestIds.toSet(), hasLength(1));
+    expect(media.hasPendingUpload, isFalse);
+  });
+
   testWidgets(
     'picker cancellation keeps demo editor local and does not navigate',
     (tester) async {

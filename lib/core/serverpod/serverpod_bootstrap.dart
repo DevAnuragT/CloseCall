@@ -8,6 +8,7 @@ import '../../features/couple/data/serverpod_couple_repository.dart';
 import '../../features/pairing/presentation/pairing_controller.dart';
 import '../../features/auth/presentation/account_controller.dart';
 import '../../features/media/data/serverpod_media_repository.dart';
+import '../../features/media/data/media_client.dart';
 import '../../features/media/presentation/media_controller.dart';
 import '../config/app_config.dart';
 import '../../features/widget/data/home_widget_service.dart';
@@ -16,11 +17,12 @@ import '../../features/widget/data/native_widget_timeline.dart';
 import '../../features/widget/data/serverpod_schedule_repository.dart';
 import '../../features/widget/presentation/schedule_controller.dart';
 
-/// One client and secure persisted session per configured app instance.
+/// One secure persisted session, with separate regular and media transports.
 class ServerpodBootstrap {
   ServerpodBootstrap(String url) {
     client = Client(url)..connectivityMonitor = FlutterConnectivityMonitor();
     client.authSessionManager = createRestorableAuthManager(client);
+    mediaClient = createMediaClient(url, authKeyProvider: client.auth);
     session = ServerpodAuthSession(client);
     pairing = PairingController(
       allowDevGuest: AppConfig.allowDevGuest,
@@ -31,7 +33,7 @@ class ServerpodBootstrap {
       ),
     );
     account = AccountController(session);
-    final mediaRepository = ServerpodMediaRepository(client);
+    final mediaRepository = ServerpodMediaRepository(mediaClient);
     final writer = LocalWidgetWriter(
       applyPhoto: (bytes) async {
         await HomeWidgetService.setPhoto(bytes, preserveTimeline: true);
@@ -54,6 +56,7 @@ class ServerpodBootstrap {
   }
 
   late final Client client;
+  late final Client mediaClient;
   late final ServerpodAuthSession session;
   late final PairingController pairing;
   late final AccountController account;
@@ -66,6 +69,7 @@ class ServerpodBootstrap {
     account.dispose();
     pairing.dispose();
     session.dispose();
+    mediaClient.close();
     client.close();
   }
 }

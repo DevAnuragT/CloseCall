@@ -68,6 +68,11 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
     try {
       _backend = ServerpodBootstrap(widget.serverUrl);
       _error = null;
+      final foreground =
+          WidgetsBinding.instance.lifecycleState == null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+      _backend!.pairing.enableForegroundSync(foreground: foreground);
+      _backend!.schedules.setForeground(foreground);
       _backend!.pairing.initialize();
     } catch (error) {
       _error = error;
@@ -83,6 +88,7 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _backend?.pairing.setForeground(state == AppLifecycleState.resumed);
     _backend?.schedules.setForeground(state == AppLifecycleState.resumed);
   }
 

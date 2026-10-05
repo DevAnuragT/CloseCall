@@ -119,6 +119,39 @@ void main() {
     expect(media.busy, isFalse);
   });
 
+  for (final scopeChange in ['cancel', 'sign-out', 'account-switch']) {
+    test('$scopeChange discards late upload and never replays it', () async {
+      media.dispose();
+      final delayed = _DelayedUploadMedia();
+      media = MediaController(
+        pairing: pairing,
+        repository: delayed,
+        prepare: (bytes) async => bytes,
+      );
+      final upload = media.uploadConfirmed(testPng);
+      await Future<void>.delayed(Duration.zero);
+      expect(delayed.requestIds, hasLength(1));
+      switch (scopeChange) {
+        case 'cancel':
+          media.cancel();
+        case 'sign-out':
+          auth.change(null);
+        case 'account-switch':
+          auth.change('other-account');
+      }
+      delayed.response.complete(testAsset(id: 'late-upload', uploader: 'me'));
+      await upload;
+      await Future<void>.delayed(Duration.zero);
+      await media.retry();
+      expect(delayed.requestIds, hasLength(1));
+      expect(media.hasPendingUpload, isFalse);
+      expect(media.pendingRequestId, isNull);
+      expect(media.assets.where((a) => a.assetId == 'late-upload'), isEmpty);
+      expect(media.error, isNull);
+      expect(media.status ?? '', isNot(contains('Uploaded privately')));
+    });
+  }
+
   test(
     'local validation prevents malformed, oversized or huge dimension upload',
     () async {
@@ -199,5 +232,14 @@ void main() {
       expect(mediaErrorMessage(media.error!), isNot(contains('Instance of')));
       expect(media.hasPendingUpload, isTrue);
     });
+  }
+}
+
+class _DelayedUploadMedia extends FakeMedia {
+  final response = Completer<MediaAsset>();
+  @override
+  Future<MediaAsset> uploadPhoto(Uint8List bytes, String requestId) async {
+    await super.uploadPhoto(bytes, requestId);
+    return response.future;
   }
 }
