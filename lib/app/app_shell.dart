@@ -56,15 +56,12 @@ class _AppShellState extends State<AppShell> {
       else
         HomeScreen(pairing: pairing, onOpenPairing: _openProfile),
       MomentsScreen(liveMode: liveMode),
-      _label(
-        liveMode
-            ? 'Private server photos and separate local widget updates.'
-            : 'Local widget editor — not synced to your partner.',
-        WidgetTabScreen(
-          media: widget.media,
-          liveMode: liveMode,
-          schedules: widget.schedules,
-        ),
+      WidgetTabScreen(
+        media: widget.media,
+        pairing: pairing,
+        liveMode: liveMode,
+        schedules: widget.schedules,
+        onConnectPartner: _openProfile,
       ),
       if (pairing != null)
         PairingScreen(controller: pairing, account: widget.account)

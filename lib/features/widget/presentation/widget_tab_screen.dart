@@ -9,12 +9,14 @@ import '../../../core/theme/app_spacing.dart';
 import '../../media/data/media_repository.dart';
 import '../../media/data/photo_preparation.dart';
 import '../../media/presentation/media_controller.dart';
+import '../../pairing/presentation/pairing_controller.dart';
 import '../data/home_widget_service.dart';
 import 'editor/widget_editor_screen.dart';
 import 'widget_preview_screen.dart';
 import 'schedule_controller.dart';
 import 'schedule_panel.dart';
 import 'widget_ui_components.dart';
+import 'unpaired_widget_screen.dart';
 
 /// Private upload and this device's widget update are separate, explicit actions.
 class WidgetTabScreen extends StatefulWidget {
@@ -25,12 +27,16 @@ class WidgetTabScreen extends StatefulWidget {
     this.pickPhoto,
     this.applyLocalPhoto,
     this.schedules,
+    this.pairing,
+    this.onConnectPartner,
   });
   final MediaController? media;
   final bool liveMode;
   final Future<Uint8List?> Function()? pickPhoto;
   final Future<void> Function(Uint8List)? applyLocalPhoto;
   final ScheduleController? schedules;
+  final PairingController? pairing;
+  final VoidCallback? onConnectPartner;
   @override
   State<WidgetTabScreen> createState() => _WidgetTabScreenState();
 }
@@ -48,13 +54,18 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
       _status = null;
     });
     final scope = widget.media;
+    final pairing = widget.pairing ?? scope?.pairing;
     final navigator = Navigator.of(context);
-    final identity = scope?.pairing.userId;
-    final coupleId = scope?.pairing.couple?.id;
+    final identity = pairing?.userId;
+    final authRevision = pairing?.authRevision;
+    final coupleId = pairing?.couple?.id;
     bool current() =>
         mounted &&
-        identity == scope?.pairing.userId &&
-        coupleId == scope?.pairing.couple?.id;
+        identical(scope, widget.media) &&
+        identical(pairing, widget.pairing ?? widget.media?.pairing) &&
+        identity == pairing?.userId &&
+        authRevision == pairing?.authRevision &&
+        coupleId == pairing?.couple?.id;
     try {
       Uint8List? background;
       if (!blank) {
@@ -126,9 +137,39 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.media ?? const AlwaysStoppedAnimation(0),
+    listenable: Listenable.merge([
+      widget.media,
+      widget.pairing ?? widget.media?.pairing,
+    ]),
     builder: (context, _) {
       final media = widget.media;
+      final pairing = widget.pairing ?? media?.pairing;
+      if (widget.liveMode || pairing != null) {
+        if (pairing == null ||
+            pairing.error != null ||
+            pairing.userId == null ||
+            !pairing.hasLoadedPairing) {
+          return WidgetPairingStatus(pairing: pairing);
+        }
+        if (pairing.couple?.isComplete != true ||
+            !pairing.couple!.memberIds.contains(pairing.userId)) {
+          return UnpairedWidgetScreen(
+            key: ValueKey((
+              pairing,
+              pairing.userId,
+              pairing.authRevision,
+              pairing.couple?.id,
+            )),
+            pairing: pairing,
+            pickPhoto: widget.pickPhoto,
+            applyLocalPhoto:
+                widget.applyLocalPhoto ??
+                widget.schedules?.applyManualPhoto ??
+                media?.applyLocalPhoto,
+            onConnectPartner: widget.onConnectPartner,
+          );
+        }
+      }
       final busy = _editing || media?.busy == true;
       return SafeArea(
         child: ListView(
@@ -328,7 +369,8 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                   color: AppColors.success,
                 ),
               ),
-            if (media?.downloadedPhoto != null) ...[
+            if (media?.downloadedPhoto != null &&
+                media?.selectedAsset?.coupleId == pairing?.couple?.id) ...[
               const SizedBox(height: AppSpacing.xl),
               WidgetCard(
                 eyebrow: 'Ready on this device',
@@ -369,7 +411,9 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                       )
                     : Column(
                         children: [
-                          for (final asset in media.assets)
+                          for (final asset in media.assets.where(
+                            (asset) => asset.coupleId == pairing?.couple?.id,
+                          ))
                             _PrivateAssetTile(
                               asset: asset,
                               currentUserId: media.pairing.userId,

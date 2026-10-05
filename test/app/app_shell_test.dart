@@ -1,11 +1,17 @@
 import 'package:closecall/app/app_shell.dart';
 import 'package:closecall/main.dart';
+import 'package:closecall/core/theme/app_theme.dart';
+import 'package:closecall/features/couple/data/couple_repository.dart';
+import 'package:closecall/features/couple/domain/couple.dart';
+import 'package:closecall/features/pairing/presentation/pairing_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../support/live_fakes.dart';
 
 void main() {
-  testWidgets('App boots into the 4-tab shell starting on Home',
-      (tester) async {
+  testWidgets('App boots into the 4-tab shell starting on Home', (
+    tester,
+  ) async {
     await tester.pumpWidget(const CloseCallApp());
 
     // 'Home' appears only as the nav label; the greeting confirms the Home
@@ -23,8 +29,9 @@ void main() {
     expect(bar.selectedIndex, 0);
   });
 
-  testWidgets('tapping the Widget tab updates the selected index',
-      (tester) async {
+  testWidgets('tapping the Widget tab updates the selected index', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MaterialApp(home: AppShell()));
 
     // The unselected Widget destination shows the outlined icon.
@@ -34,4 +41,85 @@ void main() {
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(bar.selectedIndex, 2);
   });
+
+  for (final pending in [false, true]) {
+    testWidgets(
+      'Widget ${pending ? 'View invite' : 'Connect partner'} opens Profile pairing',
+      (tester) async {
+        final auth = FakeAuth()..change('me');
+        final repository = _ShellCouples(pending);
+        final pairing = PairingController(
+          session: auth,
+          repository: repository,
+        );
+        await pairing.initialize();
+        addTearDown(() {
+          pairing.dispose();
+          auth.dispose();
+        });
+        tester.view.physicalSize = const Size(360, 780);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.light,
+            home: AppShell(pairing: pairing),
+          ),
+        );
+        await tester.tap(
+          find.descendant(
+            of: find.byType(NavigationBar),
+            matching: find.text('Widget'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(find.byKey(const Key('choose-local-photo'))).bottom,
+          lessThan(700),
+        );
+        expect(find.text('Preview · illustration'), findsOneWidget);
+        expect(find.textContaining('Private server photos'), findsNothing);
+        expect(find.byType(TextField), findsNothing);
+        final action = find.byKey(const Key('widget-connect-partner'));
+        await tester.ensureVisible(action);
+        await tester.pumpAndSettle();
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<NavigationBar>(find.byType(NavigationBar))
+              .selectedIndex,
+          3,
+        );
+        final inviteField = find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField &&
+              widget.decoration?.labelText == 'Partner invite code',
+        );
+        expect(inviteField, findsOneWidget);
+        await tester.ensureVisible(inviteField);
+        await tester.pumpAndSettle();
+        await tester.enterText(inviteField, 'ABC123');
+        expect(
+          tester.widget<TextField>(inviteField).controller!.text,
+          'ABC123',
+        );
+        if (pending) expect(find.text('ABC123'), findsWidgets);
+      },
+    );
+  }
+}
+
+class _ShellCouples extends FakeCouples implements PairingCodeReader {
+  _ShellCouples(this.pending) {
+    couple = pending
+        ? Couple(id: 'pending-secret-id', memberIds: ['me'])
+        : null;
+  }
+  final bool pending;
+  @override
+  String? get currentInviteCode => pending ? 'ABC123' : null;
 }

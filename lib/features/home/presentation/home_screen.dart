@@ -466,9 +466,12 @@ class _PrivacyNote extends StatelessWidget {
           color: AppColors.inkMuted,
         ),
         const SizedBox(width: AppSpacing.xs),
-        Text(
-          'Your space is private by design',
-          style: TextStyle(color: AppColors.inkMuted, fontSize: 13),
+        Flexible(
+          child: Text(
+            'Your space is private by design',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.inkMuted, fontSize: 13),
+          ),
         ),
       ],
     );
