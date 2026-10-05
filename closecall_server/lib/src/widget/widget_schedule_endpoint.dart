@@ -17,21 +17,64 @@ class WidgetScheduleEndpoint extends Endpoint {
     : _service = service ?? WidgetTimelineService();
 
   Future<WidgetTimeline> currentTimeline(Session session) =>
-    _service.timeline(session, session.authenticated!.userIdentifier);
+      _service.timeline(session, session.authenticated!.userIdentifier);
 
-  Future<WidgetTimeline> partnerTimeline(Session session) =>
-    _service.timeline(session, session.authenticated!.userIdentifier, partner: true);
+  Future<WidgetTimeline> partnerTimeline(Session session) => _service.timeline(
+    session,
+    session.authenticated!.userIdentifier,
+    partner: true,
+  );
 
-  Future<WidgetScheduleEntry> createSchedule(Session session, String assetId,
-    DateTime activeFrom, DateTime activeUntil, String requestId) =>
-    _service.create(session, session.authenticated!.userIdentifier, assetId,
-      activeFrom, activeUntil, requestId);
+  /// Reads the signed-in recipient's committed state, including opt-out state.
+  Future<WidgetDeliveryState> getDeliveryState(Session session) =>
+      _service.deliveryState(session, session.authenticated!.userIdentifier);
+
+  /// Only the recipient may change their own couple-scoped consent.
+  Future<WidgetDeliveryState> setDeliveryConsent(
+    Session session,
+    bool enabled,
+  ) => _service.setDeliveryConsent(
+    session,
+    session.authenticated!.userIdentifier,
+    enabled,
+  );
+
+  /// Sends an already uploaded, sender-owned asset. Retry with the same UUID.
+  Future<WidgetSendReceipt> sendAsset(
+    Session session,
+    String assetId,
+    String requestId,
+  ) => _service.sendAsset(
+    session,
+    session.authenticated!.userIdentifier,
+    assetId,
+    requestId,
+  );
+
+  Future<WidgetScheduleEntry> createSchedule(
+    Session session,
+    String assetId,
+    DateTime activeFrom,
+    DateTime activeUntil,
+    String requestId,
+  ) => _service.create(
+    session,
+    session.authenticated!.userIdentifier,
+    assetId,
+    activeFrom,
+    activeUntil,
+    requestId,
+  );
 
   Future<WidgetTimeline> setFallback(Session session, String assetId) =>
-    _service.fallback(session, session.authenticated!.userIdentifier, assetId);
+      _service.fallback(
+        session,
+        session.authenticated!.userIdentifier,
+        assetId,
+      );
 
-  Future<void> cancelSchedule(Session session, String scheduleId) =>
-    _service.cancel(session, session.authenticated!.userIdentifier, scheduleId);
+  Future<void> cancelSchedule(Session session, String scheduleId) => _service
+      .cancel(session, session.authenticated!.userIdentifier, scheduleId);
 
   /// Local notifications reduce latency, precise timers handle boundaries, and
   /// one-second DB reconciliation covers missed events/restarts/other pods.
@@ -67,8 +110,12 @@ class WidgetScheduleEndpoint extends Endpoint {
             }
             boundary?.cancel();
             final now = clock.now().toUtc();
-            final boundaries = timeline.schedules.expand((s) => [s.activeFrom, s.activeUntil])
-              .where((at) => at.isAfter(now)).toList()..sort();
+            final boundaries =
+                timeline.schedules
+                    .expand((s) => [s.activeFrom, s.activeUntil])
+                    .where((at) => at.isAfter(now))
+                    .toList()
+                  ..sort();
             if (boundaries.isNotEmpty) {
               boundary = Timer(boundaries.first.difference(now), refresh);
             }
@@ -78,16 +125,39 @@ class WidgetScheduleEndpoint extends Endpoint {
             output.addError(error, stack);
             unawaited(output.close());
           }
-        } finally { running = false; }
+        } finally {
+          running = false;
+        }
       })();
     }
 
     output = StreamController<WidgetTimeline>(
       onListen: () {
         // Subscribe BEFORE reading the initial repeatable-read snapshot.
-        notices = session.messages.createStream<TimelineNotice>(timelineChannel(user))
-          .listen((notice) { if (notice.recipientId == user) refresh(); },
-            onError: (Object _) { refresh(); });
+        notices = session.messages
+            .createStream<TimelineNotice>(timelineChannel(user))
+            .listen(
+              (notice) async {
+                if (notice.recipientId != user) return;
+                if (notice.deliveryVersion != null) {
+                  // Delivery hints cannot bypass CURRENT consent. Polling still
+                  // exposes current truth/opt-out metadata for manual reconciliation.
+                  try {
+                    final state = await getDeliveryState(session);
+                    if (!state.autoUpdateEnabled ||
+                        state.version < notice.deliveryVersion!) {
+                      return;
+                    }
+                  } catch (_) {
+                    return;
+                  }
+                }
+                refresh();
+              },
+              onError: (Object _) {
+                refresh();
+              },
+            );
         poll = Timer.periodic(const Duration(seconds: 1), (_) => refresh());
         refresh();
       },

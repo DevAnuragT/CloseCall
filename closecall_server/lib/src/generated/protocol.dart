@@ -33,9 +33,13 @@ import 'pairing/pairing_failure.dart' as _ium95mnn;
 import 'pairing/pairing_state.dart' as _iyyqlhox;
 import 'widget/schedule_failure.dart' as _ipjphtkx;
 import 'widget/timeline_notice.dart' as _iulii77s;
+import 'widget/widget_delivery_record.dart' as _ib5zdgim;
+import 'widget/widget_delivery_state.dart' as _icmbt5hs;
 import 'widget/widget_fallback_record.dart' as _i7xena83;
 import 'widget/widget_schedule_entry.dart' as _iro0jbgj;
 import 'widget/widget_schedule_record.dart' as _ipbmbdsw;
+import 'widget/widget_send_receipt.dart' as _iezshfmm;
+import 'widget/widget_send_record.dart' as _iieh2um4;
 import 'widget/widget_timeline.dart' as _i8hd5s9w;
 export 'auth/account_state.dart';
 export 'media/media_asset.dart';
@@ -47,9 +51,13 @@ export 'pairing/pairing_failure.dart';
 export 'pairing/pairing_state.dart';
 export 'widget/schedule_failure.dart';
 export 'widget/timeline_notice.dart';
+export 'widget/widget_delivery_record.dart';
+export 'widget/widget_delivery_state.dart';
 export 'widget/widget_fallback_record.dart';
 export 'widget/widget_schedule_entry.dart';
 export 'widget/widget_schedule_record.dart';
+export 'widget/widget_send_receipt.dart';
+export 'widget/widget_send_record.dart';
 export 'widget/widget_timeline.dart';
 
 class Protocol extends _is.DatabaseSerializationManager {
@@ -326,6 +334,123 @@ class Protocol extends _is.DatabaseSerializationManager {
       managed: true,
     ),
     _isp.TableDefinition(
+      name: 'closecall_widget_delivery',
+      dartName: 'WidgetDeliveryRecord',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int?',
+          columnDefault: 'serial',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'recipientMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'autoUpdateEnabled',
+          columnType: _isp.ColumnType.boolean,
+          isNullable: false,
+          dartType: 'bool',
+          columnDefault: 'false',
+        ),
+        _isp.ColumnDefinition(
+          name: 'version',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+          columnDefault: '0',
+        ),
+        _isp.ColumnDefinition(
+          name: 'assetId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: true,
+          dartType: 'UuidValue?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'senderMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: true,
+          dartType: 'int?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'sentAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_delivery_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_delivery_fk_1',
+          columns: ['recipientMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_delivery_fk_2',
+          columns: ['assetId'],
+          referenceTable: 'closecall_media',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_delivery_fk_3',
+          columns: ['senderMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_widget_delivery_recipient_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'recipientMemberId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
+    _isp.TableDefinition(
       name: 'closecall_widget_fallback',
       dartName: 'WidgetFallbackRecord',
       schema: 'public',
@@ -561,6 +686,132 @@ class Protocol extends _is.DatabaseSerializationManager {
       ],
       managed: true,
     ),
+    _isp.TableDefinition(
+      name: 'closecall_widget_send',
+      dartName: 'WidgetSendRecord',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue?',
+          columnDefault: 'random',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'senderMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'recipientMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'assetId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'requestId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'version',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'createdAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'recipientAutoUpdateEnabled',
+          columnType: _isp.ColumnType.boolean,
+          isNullable: false,
+          dartType: 'bool',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_send_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_send_fk_1',
+          columns: ['senderMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_send_fk_2',
+          columns: ['recipientMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_send_fk_3',
+          columns: ['assetId'],
+          referenceTable: 'closecall_media',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_widget_send_request_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'coupleId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'requestId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
     ..._iacs.Protocol.targetTableDefinitions,
     ..._iais.Protocol.targetTableDefinitions,
     ..._isp.Protocol.targetTableDefinitions,
@@ -623,6 +874,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == _iulii77s.TimelineNotice) {
       return _iulii77s.TimelineNotice.fromJson(data) as T;
     }
+    if (t == _ib5zdgim.WidgetDeliveryRecord) {
+      return _ib5zdgim.WidgetDeliveryRecord.fromJson(data) as T;
+    }
+    if (t == _icmbt5hs.WidgetDeliveryState) {
+      return _icmbt5hs.WidgetDeliveryState.fromJson(data) as T;
+    }
     if (t == _i7xena83.WidgetFallbackRecord) {
       return _i7xena83.WidgetFallbackRecord.fromJson(data) as T;
     }
@@ -631,6 +888,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (t == _ipbmbdsw.WidgetScheduleRecord) {
       return _ipbmbdsw.WidgetScheduleRecord.fromJson(data) as T;
+    }
+    if (t == _iezshfmm.WidgetSendReceipt) {
+      return _iezshfmm.WidgetSendReceipt.fromJson(data) as T;
+    }
+    if (t == _iieh2um4.WidgetSendRecord) {
+      return _iieh2um4.WidgetSendRecord.fromJson(data) as T;
     }
     if (t == _i8hd5s9w.WidgetTimeline) {
       return _i8hd5s9w.WidgetTimeline.fromJson(data) as T;
@@ -674,6 +937,18 @@ class Protocol extends _is.DatabaseSerializationManager {
       return (data != null ? _iulii77s.TimelineNotice.fromJson(data) : null)
           as T;
     }
+    if (t == _is.getType<_ib5zdgim.WidgetDeliveryRecord?>()) {
+      return (data != null
+              ? _ib5zdgim.WidgetDeliveryRecord.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _is.getType<_icmbt5hs.WidgetDeliveryState?>()) {
+      return (data != null
+              ? _icmbt5hs.WidgetDeliveryState.fromJson(data)
+              : null)
+          as T;
+    }
     if (t == _is.getType<_i7xena83.WidgetFallbackRecord?>()) {
       return (data != null
               ? _i7xena83.WidgetFallbackRecord.fromJson(data)
@@ -690,6 +965,14 @@ class Protocol extends _is.DatabaseSerializationManager {
       return (data != null
               ? _ipbmbdsw.WidgetScheduleRecord.fromJson(data)
               : null)
+          as T;
+    }
+    if (t == _is.getType<_iezshfmm.WidgetSendReceipt?>()) {
+      return (data != null ? _iezshfmm.WidgetSendReceipt.fromJson(data) : null)
+          as T;
+    }
+    if (t == _is.getType<_iieh2um4.WidgetSendRecord?>()) {
+      return (data != null ? _iieh2um4.WidgetSendRecord.fromJson(data) : null)
           as T;
     }
     if (t == _is.getType<_i8hd5s9w.WidgetTimeline?>()) {
@@ -737,9 +1020,13 @@ class Protocol extends _is.DatabaseSerializationManager {
       _iyyqlhox.PairingState => 'PairingState',
       _ipjphtkx.ScheduleFailure => 'ScheduleFailure',
       _iulii77s.TimelineNotice => 'TimelineNotice',
+      _ib5zdgim.WidgetDeliveryRecord => 'WidgetDeliveryRecord',
+      _icmbt5hs.WidgetDeliveryState => 'WidgetDeliveryState',
       _i7xena83.WidgetFallbackRecord => 'WidgetFallbackRecord',
       _iro0jbgj.WidgetScheduleEntry => 'WidgetScheduleEntry',
       _ipbmbdsw.WidgetScheduleRecord => 'WidgetScheduleRecord',
+      _iezshfmm.WidgetSendReceipt => 'WidgetSendReceipt',
+      _iieh2um4.WidgetSendRecord => 'WidgetSendRecord',
       _i8hd5s9w.WidgetTimeline => 'WidgetTimeline',
       _ => null,
     };
@@ -777,12 +1064,20 @@ class Protocol extends _is.DatabaseSerializationManager {
         return 'ScheduleFailure';
       case _iulii77s.TimelineNotice():
         return 'TimelineNotice';
+      case _ib5zdgim.WidgetDeliveryRecord():
+        return 'WidgetDeliveryRecord';
+      case _icmbt5hs.WidgetDeliveryState():
+        return 'WidgetDeliveryState';
       case _i7xena83.WidgetFallbackRecord():
         return 'WidgetFallbackRecord';
       case _iro0jbgj.WidgetScheduleEntry():
         return 'WidgetScheduleEntry';
       case _ipbmbdsw.WidgetScheduleRecord():
         return 'WidgetScheduleRecord';
+      case _iezshfmm.WidgetSendReceipt():
+        return 'WidgetSendReceipt';
+      case _iieh2um4.WidgetSendRecord():
+        return 'WidgetSendRecord';
       case _i8hd5s9w.WidgetTimeline():
         return 'WidgetTimeline';
     }
@@ -846,6 +1141,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (dataClassName == 'TimelineNotice') {
       return deserialize<_iulii77s.TimelineNotice>(data['data']);
     }
+    if (dataClassName == 'WidgetDeliveryRecord') {
+      return deserialize<_ib5zdgim.WidgetDeliveryRecord>(data['data']);
+    }
+    if (dataClassName == 'WidgetDeliveryState') {
+      return deserialize<_icmbt5hs.WidgetDeliveryState>(data['data']);
+    }
     if (dataClassName == 'WidgetFallbackRecord') {
       return deserialize<_i7xena83.WidgetFallbackRecord>(data['data']);
     }
@@ -854,6 +1155,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (dataClassName == 'WidgetScheduleRecord') {
       return deserialize<_ipbmbdsw.WidgetScheduleRecord>(data['data']);
+    }
+    if (dataClassName == 'WidgetSendReceipt') {
+      return deserialize<_iezshfmm.WidgetSendReceipt>(data['data']);
+    }
+    if (dataClassName == 'WidgetSendRecord') {
+      return deserialize<_iieh2um4.WidgetSendRecord>(data['data']);
     }
     if (dataClassName == 'WidgetTimeline') {
       return deserialize<_i8hd5s9w.WidgetTimeline>(data['data']);
@@ -905,10 +1212,14 @@ class Protocol extends _is.DatabaseSerializationManager {
         return _iz3xjlbz.Couple.t;
       case _ijn3tadz.CoupleMember:
         return _ijn3tadz.CoupleMember.t;
+      case _ib5zdgim.WidgetDeliveryRecord:
+        return _ib5zdgim.WidgetDeliveryRecord.t;
       case _i7xena83.WidgetFallbackRecord:
         return _i7xena83.WidgetFallbackRecord.t;
       case _ipbmbdsw.WidgetScheduleRecord:
         return _ipbmbdsw.WidgetScheduleRecord.t;
+      case _iieh2um4.WidgetSendRecord:
+        return _iieh2um4.WidgetSendRecord.t;
     }
     return null;
   }

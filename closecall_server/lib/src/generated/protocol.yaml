@@ -24,6 +24,9 @@ pairing:
 widgetSchedule:
   - currentTimeline:
   - partnerTimeline:
+  - getDeliveryState:
+  - setDeliveryConsent:
+  - sendAsset:
   - createSchedule:
   - setFallback:
   - cancelSchedule:

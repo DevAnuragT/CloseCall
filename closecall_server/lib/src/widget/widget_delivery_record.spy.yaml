@@ -1,0 +1,17 @@
+class: WidgetDeliveryRecord
+table: closecall_widget_delivery
+serverOnly: true
+# Composite same-couple FKs and state CHECKs live in migration 20261005132731105
+# and runtime widget_schedule_schema.dart. Preserve them in future migrations.
+fields:
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  recipientMemberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  autoUpdateEnabled: bool, default=false
+  version: int, default=0
+  assetId: UuidValue?, relation(parent=closecall_media, onDelete=Cascade)
+  senderMemberId: int?, relation(parent=closecall_couple_member, onDelete=Cascade)
+  sentAt: DateTime?
+indexes:
+  closecall_widget_delivery_recipient_unique:
+    fields: recipientMemberId
+    unique: true

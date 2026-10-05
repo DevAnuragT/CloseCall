@@ -18,8 +18,12 @@ import 'package:closecall_client/src/protocol/media/media_asset.dart'
     as _i7z5ta07;
 import 'package:closecall_client/src/protocol/pairing/pairing_state.dart'
     as _i9hl8iq9;
+import 'package:closecall_client/src/protocol/widget/widget_delivery_state.dart'
+    as _ih73c9dn;
 import 'package:closecall_client/src/protocol/widget/widget_schedule_entry.dart'
     as _ipgzv14b;
+import 'package:closecall_client/src/protocol/widget/widget_send_receipt.dart'
+    as _i6vqeh0y;
 import 'package:closecall_client/src/protocol/widget/widget_timeline.dart'
     as _ic1bjjnb;
 import 'package:http/http.dart' as _i85jenna;
@@ -339,6 +343,32 @@ class EndpointWidgetSchedule extends _isc.EndpointRef {
         'partnerTimeline',
         {},
       );
+
+  /// Reads the signed-in recipient's committed state, including opt-out state.
+  _ida.Future<_ih73c9dn.WidgetDeliveryState> getDeliveryState() =>
+      caller.callServerEndpoint<_ih73c9dn.WidgetDeliveryState>(
+        'widgetSchedule',
+        'getDeliveryState',
+        {},
+      );
+
+  /// Only the recipient may change their own couple-scoped consent.
+  _ida.Future<_ih73c9dn.WidgetDeliveryState> setDeliveryConsent(bool enabled) =>
+      caller.callServerEndpoint<_ih73c9dn.WidgetDeliveryState>(
+        'widgetSchedule',
+        'setDeliveryConsent',
+        {'enabled': enabled},
+      );
+
+  /// Sends an already uploaded, sender-owned asset. Retry with the same UUID.
+  _ida.Future<_i6vqeh0y.WidgetSendReceipt> sendAsset(
+    String assetId,
+    String requestId,
+  ) => caller.callServerEndpoint<_i6vqeh0y.WidgetSendReceipt>(
+    'widgetSchedule',
+    'sendAsset',
+    {'assetId': assetId, 'requestId': requestId},
+  );
 
   _ida.Future<_ipgzv14b.WidgetScheduleEntry> createSchedule(
     String assetId,

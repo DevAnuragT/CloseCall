@@ -24,7 +24,9 @@ import 'media/media_failure.dart' as _iuzipihh;
 import 'pairing/pairing_failure.dart' as _ium95mnn;
 import 'pairing/pairing_state.dart' as _iyyqlhox;
 import 'widget/schedule_failure.dart' as _ipjphtkx;
+import 'widget/widget_delivery_state.dart' as _icmbt5hs;
 import 'widget/widget_schedule_entry.dart' as _iro0jbgj;
+import 'widget/widget_send_receipt.dart' as _iezshfmm;
 import 'widget/widget_timeline.dart' as _i8hd5s9w;
 export 'auth/account_state.dart';
 export 'media/media_asset.dart';
@@ -32,7 +34,9 @@ export 'media/media_failure.dart';
 export 'pairing/pairing_failure.dart';
 export 'pairing/pairing_state.dart';
 export 'widget/schedule_failure.dart';
+export 'widget/widget_delivery_state.dart';
 export 'widget/widget_schedule_entry.dart';
+export 'widget/widget_send_receipt.dart';
 export 'widget/widget_timeline.dart';
 export 'client.dart';
 
@@ -85,8 +89,14 @@ class Protocol extends _isc.SerializationManager {
     if (t == _ipjphtkx.ScheduleFailure) {
       return _ipjphtkx.ScheduleFailure.fromJson(data) as T;
     }
+    if (t == _icmbt5hs.WidgetDeliveryState) {
+      return _icmbt5hs.WidgetDeliveryState.fromJson(data) as T;
+    }
     if (t == _iro0jbgj.WidgetScheduleEntry) {
       return _iro0jbgj.WidgetScheduleEntry.fromJson(data) as T;
+    }
+    if (t == _iezshfmm.WidgetSendReceipt) {
+      return _iezshfmm.WidgetSendReceipt.fromJson(data) as T;
     }
     if (t == _i8hd5s9w.WidgetTimeline) {
       return _i8hd5s9w.WidgetTimeline.fromJson(data) as T;
@@ -111,10 +121,20 @@ class Protocol extends _isc.SerializationManager {
       return (data != null ? _ipjphtkx.ScheduleFailure.fromJson(data) : null)
           as T;
     }
+    if (t == _isc.getType<_icmbt5hs.WidgetDeliveryState?>()) {
+      return (data != null
+              ? _icmbt5hs.WidgetDeliveryState.fromJson(data)
+              : null)
+          as T;
+    }
     if (t == _isc.getType<_iro0jbgj.WidgetScheduleEntry?>()) {
       return (data != null
               ? _iro0jbgj.WidgetScheduleEntry.fromJson(data)
               : null)
+          as T;
+    }
+    if (t == _isc.getType<_iezshfmm.WidgetSendReceipt?>()) {
+      return (data != null ? _iezshfmm.WidgetSendReceipt.fromJson(data) : null)
           as T;
     }
     if (t == _isc.getType<_i8hd5s9w.WidgetTimeline?>()) {
@@ -153,7 +173,9 @@ class Protocol extends _isc.SerializationManager {
       _ium95mnn.PairingFailure => 'PairingFailure',
       _iyyqlhox.PairingState => 'PairingState',
       _ipjphtkx.ScheduleFailure => 'ScheduleFailure',
+      _icmbt5hs.WidgetDeliveryState => 'WidgetDeliveryState',
       _iro0jbgj.WidgetScheduleEntry => 'WidgetScheduleEntry',
+      _iezshfmm.WidgetSendReceipt => 'WidgetSendReceipt',
       _i8hd5s9w.WidgetTimeline => 'WidgetTimeline',
       _ => null,
     };
@@ -181,8 +203,12 @@ class Protocol extends _isc.SerializationManager {
         return 'PairingState';
       case _ipjphtkx.ScheduleFailure():
         return 'ScheduleFailure';
+      case _icmbt5hs.WidgetDeliveryState():
+        return 'WidgetDeliveryState';
       case _iro0jbgj.WidgetScheduleEntry():
         return 'WidgetScheduleEntry';
+      case _iezshfmm.WidgetSendReceipt():
+        return 'WidgetSendReceipt';
       case _i8hd5s9w.WidgetTimeline():
         return 'WidgetTimeline';
     }
@@ -225,8 +251,14 @@ class Protocol extends _isc.SerializationManager {
     if (dataClassName == 'ScheduleFailure') {
       return deserialize<_ipjphtkx.ScheduleFailure>(data['data']);
     }
+    if (dataClassName == 'WidgetDeliveryState') {
+      return deserialize<_icmbt5hs.WidgetDeliveryState>(data['data']);
+    }
     if (dataClassName == 'WidgetScheduleEntry') {
       return deserialize<_iro0jbgj.WidgetScheduleEntry>(data['data']);
+    }
+    if (dataClassName == 'WidgetSendReceipt') {
+      return deserialize<_iezshfmm.WidgetSendReceipt>(data['data']);
     }
     if (dataClassName == 'WidgetTimeline') {
       return deserialize<_i8hd5s9w.WidgetTimeline>(data['data']);

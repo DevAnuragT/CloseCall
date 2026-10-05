@@ -20,16 +20,23 @@ abstract class WidgetTimeline
     required this.coupleId,
     required this.recipientId,
     this.fallbackAssetId,
+    this.latestAssetId,
+    int? deliveryVersion,
+    bool? autoUpdateEnabled,
     this.currentAssetId,
     this.nextTransition,
     required this.schedules,
     required this.serverTime,
-  });
+  }) : deliveryVersion = deliveryVersion ?? 0,
+       autoUpdateEnabled = autoUpdateEnabled ?? false;
 
   factory WidgetTimeline({
     required String coupleId,
     required String recipientId,
     String? fallbackAssetId,
+    String? latestAssetId,
+    int? deliveryVersion,
+    bool? autoUpdateEnabled,
     String? currentAssetId,
     DateTime? nextTransition,
     required List<_il7dc4v7.WidgetScheduleEntry> schedules,
@@ -41,6 +48,13 @@ abstract class WidgetTimeline
       coupleId: jsonSerialization['coupleId'] as String,
       recipientId: jsonSerialization['recipientId'] as String,
       fallbackAssetId: jsonSerialization['fallbackAssetId'] as String?,
+      latestAssetId: jsonSerialization['latestAssetId'] as String?,
+      deliveryVersion: jsonSerialization['deliveryVersion'] as int?,
+      autoUpdateEnabled: jsonSerialization['autoUpdateEnabled'] == null
+          ? null
+          : _is.BoolJsonExtension.fromJson(
+              jsonSerialization['autoUpdateEnabled'],
+            ),
       currentAssetId: jsonSerialization['currentAssetId'] as String?,
       nextTransition: jsonSerialization['nextTransition'] == null
           ? null
@@ -63,6 +77,12 @@ abstract class WidgetTimeline
 
   String? fallbackAssetId;
 
+  String? latestAssetId;
+
+  int deliveryVersion;
+
+  bool autoUpdateEnabled;
+
   String? currentAssetId;
 
   DateTime? nextTransition;
@@ -78,6 +98,9 @@ abstract class WidgetTimeline
     String? coupleId,
     String? recipientId,
     String? fallbackAssetId,
+    String? latestAssetId,
+    int? deliveryVersion,
+    bool? autoUpdateEnabled,
     String? currentAssetId,
     DateTime? nextTransition,
     List<_il7dc4v7.WidgetScheduleEntry>? schedules,
@@ -90,6 +113,9 @@ abstract class WidgetTimeline
       'coupleId': coupleId,
       'recipientId': recipientId,
       if (fallbackAssetId != null) 'fallbackAssetId': fallbackAssetId,
+      if (latestAssetId != null) 'latestAssetId': latestAssetId,
+      'deliveryVersion': deliveryVersion,
+      'autoUpdateEnabled': autoUpdateEnabled,
       if (currentAssetId != null) 'currentAssetId': currentAssetId,
       if (nextTransition != null) 'nextTransition': nextTransition?.toJson(),
       'schedules': schedules.toJson(valueToJson: (v) => v.toJson()),
@@ -104,6 +130,9 @@ abstract class WidgetTimeline
       'coupleId': coupleId,
       'recipientId': recipientId,
       if (fallbackAssetId != null) 'fallbackAssetId': fallbackAssetId,
+      if (latestAssetId != null) 'latestAssetId': latestAssetId,
+      'deliveryVersion': deliveryVersion,
+      'autoUpdateEnabled': autoUpdateEnabled,
       if (currentAssetId != null) 'currentAssetId': currentAssetId,
       if (nextTransition != null) 'nextTransition': nextTransition?.toJson(),
       'schedules': schedules.toJson(valueToJson: (v) => v.toJsonForProtocol()),
@@ -124,6 +153,9 @@ class _WidgetTimelineImpl extends WidgetTimeline {
     required String coupleId,
     required String recipientId,
     String? fallbackAssetId,
+    String? latestAssetId,
+    int? deliveryVersion,
+    bool? autoUpdateEnabled,
     String? currentAssetId,
     DateTime? nextTransition,
     required List<_il7dc4v7.WidgetScheduleEntry> schedules,
@@ -132,6 +164,9 @@ class _WidgetTimelineImpl extends WidgetTimeline {
          coupleId: coupleId,
          recipientId: recipientId,
          fallbackAssetId: fallbackAssetId,
+         latestAssetId: latestAssetId,
+         deliveryVersion: deliveryVersion,
+         autoUpdateEnabled: autoUpdateEnabled,
          currentAssetId: currentAssetId,
          nextTransition: nextTransition,
          schedules: schedules,
@@ -146,6 +181,9 @@ class _WidgetTimelineImpl extends WidgetTimeline {
     String? coupleId,
     String? recipientId,
     Object? fallbackAssetId = _Undefined,
+    Object? latestAssetId = _Undefined,
+    int? deliveryVersion,
+    bool? autoUpdateEnabled,
     Object? currentAssetId = _Undefined,
     Object? nextTransition = _Undefined,
     List<_il7dc4v7.WidgetScheduleEntry>? schedules,
@@ -157,6 +195,11 @@ class _WidgetTimelineImpl extends WidgetTimeline {
       fallbackAssetId: fallbackAssetId is String?
           ? fallbackAssetId
           : this.fallbackAssetId,
+      latestAssetId: latestAssetId is String?
+          ? latestAssetId
+          : this.latestAssetId,
+      deliveryVersion: deliveryVersion ?? this.deliveryVersion,
+      autoUpdateEnabled: autoUpdateEnabled ?? this.autoUpdateEnabled,
       currentAssetId: currentAssetId is String?
           ? currentAssetId
           : this.currentAssetId,

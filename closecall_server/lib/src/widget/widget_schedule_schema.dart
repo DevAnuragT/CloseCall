@@ -3,9 +3,7 @@ import 'package:serverpod/protocol.dart';
 /// Same-couple relations cannot be expressed in Serverpod's single-column
 /// model DSL. Keep these in migration JSON and runtime schema verification.
 List<ForeignKeyDefinition> scheduleForeignKeys(String table) {
-  final prefix = table == 'closecall_widget_schedule'
-      ? 'closecall_widget_schedule'
-      : 'closecall_widget_fallback';
+  final prefix = table;
   ForeignKeyDefinition key(String suffix, String column, String parent) =>
       ForeignKeyDefinition(
         constraintName: '${prefix}_same_couple_$suffix',
@@ -18,7 +16,7 @@ List<ForeignKeyDefinition> scheduleForeignKeys(String table) {
       );
   return [
     key('asset', 'assetId', 'closecall_media'),
-    if (table == 'closecall_widget_schedule')
+    if (table != 'closecall_widget_fallback')
       key('sender', 'senderMemberId', 'closecall_couple_member'),
     key('recipient', 'recipientMemberId', 'closecall_couple_member'),
   ];
@@ -28,7 +26,9 @@ List<TableDefinition> withScheduleConstraints(
   List<TableDefinition> tables,
 ) => tables.map((table) {
   if (table.name != 'closecall_widget_schedule' &&
-      table.name != 'closecall_widget_fallback') {
+      table.name != 'closecall_widget_fallback' &&
+      table.name != 'closecall_widget_delivery' &&
+      table.name != 'closecall_widget_send') {
     return table;
   }
   // Serverpod 4.0.3's PostgresAnalyzer resolves conkey/confkey without WITH

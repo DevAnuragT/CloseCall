@@ -3,6 +3,9 @@ fields:
   coupleId: String
   recipientId: String
   fallbackAssetId: String?
+  latestAssetId: String?
+  deliveryVersion: int, default=0
+  autoUpdateEnabled: bool, default=false
   currentAssetId: String?
   nextTransition: DateTime?
   schedules: List<WidgetScheduleEntry>

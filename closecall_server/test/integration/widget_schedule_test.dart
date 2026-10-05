@@ -947,7 +947,7 @@ void main() {
           // Inside an ephemeral database only: reproduce the prior scheduling
           // actions on a real pre-scheduling schema, not the happy fresh-install SQL.
           await session.db.unsafeSimpleExecute(
-            'DROP TABLE closecall_widget_schedule, closecall_widget_fallback; '
+            'DROP TABLE closecall_widget_schedule, closecall_widget_fallback, closecall_widget_delivery, closecall_widget_send; '
             'DROP INDEX closecall_member_couple_id_unique; DROP INDEX closecall_media_couple_asset_unique;',
           );
           final generator = PostgresSqlGenerator();
@@ -969,7 +969,7 @@ void main() {
             Directory.current,
             runMode: 'test',
           );
-          expect(await manager.migrateToLatest(session), [repair]);
+          expect(await manager.migrateToLatest(session), [repair, '20261005132731105']);
           expect(
             await database.MigrationManager.verifyDatabaseIntegrity(session),
             isTrue,
@@ -1025,7 +1025,7 @@ void main() {
           final constraints = await session.db.unsafeQuery(
             "SELECT conname FROM pg_constraint WHERE conname LIKE 'closecall_widget_%same_couple%'",
           );
-          expect(constraints, hasLength(5));
+          expect(constraints, hasLength(11));
         },
       );
     },

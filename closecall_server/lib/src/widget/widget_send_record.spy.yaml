@@ -1,0 +1,19 @@
+class: WidgetSendRecord
+table: closecall_widget_send
+serverOnly: true
+# Composite same-couple FKs and UUID/version/member CHECKs are added by the
+# delivery migration; preserve them in subsequent generated migrations.
+fields:
+  id: UuidValue?, defaultPersist=random
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  senderMemberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  recipientMemberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  assetId: UuidValue, relation(parent=closecall_media, onDelete=Cascade)
+  requestId: String
+  version: int
+  createdAt: DateTime, default=now
+  recipientAutoUpdateEnabled: bool
+indexes:
+  closecall_widget_send_request_unique:
+    fields: coupleId, requestId
+    unique: true

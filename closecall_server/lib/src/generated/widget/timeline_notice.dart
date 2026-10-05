@@ -14,25 +14,33 @@ import 'package:serverpod/serverpod.dart' as _is;
 
 abstract class TimelineNotice
     implements _is.SerializableModel, _is.ProtocolSerialization {
-  TimelineNotice._({required this.recipientId});
+  TimelineNotice._({required this.recipientId, this.deliveryVersion});
 
-  factory TimelineNotice({required String recipientId}) = _TimelineNoticeImpl;
+  factory TimelineNotice({required String recipientId, int? deliveryVersion}) =
+      _TimelineNoticeImpl;
 
   factory TimelineNotice.fromJson(Map<String, dynamic> jsonSerialization) {
     return TimelineNotice(
       recipientId: jsonSerialization['recipientId'] as String,
+      deliveryVersion: jsonSerialization['deliveryVersion'] as int?,
     );
   }
 
   String recipientId;
 
+  int? deliveryVersion;
+
   /// Returns a shallow copy of this [TimelineNotice]
   /// with some or all fields replaced by the given arguments.
   @_is.useResult
-  TimelineNotice copyWith({String? recipientId});
+  TimelineNotice copyWith({String? recipientId, int? deliveryVersion});
   @override
   Map<String, dynamic> toJson() {
-    return {'__className__': 'TimelineNotice', 'recipientId': recipientId};
+    return {
+      '__className__': 'TimelineNotice',
+      'recipientId': recipientId,
+      if (deliveryVersion != null) 'deliveryVersion': deliveryVersion,
+    };
   }
 
   @override
@@ -46,15 +54,25 @@ abstract class TimelineNotice
   }
 }
 
+class _Undefined {}
+
 class _TimelineNoticeImpl extends TimelineNotice {
-  _TimelineNoticeImpl({required String recipientId})
-    : super._(recipientId: recipientId);
+  _TimelineNoticeImpl({required String recipientId, int? deliveryVersion})
+    : super._(recipientId: recipientId, deliveryVersion: deliveryVersion);
 
   /// Returns a shallow copy of this [TimelineNotice]
   /// with some or all fields replaced by the given arguments.
   @_is.useResult
   @override
-  TimelineNotice copyWith({String? recipientId}) {
-    return TimelineNotice(recipientId: recipientId ?? this.recipientId);
+  TimelineNotice copyWith({
+    String? recipientId,
+    Object? deliveryVersion = _Undefined,
+  }) {
+    return TimelineNotice(
+      recipientId: recipientId ?? this.recipientId,
+      deliveryVersion: deliveryVersion is int?
+          ? deliveryVersion
+          : this.deliveryVersion,
+    );
   }
 }

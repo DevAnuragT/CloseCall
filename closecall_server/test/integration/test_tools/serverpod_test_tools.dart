@@ -23,8 +23,12 @@ import 'package:closecall_server/src/generated/media/media_asset.dart'
     as _ibuid3ro;
 import 'package:closecall_server/src/generated/pairing/pairing_state.dart'
     as _iye5whdh;
+import 'package:closecall_server/src/generated/widget/widget_delivery_state.dart'
+    as _iy1hps0l;
 import 'package:closecall_server/src/generated/widget/widget_schedule_entry.dart'
     as _i8asvb62;
+import 'package:closecall_server/src/generated/widget/widget_send_receipt.dart'
+    as _iq7y1huw;
 import 'package:closecall_server/src/generated/widget/widget_timeline.dart'
     as _ikemxydo;
 import 'package:serverpod/serverpod.dart' as _is;
@@ -854,6 +858,102 @@ class _WidgetScheduleEndpoint {
                   _localCallContext.arguments,
                 )
                 as _ida.Future<_ikemxydo.WidgetTimeline>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_iy1hps0l.WidgetDeliveryState> getDeliveryState(
+    _ist.TestSessionBuilder sessionBuilder,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetSchedule',
+            method: 'getDeliveryState',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetSchedule',
+          methodName: 'getDeliveryState',
+          parameters: _ist.testObjectToJson({}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_iy1hps0l.WidgetDeliveryState>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_iy1hps0l.WidgetDeliveryState> setDeliveryConsent(
+    _ist.TestSessionBuilder sessionBuilder,
+    bool enabled,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetSchedule',
+            method: 'setDeliveryConsent',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetSchedule',
+          methodName: 'setDeliveryConsent',
+          parameters: _ist.testObjectToJson({'enabled': enabled}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_iy1hps0l.WidgetDeliveryState>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_iq7y1huw.WidgetSendReceipt> sendAsset(
+    _ist.TestSessionBuilder sessionBuilder,
+    String assetId,
+    String requestId,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetSchedule',
+            method: 'sendAsset',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetSchedule',
+          methodName: 'sendAsset',
+          parameters: _ist.testObjectToJson({
+            'assetId': assetId,
+            'requestId': requestId,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_iq7y1huw.WidgetSendReceipt>);
         return _localReturnValue;
       } finally {
         await _localUniqueSession.close();

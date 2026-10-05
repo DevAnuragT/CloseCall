@@ -2,3 +2,4 @@ class: TimelineNotice
 serverOnly: true
 fields:
   recipientId: String
+  deliveryVersion: int?

@@ -353,6 +353,44 @@ class Endpoints extends _is.EndpointDispatch {
               (endpoints['widgetSchedule'] as _iiq50v3t.WidgetScheduleEndpoint)
                   .partnerTimeline(session),
         ),
+        'getDeliveryState': _is.MethodConnector(
+          name: 'getDeliveryState',
+          params: {},
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetSchedule'] as _iiq50v3t.WidgetScheduleEndpoint)
+                  .getDeliveryState(session),
+        ),
+        'setDeliveryConsent': _is.MethodConnector(
+          name: 'setDeliveryConsent',
+          params: {
+            'enabled': _is.ParameterDescription(
+              name: 'enabled',
+              type: _is.getType<bool>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetSchedule'] as _iiq50v3t.WidgetScheduleEndpoint)
+                  .setDeliveryConsent(session, params['enabled']),
+        ),
+        'sendAsset': _is.MethodConnector(
+          name: 'sendAsset',
+          params: {
+            'assetId': _is.ParameterDescription(
+              name: 'assetId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'requestId': _is.ParameterDescription(
+              name: 'requestId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetSchedule'] as _iiq50v3t.WidgetScheduleEndpoint)
+                  .sendAsset(session, params['assetId'], params['requestId']),
+        ),
         'createSchedule': _is.MethodConnector(
           name: 'createSchedule',
           params: {

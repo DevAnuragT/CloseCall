@@ -1,0 +1,12 @@
+# A committed send, never evidence that a device rendered the photo.
+class: WidgetSendReceipt
+fields:
+  sendId: String
+  requestId: String
+  coupleId: String
+  senderId: String
+  recipientId: String
+  assetId: String
+  version: int
+  createdAt: DateTime
+  recipientAutoUpdateEnabled: bool

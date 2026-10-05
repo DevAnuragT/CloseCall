@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:closecall_client/closecall_client.dart';
@@ -82,6 +83,53 @@ Future<void> main() async {
       private = error.code == 'asset_not_found';
     }
     check(private, 'Stranger cannot download private media.');
+    final initialDelivery = await clients[1].widgetSchedule.getDeliveryState();
+    check(!initialDelivery.autoUpdateEnabled, 'Delivery consent starts off.');
+    final consent = await clients[1].widgetSchedule.setDeliveryConsent(true);
+    check(consent.autoUpdateEnabled, 'Recipient explicitly enables updates.');
+    final received = Completer<WidgetTimeline>();
+    final subscription = clients[1].widgetSchedule.watchTimeline().listen(
+      (timeline) {
+        if (timeline.latestAssetId == photo.assetId && !received.isCompleted) {
+          received.complete(timeline);
+        }
+      },
+      onError: (Object error, StackTrace stack) {
+        if (!received.isCompleted) received.completeError(error, stack);
+      },
+    );
+    try {
+      final sendId = Uuid().v4();
+      final receipt = await clients[0].widgetSchedule.sendAsset(
+        photo.assetId,
+        sendId,
+      );
+      final repeated = await clients[0].widgetSchedule.sendAsset(
+        photo.assetId,
+        sendId,
+      );
+      check(receipt.sendId == repeated.sendId, 'Send retry is idempotent.');
+      final live = await received.future.timeout(const Duration(seconds: 15));
+      check(
+        live.currentAssetId == photo.assetId && live.autoUpdateEnabled,
+        'Live recipient timeline selects the sent photo without a manual download.',
+      );
+      final state = await clients[1].widgetSchedule.getDeliveryState();
+      check(
+        state.latestAssetId == photo.assetId &&
+            state.version == receipt.version,
+        'Sent state persists and reads back over HTTP.',
+      );
+      var strangerDenied = false;
+      try {
+        await clients[2].widgetSchedule.sendAsset(photo.assetId, Uuid().v4());
+      } on ScheduleFailure catch (error) {
+        strangerDenied = error.code == 'not_paired';
+      }
+      check(strangerDenied, 'Stranger cannot send into another couple.');
+    } finally {
+      await subscription.cancel();
+    }
     final now = DateTime.now().toUtc();
     final scheduled = await clients[0].widgetSchedule.createSchedule(
       photo.assetId,
@@ -105,7 +153,7 @@ Future<void> main() async {
       'Cancelled schedule leaves timeline.',
     );
     print(
-      'HTTP smoke passed: auth, pairing, private media, schedule, cancel, idempotency, isolation.',
+      'HTTP smoke passed: auth, pairing, private media, consent, live send, schedule, cancel, idempotency, isolation.',
     );
   } finally {
     for (final client in clients) {

@@ -1,0 +1,10 @@
+# Account/couple-scoped foreground consent. Not a per-device applied receipt.
+class: WidgetDeliveryState
+fields:
+  coupleId: String
+  recipientId: String
+  autoUpdateEnabled: bool
+  version: int
+  latestAssetId: String?
+  latestSenderId: String?
+  latestSentAt: DateTime?
