@@ -31,6 +31,8 @@ import 'pairing/couple.dart' as _iz3xjlbz;
 import 'pairing/couple_member.dart' as _ijn3tadz;
 import 'pairing/pairing_failure.dart' as _ium95mnn;
 import 'pairing/pairing_state.dart' as _iyyqlhox;
+import 'push/push_device_registration.dart' as _i48xv6cw;
+import 'push/push_failure.dart' as _i9648dgo;
 import 'widget/schedule_failure.dart' as _ipjphtkx;
 import 'widget/timeline_notice.dart' as _iulii77s;
 import 'widget/widget_delivery_record.dart' as _ib5zdgim;
@@ -49,6 +51,8 @@ export 'pairing/couple.dart';
 export 'pairing/couple_member.dart';
 export 'pairing/pairing_failure.dart';
 export 'pairing/pairing_state.dart';
+export 'push/push_device_registration.dart';
+export 'push/push_failure.dart';
 export 'widget/schedule_failure.dart';
 export 'widget/timeline_notice.dart';
 export 'widget/widget_delivery_record.dart';
@@ -324,6 +328,125 @@ class Protocol extends _is.DatabaseSerializationManager {
             _isp.IndexElementDefinition(
               type: _isp.IndexElementDefinitionType.column,
               definition: 'requestId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
+    _isp.TableDefinition(
+      name: 'closecall_push_device_registration',
+      dartName: 'PushDeviceRegistration',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int?',
+          columnDefault: 'serial',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'memberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'deviceId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'token',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'platform',
+          columnType: _isp.ColumnType.text,
+          isNullable: true,
+          dartType: 'String?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'appVersion',
+          columnType: _isp.ColumnType.text,
+          isNullable: true,
+          dartType: 'String?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'updatedAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'revokedAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_push_device_registration_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_push_device_registration_fk_1',
+          columns: ['memberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_push_registration_token_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'token',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
+          indexName: 'closecall_push_registration_member_device_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'memberId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'deviceId',
             ),
           ],
           type: 'btree',
@@ -868,6 +991,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == _iyyqlhox.PairingState) {
       return _iyyqlhox.PairingState.fromJson(data) as T;
     }
+    if (t == _i48xv6cw.PushDeviceRegistration) {
+      return _i48xv6cw.PushDeviceRegistration.fromJson(data) as T;
+    }
+    if (t == _i9648dgo.PushFailure) {
+      return _i9648dgo.PushFailure.fromJson(data) as T;
+    }
     if (t == _ipjphtkx.ScheduleFailure) {
       return _ipjphtkx.ScheduleFailure.fromJson(data) as T;
     }
@@ -928,6 +1057,15 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (t == _is.getType<_iyyqlhox.PairingState?>()) {
       return (data != null ? _iyyqlhox.PairingState.fromJson(data) : null) as T;
+    }
+    if (t == _is.getType<_i48xv6cw.PushDeviceRegistration?>()) {
+      return (data != null
+              ? _i48xv6cw.PushDeviceRegistration.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _is.getType<_i9648dgo.PushFailure?>()) {
+      return (data != null ? _i9648dgo.PushFailure.fromJson(data) : null) as T;
     }
     if (t == _is.getType<_ipjphtkx.ScheduleFailure?>()) {
       return (data != null ? _ipjphtkx.ScheduleFailure.fromJson(data) : null)
@@ -1018,6 +1156,8 @@ class Protocol extends _is.DatabaseSerializationManager {
       _ijn3tadz.CoupleMember => 'CoupleMember',
       _ium95mnn.PairingFailure => 'PairingFailure',
       _iyyqlhox.PairingState => 'PairingState',
+      _i48xv6cw.PushDeviceRegistration => 'PushDeviceRegistration',
+      _i9648dgo.PushFailure => 'PushFailure',
       _ipjphtkx.ScheduleFailure => 'ScheduleFailure',
       _iulii77s.TimelineNotice => 'TimelineNotice',
       _ib5zdgim.WidgetDeliveryRecord => 'WidgetDeliveryRecord',
@@ -1060,6 +1200,10 @@ class Protocol extends _is.DatabaseSerializationManager {
         return 'PairingFailure';
       case _iyyqlhox.PairingState():
         return 'PairingState';
+      case _i48xv6cw.PushDeviceRegistration():
+        return 'PushDeviceRegistration';
+      case _i9648dgo.PushFailure():
+        return 'PushFailure';
       case _ipjphtkx.ScheduleFailure():
         return 'ScheduleFailure';
       case _iulii77s.TimelineNotice():
@@ -1134,6 +1278,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (dataClassName == 'PairingState') {
       return deserialize<_iyyqlhox.PairingState>(data['data']);
+    }
+    if (dataClassName == 'PushDeviceRegistration') {
+      return deserialize<_i48xv6cw.PushDeviceRegistration>(data['data']);
+    }
+    if (dataClassName == 'PushFailure') {
+      return deserialize<_i9648dgo.PushFailure>(data['data']);
     }
     if (dataClassName == 'ScheduleFailure') {
       return deserialize<_ipjphtkx.ScheduleFailure>(data['data']);
@@ -1212,6 +1362,8 @@ class Protocol extends _is.DatabaseSerializationManager {
         return _iz3xjlbz.Couple.t;
       case _ijn3tadz.CoupleMember:
         return _ijn3tadz.CoupleMember.t;
+      case _i48xv6cw.PushDeviceRegistration:
+        return _i48xv6cw.PushDeviceRegistration.t;
       case _ib5zdgim.WidgetDeliveryRecord:
         return _ib5zdgim.WidgetDeliveryRecord.t;
       case _i7xena83.WidgetFallbackRecord:

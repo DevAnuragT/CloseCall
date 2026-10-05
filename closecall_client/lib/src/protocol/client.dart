@@ -323,6 +323,36 @@ class EndpointPairing extends _isc.EndpointRef {
       );
 }
 
+/// Registers an FCM installation for later opaque wake dispatch. Tokens are
+/// server-only credentials: this endpoint never returns one or logs one.
+/// {@category Endpoint}
+class EndpointPush extends _isc.EndpointRef {
+  EndpointPush(_isc.EndpointCaller caller) : super(caller);
+
+  @override
+  String get name => 'push';
+
+  _ida.Future<void> registerDevice({
+    required String token,
+    required String deviceId,
+    String? platform,
+    String? appVersion,
+  }) => caller.callServerEndpoint<void>('push', 'registerDevice', {
+    'token': token,
+    'deviceId': deviceId,
+    'platform': platform,
+    'appVersion': appVersion,
+  });
+
+  _ida.Future<void> revokeDevice({
+    required String deviceId,
+    required String token,
+  }) => caller.callServerEndpoint<void>('push', 'revokeDevice', {
+    'deviceId': deviceId,
+    'token': token,
+  });
+}
+
 /// {@category Endpoint}
 class EndpointWidgetSchedule extends _isc.EndpointRef {
   EndpointWidgetSchedule(_isc.EndpointCaller caller) : super(caller);
@@ -447,6 +477,7 @@ class Client extends _isc.ServerpodClientShared {
     jwtRefresh = EndpointJwtRefresh(this);
     media = EndpointMedia(this);
     pairing = EndpointPairing(this);
+    push = EndpointPush(this);
     widgetSchedule = EndpointWidgetSchedule(this);
     modules = Modules(this);
   }
@@ -463,6 +494,8 @@ class Client extends _isc.ServerpodClientShared {
 
   late final EndpointPairing pairing;
 
+  late final EndpointPush push;
+
   late final EndpointWidgetSchedule widgetSchedule;
 
   late final Modules modules;
@@ -475,6 +508,7 @@ class Client extends _isc.ServerpodClientShared {
     'jwtRefresh': jwtRefresh,
     'media': media,
     'pairing': pairing,
+    'push': push,
     'widgetSchedule': widgetSchedule,
   };
 

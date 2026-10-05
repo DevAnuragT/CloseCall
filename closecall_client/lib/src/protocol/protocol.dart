@@ -23,6 +23,7 @@ import 'media/media_asset.dart' as _ijjfwapm;
 import 'media/media_failure.dart' as _iuzipihh;
 import 'pairing/pairing_failure.dart' as _ium95mnn;
 import 'pairing/pairing_state.dart' as _iyyqlhox;
+import 'push/push_failure.dart' as _i9648dgo;
 import 'widget/schedule_failure.dart' as _ipjphtkx;
 import 'widget/widget_delivery_state.dart' as _icmbt5hs;
 import 'widget/widget_schedule_entry.dart' as _iro0jbgj;
@@ -33,6 +34,7 @@ export 'media/media_asset.dart';
 export 'media/media_failure.dart';
 export 'pairing/pairing_failure.dart';
 export 'pairing/pairing_state.dart';
+export 'push/push_failure.dart';
 export 'widget/schedule_failure.dart';
 export 'widget/widget_delivery_state.dart';
 export 'widget/widget_schedule_entry.dart';
@@ -86,6 +88,9 @@ class Protocol extends _isc.SerializationManager {
     if (t == _iyyqlhox.PairingState) {
       return _iyyqlhox.PairingState.fromJson(data) as T;
     }
+    if (t == _i9648dgo.PushFailure) {
+      return _i9648dgo.PushFailure.fromJson(data) as T;
+    }
     if (t == _ipjphtkx.ScheduleFailure) {
       return _ipjphtkx.ScheduleFailure.fromJson(data) as T;
     }
@@ -116,6 +121,9 @@ class Protocol extends _isc.SerializationManager {
     }
     if (t == _isc.getType<_iyyqlhox.PairingState?>()) {
       return (data != null ? _iyyqlhox.PairingState.fromJson(data) : null) as T;
+    }
+    if (t == _isc.getType<_i9648dgo.PushFailure?>()) {
+      return (data != null ? _i9648dgo.PushFailure.fromJson(data) : null) as T;
     }
     if (t == _isc.getType<_ipjphtkx.ScheduleFailure?>()) {
       return (data != null ? _ipjphtkx.ScheduleFailure.fromJson(data) : null)
@@ -172,6 +180,7 @@ class Protocol extends _isc.SerializationManager {
       _iuzipihh.MediaFailure => 'MediaFailure',
       _ium95mnn.PairingFailure => 'PairingFailure',
       _iyyqlhox.PairingState => 'PairingState',
+      _i9648dgo.PushFailure => 'PushFailure',
       _ipjphtkx.ScheduleFailure => 'ScheduleFailure',
       _icmbt5hs.WidgetDeliveryState => 'WidgetDeliveryState',
       _iro0jbgj.WidgetScheduleEntry => 'WidgetScheduleEntry',
@@ -201,6 +210,8 @@ class Protocol extends _isc.SerializationManager {
         return 'PairingFailure';
       case _iyyqlhox.PairingState():
         return 'PairingState';
+      case _i9648dgo.PushFailure():
+        return 'PushFailure';
       case _ipjphtkx.ScheduleFailure():
         return 'ScheduleFailure';
       case _icmbt5hs.WidgetDeliveryState():
@@ -247,6 +258,9 @@ class Protocol extends _isc.SerializationManager {
     }
     if (dataClassName == 'PairingState') {
       return deserialize<_iyyqlhox.PairingState>(data['data']);
+    }
+    if (dataClassName == 'PushFailure') {
+      return deserialize<_i9648dgo.PushFailure>(data['data']);
     }
     if (dataClassName == 'ScheduleFailure') {
       return deserialize<_ipjphtkx.ScheduleFailure>(data['data']);

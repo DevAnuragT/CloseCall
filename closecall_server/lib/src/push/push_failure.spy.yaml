@@ -1,0 +1,4 @@
+# Stable codes: not_paired, invalid_token, invalid_device.
+exception: PushFailure
+fields:
+  code: String

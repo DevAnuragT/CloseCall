@@ -1,0 +1,19 @@
+class: PushDeviceRegistration
+table: closecall_push_device_registration
+serverOnly: true
+fields:
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  memberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  deviceId: String
+  token: String
+  platform: String?
+  appVersion: String?
+  updatedAt: DateTime, default=now
+  revokedAt: DateTime?
+indexes:
+  closecall_push_registration_token_unique:
+    fields: token
+    unique: true
+  closecall_push_registration_member_device_unique:
+    fields: memberId, deviceId
+    unique: true

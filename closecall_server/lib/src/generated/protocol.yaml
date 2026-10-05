@@ -21,6 +21,9 @@ pairing:
   - createCouple:
   - joinByCode:
   - currentCouple:
+push:
+  - registerDevice:
+  - revokeDevice:
 widgetSchedule:
   - currentTimeline:
   - partnerTimeline:

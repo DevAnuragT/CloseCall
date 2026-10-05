@@ -22,20 +22,37 @@ List<ForeignKeyDefinition> scheduleForeignKeys(String table) {
   ];
 }
 
+List<ForeignKeyDefinition> pushRegistrationForeignKeys() => [
+  ForeignKeyDefinition(
+    constraintName: 'closecall_push_registration_same_couple_member',
+    columns: ['coupleId', 'memberId'],
+    referenceTable: 'closecall_couple_member',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+];
+
 List<TableDefinition> withScheduleConstraints(
   List<TableDefinition> tables,
 ) => tables.map((table) {
-  if (table.name != 'closecall_widget_schedule' &&
-      table.name != 'closecall_widget_fallback' &&
-      table.name != 'closecall_widget_delivery' &&
-      table.name != 'closecall_widget_send') {
+  final isScheduleTable = table.name == 'closecall_widget_schedule' ||
+      table.name == 'closecall_widget_fallback' ||
+      table.name == 'closecall_widget_delivery' ||
+      table.name == 'closecall_widget_send';
+  final isPushTable = table.name == 'closecall_push_device_registration';
+  if (!isScheduleTable && !isPushTable) {
     return table;
   }
   // Serverpod 4.0.3's PostgresAnalyzer resolves conkey/confkey without WITH
   // ORDINALITY/ORDER BY and reports each side in physical column order. This
   // view is ONLY for runtime verification, not SQL/artifact generation. The
   // canonical definitions above retain correct paired FK column ordering.
-  final additional = scheduleForeignKeys(table.name).map((key) {
+  final additional = (isPushTable
+          ? pushRegistrationForeignKeys()
+          : scheduleForeignKeys(table.name))
+      .map((key) {
     final parent = tables.singleWhere((t) => t.name == key.referenceTable);
     return key.copyWith(
       columns: table.columns

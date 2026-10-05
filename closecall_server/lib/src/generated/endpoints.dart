@@ -23,6 +23,7 @@ import '../auth/email_idp_endpoint.dart' as _iuc1hd5t;
 import '../auth/jwt_refresh_endpoint.dart' as _inwq3ztq;
 import '../media/media_endpoint.dart' as _i9ppd1x8;
 import '../pairing/pairing_endpoint.dart' as _iku2870h;
+import '../push/push_endpoint.dart' as _ii21ahkp;
 import '../widget/widget_schedule_endpoint.dart' as _iiq50v3t;
 export 'future_calls.dart' show ServerpodFutureCallsGetter;
 
@@ -41,6 +42,7 @@ class Endpoints extends _is.EndpointDispatch {
       'media': _i9ppd1x8.MediaEndpoint()..initialize(server, 'media', null),
       'pairing': _iku2870h.PairingEndpoint()
         ..initialize(server, 'pairing', null),
+      'push': _ii21ahkp.PushEndpoint()..initialize(server, 'push', null),
       'widgetSchedule': _iiq50v3t.WidgetScheduleEndpoint()
         ..initialize(server, 'widgetSchedule', null),
     };
@@ -331,6 +333,66 @@ class Endpoints extends _is.EndpointDispatch {
           call: (_is.Session session, Map<String, dynamic> params) async =>
               (endpoints['pairing'] as _iku2870h.PairingEndpoint).currentCouple(
                 session,
+              ),
+        ),
+      },
+    );
+    connectors['push'] = _is.EndpointConnector(
+      name: 'push',
+      endpoint: endpoints['push']!,
+      methodConnectors: {
+        'registerDevice': _is.MethodConnector(
+          name: 'registerDevice',
+          params: {
+            'token': _is.ParameterDescription(
+              name: 'token',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'deviceId': _is.ParameterDescription(
+              name: 'deviceId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'platform': _is.ParameterDescription(
+              name: 'platform',
+              type: _is.getType<String?>(),
+              nullable: true,
+            ),
+            'appVersion': _is.ParameterDescription(
+              name: 'appVersion',
+              type: _is.getType<String?>(),
+              nullable: true,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['push'] as _ii21ahkp.PushEndpoint).registerDevice(
+                session,
+                token: params['token'],
+                deviceId: params['deviceId'],
+                platform: params['platform'],
+                appVersion: params['appVersion'],
+              ),
+        ),
+        'revokeDevice': _is.MethodConnector(
+          name: 'revokeDevice',
+          params: {
+            'deviceId': _is.ParameterDescription(
+              name: 'deviceId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'token': _is.ParameterDescription(
+              name: 'token',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['push'] as _ii21ahkp.PushEndpoint).revokeDevice(
+                session,
+                deviceId: params['deviceId'],
+                token: params['token'],
               ),
         ),
       },

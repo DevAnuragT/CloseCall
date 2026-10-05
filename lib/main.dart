@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:serverpod_auth_idp_flutter/serverpod_auth_idp_flutter.dart';
 
 import 'app/app_shell.dart';
@@ -8,11 +11,19 @@ import 'core/permissions/notification_permission_service.dart';
 import 'core/permissions/permission_onboarding.dart';
 import 'core/permissions/widget_readiness_controller.dart';
 import 'core/serverpod/serverpod_bootstrap.dart';
+import 'core/push/push_registration_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/auth_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Background FCM work is an opaque wake marker only. Foreground
+  // reconciliation remains responsible for authorized Serverpod state.
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    FirebaseMessaging.onBackgroundMessage(
+      closeCallFirebaseMessagingBackgroundHandler,
+    );
+  }
   // Invalid configured URLs remain an explicit startup error, never demo mode.
   try {
     runApp(CloseCallApp(config: AppConfig.fromEnvironment()));
@@ -88,11 +99,13 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
           service: AndroidWidgetPermissionService(),
           promptStore: SharedPreferencesPermissionPromptStore(),
         );
+        _readiness!.addListener(_permissionReadinessChanged);
         _readiness!.bindPairing(_backend!.pairing);
         _readiness!.setForeground(foreground);
         _readiness!.initialize();
       }
       _backend!.pairing.initialize();
+      _backend!.push.start();
     } catch (error) {
       _error = error;
     }
@@ -101,6 +114,7 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _readiness?.removeListener(_permissionReadinessChanged);
     _readiness?.bindPairing(null);
     _readiness?.dispose();
     _backend?.dispose();
@@ -112,7 +126,16 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
     _backend?.pairing.setForeground(state == AppLifecycleState.resumed);
     _backend?.schedules.setForeground(state == AppLifecycleState.resumed);
     _readiness?.setForeground(state == AppLifecycleState.resumed);
-    if (state == AppLifecycleState.resumed) _readiness?.refresh();
+    if (state == AppLifecycleState.resumed) {
+      _readiness?.refresh();
+      unawaited(_backend?.push.reconcile());
+    }
+  }
+
+  void _permissionReadinessChanged() {
+    if (_readiness?.notificationAccess == NotificationAccess.granted) {
+      unawaited(_backend?.push.reconcile());
+    }
   }
 
   @override

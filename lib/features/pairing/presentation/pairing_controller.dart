@@ -30,6 +30,7 @@ class PairingController extends ChangeNotifier {
   int _quietFailures = 0;
   Timer? _pollTimer;
   Future<void>? _quietFlight;
+  final List<Future<void> Function()> _beforeSignOutHooks = [];
   bool _retryIsRead = false;
   bool _errorIsRead = false;
   int _retryRevision = 0;
@@ -235,6 +236,9 @@ class PairingController extends ChangeNotifier {
   });
 
   Future<void> signOut() => _run(() async {
+    for (final hook in List<Future<void> Function()>.of(_beforeSignOutHooks)) {
+      await hook();
+    }
     try {
       await session.signOut();
     } on LocalSignOutException {
@@ -251,6 +255,17 @@ class PairingController extends ChangeNotifier {
   Future<void> retry() async {
     final action = _retry;
     if (action != null) await _run(action, readOnly: _retryIsRead);
+  }
+
+  /// Allows scoped services to revoke authenticated device state before the
+  /// auth session is cleared. Hooks must be best-effort and must not strand a
+  /// sign-out; callers should swallow remote transport failures.
+  void addBeforeSignOutHook(Future<void> Function() hook) {
+    if (!_beforeSignOutHooks.contains(hook)) _beforeSignOutHooks.add(hook);
+  }
+
+  void removeBeforeSignOutHook(Future<void> Function() hook) {
+    _beforeSignOutHooks.remove(hook);
   }
 
   Future<void> _load() async {
@@ -306,6 +321,7 @@ class PairingController extends ChangeNotifier {
     _syncVersion++;
     _pollTimer?.cancel();
     _pollTimer = null;
+    _beforeSignOutHooks.clear();
     session.removeListener(_authChanged);
     super.dispose();
   }

@@ -182,6 +182,8 @@ class TestEndpoints {
 
   late final _PairingEndpoint pairing;
 
+  late final _PushEndpoint push;
+
   late final _WidgetScheduleEndpoint widgetSchedule;
 }
 
@@ -198,6 +200,7 @@ class _InternalTestEndpoints extends TestEndpoints
     jwtRefresh = _JwtRefreshEndpoint(endpoints, serializationManager);
     media = _MediaEndpoint(endpoints, serializationManager);
     pairing = _PairingEndpoint(endpoints, serializationManager);
+    push = _PushEndpoint(endpoints, serializationManager);
     widgetSchedule = _WidgetScheduleEndpoint(endpoints, serializationManager);
   }
 }
@@ -790,6 +793,88 @@ class _PairingEndpoint {
                   _localCallContext.arguments,
                 )
                 as _ida.Future<_iye5whdh.PairingState?>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+}
+
+class _PushEndpoint {
+  _PushEndpoint(this._endpointDispatch, this._serializationManager);
+
+  final _is.EndpointDispatch _endpointDispatch;
+
+  final _is.SerializationManager _serializationManager;
+
+  _ida.Future<void> registerDevice(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String token,
+    required String deviceId,
+    String? platform,
+    String? appVersion,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'push',
+            method: 'registerDevice',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'push',
+          methodName: 'registerDevice',
+          parameters: _ist.testObjectToJson({
+            'token': token,
+            'deviceId': deviceId,
+            'platform': platform,
+            'appVersion': appVersion,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<void>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<void> revokeDevice(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String deviceId,
+    required String token,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'push',
+            method: 'revokeDevice',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'push',
+          methodName: 'revokeDevice',
+          parameters: _ist.testObjectToJson({
+            'deviceId': deviceId,
+            'token': token,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<void>);
         return _localReturnValue;
       } finally {
         await _localUniqueSession.close();

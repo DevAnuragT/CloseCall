@@ -211,6 +211,18 @@ complete merely because Firebase config files exist.
   explicit control. Returning from Settings refreshes the real OS state.
 - Android notification/widget readiness is now covered by the new permission and
   widget UI tests; full Flutter suite after this change: **335 passed**.
+- Added the FCM registration foundation: after complete pairing and granted
+  notification access, the Android installation registers its current FCM token
+  and scoped device ID through authenticated Serverpod RPCs. Token rotation is
+  idempotent; sign-out/re-pair revokes the active registration best-effort. If
+  Firebase, notifications, pairing or token access is unavailable, the app stays
+  usable and foreground delivery is unaffected. Background messages currently
+  record only an opaque pending-wake version marker; they do not download photos
+  or update the widget.
+- FCM registration schema/migration is generated and covered by backend tests.
+  The app also reconciles registration when notification permission changes and
+  on returning to the foreground, so granting the first-launch prompt does not
+  require an app restart.
 
 ### Remaining acceptance and external blocker
 
@@ -220,6 +232,33 @@ verify widget changes without Download/Apply. Verify restart persistence, local
 pause, resume and schedule priority separately.
 
 Closed-app reception remains unimplemented: secure server FCM credentials,
-durable dispatch, background authorization/execution and per-device applied
-acknowledgements remain the next slice. No credentials or paid settings were
-changed. Do not describe foreground delivery as closed-app instant delivery.
+durable dispatch/outbox, background authorization/execution and per-device
+applied acknowledgements remain the next slice. No credentials or paid settings
+were changed. Do not describe foreground delivery as closed-app instant
+delivery.
+
+### Push registration foundation — 6 October 2026
+
+- Added an Android-only, authenticated FCM installation registration endpoint.
+  The server derives the current user, couple and member from the Serverpod
+  session; registration accepts an opaque token plus device/platform metadata,
+  is idempotent per token/device, and exposes no token in a response.
+- Registration rows are scoped to a couple member and device, use unique token
+  and member/device constraints, and have a same-couple foreign key. Token
+  rotation replaces the installation's previous token; sign-out and re-pair
+  best-effort revoke the current device registration.
+- The Flutter coordinator reads notification status but never requests it.
+  It starts only after a loaded complete pairing and granted notifications.
+  Firebase initialization, token reads, refreshes, unavailable platforms and
+  server failures remain non-blocking for auth, pairing, foreground Send and
+  widget use. Late async token results are discarded after scope changes.
+- The FCM background callback accepts only an opaque invalidation/version hint
+  and records a bounded app-private wake marker. It does not download photos,
+  create a second auth client, or claim closed-app widget updates. Foreground
+  reconciliation and a future authenticated dispatcher remain required.
+- FCM server credentials, durable outbox dispatch, background authorized fetch,
+  and applied acknowledgements are intentionally not part of this foundation.
+  Token data is sensitive server-only data and must not be placed in logs,
+  client DTOs, app UI, or chat; no server encryption mechanism currently exists
+  in this repository, so access to the registration table must remain limited
+  to the backend runtime and database operators.

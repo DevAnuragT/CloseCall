@@ -17,6 +17,9 @@ import '../../features/widget/data/native_widget_timeline.dart';
 import '../../features/widget/data/serverpod_schedule_repository.dart';
 import '../../features/widget/data/shared_preferences_widget_consent_store.dart';
 import '../../features/widget/presentation/schedule_controller.dart';
+import '../permissions/notification_permission_service.dart';
+import '../push/push_registration_api.dart';
+import '../push/push_registration_service.dart';
 
 /// One secure persisted session, with separate regular and media transports.
 class ServerpodBootstrap {
@@ -32,6 +35,13 @@ class ServerpodBootstrap {
         client,
         userId: () => session.userId,
       ),
+    );
+    push = PushRegistrationService(
+      pairing: pairing,
+      permissions: AndroidWidgetPermissionService(),
+      api: ServerpodPushRegistrationApi(client),
+      platform: 'android',
+      appVersion: '1.0.0+1',
     );
     account = AccountController(session);
     final mediaRepository = ServerpodMediaRepository(mediaClient);
@@ -62,11 +72,13 @@ class ServerpodBootstrap {
   late final Client mediaClient;
   late final ServerpodAuthSession session;
   late final PairingController pairing;
+  late final PushRegistrationService push;
   late final AccountController account;
   late final MediaController media;
   late final ScheduleController schedules;
 
   void dispose() {
+    push.dispose();
     media.dispose();
     schedules.dispose();
     account.dispose();

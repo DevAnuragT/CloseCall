@@ -39,6 +39,7 @@ dependencies:
   # Annotations (@immutable) used by the pure-Dart domain models.
   meta: ^1.15.0
   firebase_core: ^4.15.0
+  firebase_messaging: ^16.0.4
   supabase_flutter: ^2.18.0
   serverpod_flutter: 4.0.3
   serverpod_auth_idp_flutter: 4.0.3

@@ -171,6 +171,10 @@ dependencies:
     for (final directory in [
       'lib/src/generated',
       'test/integration/test_tools',
+      // The pinned CLI generates the typed client beside the server. Copy it
+      // through the same scratch boundary so server/client protocol drift is
+      // caught by --check rather than relying on a hand-edited client.
+      '../closecall_client/lib/src/protocol',
     ]) {
       final source = Directory('${staged.path}/$directory');
       if (!source.existsSync()) {
