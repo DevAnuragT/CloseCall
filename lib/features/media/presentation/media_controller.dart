@@ -12,6 +12,7 @@ class MediaController extends ChangeNotifier {
     required this.repository,
     this.applyLocalPhoto,
     this.clearLocalPhoto,
+    this.sendAsset,
     Future<Uint8List> Function(Uint8List)? prepare,
     String Function()? requestId,
   }) : _prepare = prepare ?? preparePhotoPng,
@@ -24,6 +25,7 @@ class MediaController extends ChangeNotifier {
   final MediaRepository repository;
   final Future<void> Function(Uint8List)? applyLocalPhoto;
   final Future<void> Function()? clearLocalPhoto;
+  final Future<WidgetSendReceipt> Function(String, String)? sendAsset;
   final Future<Uint8List> Function(Uint8List) _prepare;
   final String Function() _requestId;
   String? _scope;
@@ -38,13 +40,20 @@ class MediaController extends ChangeNotifier {
   Uint8List? _pendingPhoto;
   bool _prepared = false;
   String? pendingRequestId;
+  MediaAsset? _pendingSendAsset;
+  String? _pendingSendRequestId;
   Future<void> Function()? _retry;
   Future<void> _localQueue = Future.value();
   bool get canShare => _currentScope != null;
   bool get hasPendingUpload => _pendingPhoto != null;
+  bool get hasPendingSend => _pendingSendRequestId != null;
   String? get _currentScope =>
-      pairing.userId != null && pairing.couple?.isComplete == true
-      ? '${pairing.userId}/${pairing.couple!.id}'
+      pairing.userId != null &&
+          pairing.hasLoadedPairing &&
+          pairing.couple?.isComplete == true &&
+          pairing.couple!.memberIds.contains(pairing.userId)
+      ? '${pairing.userId}:${pairing.authRevision}/${pairing.couple!.id}/'
+            '${(pairing.couple!.memberIds.toList()..sort()).join('/')}'
       : null;
   bool _current(int revision) =>
       !_disposed && revision == _revision && _scope == _currentScope;
@@ -63,6 +72,8 @@ class MediaController extends ChangeNotifier {
     _pendingPhoto = null;
     _prepared = false;
     pendingRequestId = null;
+    _pendingSendAsset = null;
+    _pendingSendRequestId = null;
     _retry = null;
     error = null;
     status = null;
@@ -86,9 +97,11 @@ class MediaController extends ChangeNotifier {
 
   Future<void> _run(
     Future<void> Function(int) action,
-    Future<void> Function() retry,
-  ) async {
+    Future<void> Function() retry, {
+    bool resumePending = false,
+  }) async {
     if (_disposed || busy) return;
+    if (!resumePending && (hasPendingUpload || hasPendingSend)) return;
     if (!canShare) {
       error = StateError('Complete pairing before sharing photos.');
       _notify();
@@ -101,7 +114,7 @@ class MediaController extends ChangeNotifier {
     _retry = retry;
     _notify();
     try {
-      await action(revision);
+      if (_current(revision)) await action(revision);
       if (_current(revision)) _retry = null;
     } catch (failure) {
       if (_current(revision)) error = failure;
@@ -114,19 +127,7 @@ class MediaController extends ChangeNotifier {
   }
 
   Future<void> uploadConfirmed(Uint8List photo) async {
-    if (busy || _disposed) return;
-    if (!canShare) {
-      error = StateError('Complete pairing before sharing photos.');
-      _notify();
-      return;
-    }
-    if (hasPendingUpload) {
-      error = StateError(
-        'Retry or cancel the pending upload before choosing another photo.',
-      );
-      _notify();
-      return;
-    }
+    if (!_canStartPhoto()) return;
     // Preserve an immutable payload and UUID for retry after uncertain failures.
     _pendingPhoto = Uint8List.fromList(photo);
     _prepared = false;
@@ -134,23 +135,120 @@ class MediaController extends ChangeNotifier {
     await retryUpload();
   }
 
-  Future<void> retryUpload() => _run((revision) async {
-    if (_pendingPhoto == null || pendingRequestId == null) return;
+  bool _canStartPhoto() {
+    if (busy || _disposed || hasPendingUpload || hasPendingSend) return false;
+    if (canShare) return true;
+    error = StateError('Complete pairing before sharing photos.');
+    _notify();
+    return false;
+  }
+
+  /// Upload and send are separate acknowledged stages. An uncertain send keeps
+  /// its exact asset and UUID; explicit retry must never upload it a second time.
+  Future<void> sendConfirmed(Uint8List photo) async {
+    if (!_canStartPhoto()) return;
+    _pendingPhoto = Uint8List.fromList(photo);
+    _prepared = false;
+    pendingRequestId = _requestId();
+    _pendingSendRequestId = _requestId();
+    await _retrySend();
+  }
+
+  Future<void> sendUploaded(MediaAsset asset) async {
+    if (!_canStartPhoto()) return;
+    try {
+      _validateOwnAsset(asset);
+    } catch (failure) {
+      error = failure;
+      status = null;
+      _notify();
+      return;
+    }
+    _pendingSendAsset = asset.copyWith();
+    _pendingSendRequestId = _requestId();
+    await _retrySend();
+  }
+
+  void _validateOwnAsset(MediaAsset asset) {
+    if (asset.assetId.isEmpty ||
+        asset.coupleId != pairing.couple?.id ||
+        asset.uploaderId != pairing.userId) {
+      throw StateError('Only your own photo in this couple can be sent.');
+    }
+  }
+
+  Future<void> _retrySend() => _run(
+    (revision) async {
+      if (_pendingSendRequestId == null) return;
+      if (sendAsset == null) throw StateError('Photo sending is unavailable.');
+      if (_pendingSendAsset == null) {
+        final uploaded = await _upload(revision);
+        if (!_current(revision) || uploaded == null) return;
+        _pendingSendAsset = uploaded.copyWith();
+        _notify();
+      }
+      if (!_current(revision)) return;
+      final asset = _pendingSendAsset!;
+      _validateOwnAsset(asset);
+      final id = _pendingSendRequestId!;
+      final sender = pairing.userId!;
+      final couple = pairing.couple!;
+      final recipient = couple.memberIds.singleWhere(
+        (member) => member != sender,
+      );
+      final receipt = await sendAsset!(asset.assetId, id);
+      if (!_current(revision)) return;
+      if (receipt.requestId != id ||
+          receipt.assetId != asset.assetId ||
+          receipt.coupleId != couple.id ||
+          receipt.senderId != sender ||
+          receipt.recipientId != recipient ||
+          receipt.sendId.isEmpty ||
+          receipt.version < 1) {
+        throw StateError('Could not confirm the sent photo.');
+      }
+      _pendingSendAsset = null;
+      _pendingSendRequestId = null;
+      status = receipt.recipientAutoUpdateEnabled
+          ? 'Sent. Active schedules take priority. Your partner can receive it on an opted-in device while CloseCall is open.'
+          : 'Sent — queued until your partner allows updates. Active schedules take priority.';
+    },
+    _retrySend,
+    resumePending: true,
+  );
+
+  Future<void> retryUpload() {
+    if (hasPendingSend) return _retrySend();
+    return _run(
+      (revision) async {
+        final result = await _upload(revision);
+        if (!_current(revision) || result == null) return;
+        status =
+            'Uploaded privately to your couple. Your local widget was not changed.';
+      },
+      retryUpload,
+      resumePending: true,
+    );
+  }
+
+  Future<MediaAsset?> _upload(int revision) async {
+    if (!_current(revision)) return null;
+    if (_pendingPhoto == null || pendingRequestId == null) return null;
     final original = _pendingPhoto!;
     final id = pendingRequestId!;
     final prepared = _prepared ? original : await _prepare(original);
-    if (!_current(revision)) return;
+    if (!_current(revision)) return null;
     validateUploadPng(prepared);
     _pendingPhoto = prepared;
     _prepared = true;
     final result = await repository.uploadPhoto(prepared, id);
-    if (!_current(revision)) return;
+    if (!_current(revision)) return null;
+    _validateOwnAsset(result);
     _pendingPhoto = null;
     pendingRequestId = null;
     assets = [result, ...assets.where((a) => a.assetId != result.assetId)];
-    status =
-        'Uploaded privately to your couple. Your local widget was not changed.';
-  }, retryUpload);
+    return result;
+  }
 
   Future<void> refresh() => _run((revision) async {
     final result = await repository.listAssets();
@@ -209,11 +307,14 @@ class MediaController extends ChangeNotifier {
     _revision++;
     busy = false;
     _pendingPhoto = null;
+    _prepared = false;
     pendingRequestId = null;
+    _pendingSendAsset = null;
+    _pendingSendRequestId = null;
     _retry = null;
     error = null;
     status =
-        'Stopped waiting. An already submitted upload or local widget update may still finish; refresh to check server photos.';
+        'Stopped waiting. An already submitted upload, send or local widget update may still finish; refresh to check server photos.';
     _notify();
   }
 
@@ -221,6 +322,11 @@ class MediaController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _revision++;
+    _pendingPhoto = null;
+    _pendingSendAsset = null;
+    _pendingSendRequestId = null;
+    pendingRequestId = null;
+    _retry = null;
     pairing.removeListener(_scopeChanged);
     pairing.session.removeListener(_scopeChanged);
     super.dispose();

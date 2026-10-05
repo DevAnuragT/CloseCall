@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:closecall_client/closecall_client.dart' hide Uuid;
 import 'package:closecall_shared/closecall_shared.dart' as shared;
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import '../../media/data/photo_preparation.dart';
 import '../../pairing/presentation/pairing_controller.dart';
 import '../data/local_widget_writer.dart';
 import '../data/schedule_repository.dart';
+import '../data/widget_consent_store.dart';
 
 Duration Function() _monotonicClock() {
   final stopwatch = Stopwatch()..start();
@@ -47,10 +49,12 @@ class ScheduleController extends ChangeNotifier {
     required this.repository,
     required this.mediaRepository,
     required this.localWriter,
+    WidgetConsentStore? consentStore,
     DateTime Function()? now,
     Duration Function()? elapsed,
     String Function()? requestId,
-  }) : _now = now ?? DateTime.now,
+  }) : consentStore = consentStore ?? MemoryWidgetConsentStore(),
+       _now = now ?? DateTime.now,
        _elapsed = elapsed ?? _monotonicClock(),
        _requestId = requestId ?? const Uuid().v4 {
     pairing.addListener(_scopeChanged);
@@ -62,6 +66,7 @@ class ScheduleController extends ChangeNotifier {
   final ScheduleRepository repository;
   final MediaRepository mediaRepository;
   final LocalWidgetWriter localWriter;
+  final WidgetConsentStore consentStore;
   final DateTime Function() _now;
   final Duration Function() _elapsed;
   final String Function() _requestId;
@@ -72,6 +77,17 @@ class ScheduleController extends ChangeNotifier {
   bool _disposed = false;
   bool foreground = true;
   bool autoSyncEnabled = false;
+  bool get partnerUpdatesEnabled => autoSyncEnabled;
+  bool partnerUpdatesBusy = false;
+  Object? partnerUpdatesError;
+  bool _deviceConsentManaged = false;
+  int _consentVersion = 0;
+  int _restoreScope = -1;
+  String? _observedUser;
+  bool _clearedSignedOutConsent = false;
+  String? _validatedConsentScope;
+  Future<void> _consentTail = Future.value();
+  Future<void> _deliveryTail = Future.value();
   bool busy = false;
   bool syncing = false;
   Object? error;
@@ -81,6 +97,8 @@ class ScheduleController extends ChangeNotifier {
   WidgetTimeline? ownTimeline;
   WidgetTimeline? partnerTimeline;
   WidgetTimeline? _nativeCachedTimeline;
+  WidgetTimeline? _lastSyncedTimeline;
+  String? _lastSyncedAsset;
   shared.WidgetResolution? ownResolution;
   shared.WidgetResolution? partnerResolution;
   PendingScheduleRequest? pendingCreate;
@@ -88,6 +106,9 @@ class ScheduleController extends ChangeNotifier {
   _ClockAnchor? _partnerClock;
   StreamSubscription<WidgetTimeline>? _subscription;
   Timer? _timer;
+  Timer? _reconnectTimer;
+  int _reconnectFailures = 0;
+  bool _streamBlocked = false;
   final _cache = <String, Uint8List>{};
   String? _appliedAsset;
   bool _appliedEmpty = false;
@@ -126,6 +147,7 @@ class ScheduleController extends ChangeNotifier {
       _current(scope) &&
       sync == _syncVersion &&
       autoSyncEnabled &&
+      (!_deviceConsentManaged || ownTimeline?.autoUpdateEnabled == true) &&
       foreground &&
       canSchedule;
   void _notify() {
@@ -133,12 +155,23 @@ class ScheduleController extends ChangeNotifier {
   }
 
   void _scopeChanged() {
-    if (_disposed || (_scopeInitialized && _scope == _currentScope)) return;
+    if (_disposed) return;
+    _observeConsentIdentity();
+    if (_scopeInitialized && _scope == _currentScope) {
+      _maybeRestoreConsent();
+      return;
+    }
     _scopeInitialized = true;
     _scope = _currentScope;
     final scope = ++_scopeVersion;
     _operationVersion++;
     _syncVersion++;
+    _consentVersion++;
+    partnerUpdatesBusy = false;
+    partnerUpdatesError = null;
+    _deviceConsentManaged = false;
+    _streamBlocked = false;
+    _reconnectFailures = 0;
     _stopListening();
     autoSyncEnabled = false;
     busy = false;
@@ -147,6 +180,8 @@ class ScheduleController extends ChangeNotifier {
     status = null;
     ownTimeline = partnerTimeline = null;
     _nativeCachedTimeline = null;
+    _lastSyncedTimeline = null;
+    _lastSyncedAsset = null;
     ownResolution = partnerResolution = null;
     _ownClock = _partnerClock = null;
     _cache.clear();
@@ -167,9 +202,217 @@ class ScheduleController extends ChangeNotifier {
       _subscribe();
       unawaited(refresh());
     }
+    _maybeRestoreConsent();
+  }
+
+  String? get _stableConsentScope =>
+      canSchedule ? '${pairing.userId}/${pairing.couple!.id}' : null;
+
+  // Do not erase persisted consent while secure startup is still signed out.
+  // Once an identity was observed, sign-out/switch/re-pair invalidates it.
+  void _observeConsentIdentity() {
+    final user = pairing.userId;
+    final stable = _stableConsentScope;
+    final authRevision = pairing.authRevision;
+    if (user != null) _clearedSignedOutConsent = false;
+    final changedUser = _observedUser != null && _observedUser != user;
+    final changedPair =
+        _validatedConsentScope != null &&
+        ((stable != null && stable != _validatedConsentScope) ||
+            (pairing.initialized && pairing.hasLoadedPairing && !canSchedule));
+    if (changedUser ||
+        changedPair ||
+        (user == null && pairing.initialized && !_clearedSignedOutConsent)) {
+      _validatedConsentScope = null;
+      _clearedSignedOutConsent = user == null;
+      unawaited(
+        _enqueueConsent(() => consentStore.write(null)).catchError((
+          Object failure,
+        ) {
+          if (!_disposed &&
+              pairing.userId == user &&
+              pairing.authRevision == authRevision &&
+              _stableConsentScope == stable) {
+            partnerUpdatesError = failure;
+            _notify();
+          }
+        }),
+      );
+    }
+    _observedUser = user;
+    if (stable != null) _validatedConsentScope = stable;
+  }
+
+  Future<T> _enqueueConsent<T>(Future<T> Function() operation) {
+    final result = _consentTail.then((_) => operation());
+    _consentTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  bool _consentCurrent(int scope, int version) =>
+      _current(scope) && version == _consentVersion && canSchedule;
+
+  Future<void> _persistConsent(bool enabled, int scope, int version) {
+    final consent = canSchedule
+        ? WidgetDeviceConsent(
+            userId: pairing.userId!,
+            coupleId: pairing.couple!.id,
+            enabled: enabled,
+          )
+        : null;
+    return _enqueueConsent(() async {
+      // A requested pause must survive an immediate Flutter shutdown. Dispose
+      // invalidates native work, not this already scoped durable preference.
+      final disposedSameScope =
+          _disposed && _scopeVersion == scope + 1 && _scope == _currentScope;
+      if ((!_current(scope) && !disposedSameScope) ||
+          version != _consentVersion) {
+        return;
+      }
+      await consentStore.write(consent);
+    });
+  }
+
+  DeliveryConsentRepository get _deliveryRepository {
+    final repo = repository;
+    if (repo is DeliveryConsentRepository) {
+      return repo as DeliveryConsentRepository;
+    }
+    throw UnsupportedError('Partner delivery consent is unavailable.');
+  }
+
+  void _validateDelivery(WidgetDeliveryState state) {
+    if (!canSchedule ||
+        state.coupleId != pairing.couple!.id ||
+        state.recipientId != pairing.userId) {
+      throw StateError(
+        'Delivery consent does not belong to this account and couple.',
+      );
+    }
+  }
+
+  void _maybeRestoreConsent() {
+    if (!canSchedule || _restoreScope == _scopeVersion) return;
+    _restoreScope = _scopeVersion;
+    unawaited(_restoreConsent(_scopeVersion, _consentVersion));
+  }
+
+  Future<void> _restoreConsent(int scope, int version) async {
+    try {
+      final saved = await _enqueueConsent(consentStore.read);
+      if (!_consentCurrent(scope, version) || saved == null) return;
+      if (!saved.matches(pairing.userId!, pairing.couple!.id)) {
+        await _persistConsent(false, scope, version);
+        return;
+      }
+      _deviceConsentManaged = true;
+      if (!saved.enabled) return;
+      final remote = await _deliveryRepository.getDeliveryState();
+      if (!_consentCurrent(scope, version)) return;
+      _validateDelivery(remote);
+      if (!remote.autoUpdateEnabled) {
+        await _persistConsent(false, scope, version);
+        return;
+      }
+      // Fetch fresh truth after validated restoration; never apply startup cache.
+      final timeline = await repository.currentTimeline();
+      if (!_consentCurrent(scope, version)) return;
+      _accept(timeline, own: true);
+      if (!ownTimeline!.autoUpdateEnabled) {
+        await _persistConsent(false, scope, version);
+        return;
+      }
+      await setAutoSync(true);
+    } catch (failure) {
+      if (_consentCurrent(scope, version)) {
+        partnerUpdatesError = failure;
+        _notify();
+      }
+    }
+  }
+
+  Future<WidgetDeliveryState?> _setRemoteConsent(bool enabled, int scope) {
+    final result = _deliveryTail.then((_) async {
+      if (!_current(scope) || !canSchedule) return null;
+      return _deliveryRepository.setDeliveryConsent(enabled);
+    });
+    _deliveryTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  /// Explicit opt-in affects this account on the server and this device locally.
+  /// Off always pauses the device immediately, even if server opt-out fails.
+  Future<void> setPartnerUpdates(bool enabled) async {
+    if (_disposed) return;
+    final scope = _scopeVersion;
+    final version = ++_consentVersion;
+    partnerUpdatesBusy = true;
+    partnerUpdatesError = null;
+    _deviceConsentManaged = true;
+    _notify();
+    try {
+      if (!enabled) {
+        // Synchronously invalidates downloads before storage/network awaits.
+        final pause = setAutoSync(false);
+        final persist = _persistConsent(false, scope, version);
+        final optOut = _setRemoteConsent(false, scope);
+        // Start the opt-out regardless of storage/native failure; await all so
+        // no delayed error escapes, and leave local pause in effect.
+        final results = await Future.wait<Object?>([pause, persist, optOut]);
+        if (!_current(scope) || version != _consentVersion) return;
+        final state = results.last as WidgetDeliveryState?;
+        if (state != null) _validateDelivery(state);
+        if (syncError != null) throw syncError!;
+        status =
+            'Partner updates paused on this device; account delivery consent is off. The current photo is unchanged.';
+        return;
+      }
+      if (!canSchedule) {
+        throw StateError('Complete pairing before enabling partner updates.');
+      }
+      final state = await _setRemoteConsent(true, scope);
+      if (!_consentCurrent(scope, version) || state == null) return;
+      _validateDelivery(state);
+      if (!state.autoUpdateEnabled) {
+        throw StateError('Partner delivery consent was not enabled.');
+      }
+      await _persistConsent(true, scope, version);
+      if (!_consentCurrent(scope, version)) return;
+      final timeline = await repository.currentTimeline();
+      if (!_consentCurrent(scope, version)) return;
+      _accept(timeline, own: true);
+      if (!ownTimeline!.autoUpdateEnabled) {
+        await _persistConsent(false, scope, version);
+        throw StateError(
+          'Account delivery consent is off. Enable partner updates again to retry.',
+        );
+      }
+      await setAutoSync(true);
+    } catch (failure) {
+      if (_current(scope) && version == _consentVersion) {
+        partnerUpdatesError = failure;
+        if (!enabled) {
+          status =
+              'Paused on this device. Account-level opt-out could not be confirmed; other opted-in devices may still update.';
+        }
+      }
+    } finally {
+      if (_current(scope) && version == _consentVersion) {
+        partnerUpdatesBusy = false;
+        _notify();
+      }
+    }
   }
 
   void _stopListening() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     final old = _subscription;
     _subscription = null;
     if (old != null) unawaited(old.cancel().catchError((Object _) {}));
@@ -178,12 +421,18 @@ class ScheduleController extends ChangeNotifier {
   }
 
   void _subscribe() {
-    if (_subscription != null || !canSchedule || !foreground) return;
+    if (_subscription != null ||
+        !canSchedule ||
+        !foreground ||
+        _streamBlocked) {
+      return;
+    }
     final scope = _scopeVersion;
     try {
       _subscription = repository.watchTimeline().listen(
         (timeline) {
           if (!_current(scope) || !foreground) return;
+          _reconnectFailures = 0;
           try {
             _accept(timeline, own: true);
           } catch (failure) {
@@ -193,23 +442,67 @@ class ScheduleController extends ChangeNotifier {
         },
         onError: (Object failure) {
           if (_current(scope)) {
-            streamError = failure;
-            _notify();
+            _streamFailed(failure, scope);
           }
         },
         onDone: () {
           if (!_current(scope) || !foreground) return;
           _subscription = null;
-          streamError = StateError(
-            'Timeline stream disconnected. Refresh to reconnect.',
-          );
-          _notify();
+          _streamFailed(StateError('Timeline stream disconnected.'), scope);
         },
       );
     } catch (failure) {
-      streamError = failure;
-      _notify();
+      _streamFailed(failure, scope);
     }
+  }
+
+  bool _privateFailure(Object failure) =>
+      (failure is ServerpodClientHttpException &&
+          (failure.statusCode == 401 || failure.statusCode == 403)) ||
+      (failure is ScheduleFailure &&
+          [
+            'not_paired',
+            'not_authenticated',
+            'unauthorized',
+            'asset_not_found',
+          ].contains(failure.code));
+
+  void _streamFailed(Object failure, int scope) {
+    if (!_current(scope)) return;
+    final old = _subscription;
+    _subscription = null;
+    if (old != null) unawaited(old.cancel().catchError((Object _) {}));
+    streamError = failure;
+    _streamBlocked = _privateFailure(failure);
+    _scheduleReconnect();
+    _notify();
+  }
+
+  void _scheduleReconnect() {
+    if (_disposed ||
+        !autoSyncEnabled ||
+        !foreground ||
+        !canSchedule ||
+        _streamBlocked ||
+        _reconnectTimer != null) {
+      return;
+    }
+    final scope = _scopeVersion;
+    final seconds = (1 << _reconnectFailures.clamp(0, 5)).clamp(1, 30);
+    _reconnectFailures = (_reconnectFailures + 1).clamp(0, 5);
+    _reconnectTimer = Timer(Duration(seconds: seconds), () async {
+      _reconnectTimer = null;
+      if (!_current(scope) || !autoSyncEnabled || !foreground) return;
+      try {
+        final timeline = await repository.currentTimeline();
+        if (!_current(scope) || !autoSyncEnabled || !foreground) return;
+        _accept(timeline, own: true);
+        streamError = null;
+        _subscribe();
+      } catch (failure) {
+        _streamFailed(failure, scope);
+      }
+    });
   }
 
   void setForeground(bool value) {
@@ -222,7 +515,7 @@ class ScheduleController extends ChangeNotifier {
     } else if (canSchedule) {
       _subscribe();
       resolveNow(sync: false);
-      unawaited(refresh());
+      unawaited(_refresh(retryPrivate: false));
     }
     _notify();
   }
@@ -256,18 +549,25 @@ class ScheduleController extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh() => _run((scope, operation) async {
-    if (streamError != null) _stopListening();
-    _subscribe();
-    final timelines = await Future.wait([
-      repository.currentTimeline(),
-      repository.partnerTimeline(),
-    ]);
-    if (!_operationCurrent(scope, operation)) return;
-    _accept(timelines[0], own: true);
-    _accept(timelines[1], own: false);
-    streamError = null;
-  }, refresh);
+  Future<void> refresh() => _refresh(retryPrivate: true);
+
+  Future<void> _refresh({required bool retryPrivate}) {
+    if (_streamBlocked && !retryPrivate) return Future.value();
+    return _run((scope, operation) async {
+      if (streamError != null) _stopListening();
+      _streamBlocked =
+          false; // Only an explicit refresh/scope change retries auth.
+      _subscribe();
+      final timelines = await Future.wait([
+        repository.currentTimeline(),
+        repository.partnerTimeline(),
+      ]);
+      if (!_operationCurrent(scope, operation)) return;
+      _accept(timelines[0], own: true);
+      _accept(timelines[1], own: false);
+      streamError = null;
+    }, refresh);
+  }
 
   void _accept(WidgetTimeline timeline, {required bool own}) {
     if (!canSchedule) return;
@@ -293,9 +593,15 @@ class ScheduleController extends ChangeNotifier {
     }
     final previous = own ? ownTimeline : partnerTimeline;
     if (previous != null &&
-        timeline.serverTime.toUtc().isBefore(previous.serverTime.toUtc())) {
+        (timeline.serverTime.toUtc().isBefore(previous.serverTime.toUtc()) ||
+            timeline.deliveryVersion < previous.deliveryVersion ||
+            (timeline.deliveryVersion == previous.deliveryVersion &&
+                timeline.latestAssetId != previous.latestAssetId))) {
       return;
     }
+    // Consent may change without incrementing deliveryVersion. Compare actual
+    // content, not just version, while timestamps remain monotonic anchors.
+    final unchanged = previous != null && _sameTimeline(previous, timeline);
     final previousClock = own ? _ownClock : _partnerClock;
     final received = timeline.serverTime.toUtc();
     final anchoredNow = previousClock?.now(_elapsed());
@@ -309,8 +615,34 @@ class ScheduleController extends ChangeNotifier {
     if (own) {
       ownTimeline = timeline;
       _ownClock = anchor;
-      _syncVersion++;
-      if (autoSyncEnabled) {
+      if (unchanged) {
+        if (identical(_nativeCachedTimeline, previous)) {
+          _nativeCachedTimeline = timeline;
+        }
+        if (identical(_lastSyncedTimeline, previous)) {
+          _lastSyncedTimeline = timeline;
+        }
+      } else {
+        _syncVersion++;
+      }
+      if (_deviceConsentManaged &&
+          !timeline.autoUpdateEnabled &&
+          autoSyncEnabled) {
+        final scope = _scopeVersion;
+        final version = ++_consentVersion;
+        unawaited(setAutoSync(false));
+        unawaited(
+          _persistConsent(false, scope, version).catchError((Object failure) {
+            if (_consentCurrent(scope, version)) {
+              partnerUpdatesError = failure;
+              _notify();
+            }
+          }),
+        );
+        status =
+            'Account delivery consent is off. Partner updates are paused on this device.';
+      }
+      if (!unchanged && autoSyncEnabled) {
         final scope = _scopeVersion;
         final sync = _syncVersion;
         // Stop outdated alarms immediately, even if downloading replacement
@@ -336,10 +668,19 @@ class ScheduleController extends ChangeNotifier {
     resolveNow(sync: own);
   }
 
+  bool _sameTimeline(WidgetTimeline a, WidgetTimeline b) {
+    final left = a.toJson()..remove('serverTime');
+    final right = b.toJson()..remove('serverTime');
+    return jsonEncode(left) == jsonEncode(right);
+  }
+
+  String? _baseline(WidgetTimeline timeline) =>
+      timeline.latestAssetId ?? timeline.fallbackAssetId;
+
   shared.WidgetResolution _resolve(WidgetTimeline timeline, DateTime now) =>
       shared.WidgetScheduleResolver.resolve(
         now: now,
-        fallbackAssetId: timeline.fallbackAssetId ?? '',
+        fallbackAssetId: _baseline(timeline) ?? '',
         schedules: timeline.schedules
             .map(
               (entry) => shared.WidgetSchedule(
@@ -421,6 +762,8 @@ class ScheduleController extends ChangeNotifier {
         : 'Auto-sync off. The current local photo is left unchanged.';
     _notify();
     if (!enabled) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
       final scope = _scopeVersion;
       final sync = _syncVersion;
       try {
@@ -436,6 +779,8 @@ class ScheduleController extends ChangeNotifier {
       }
     }
     if (enabled && foreground) {
+      _subscribe();
+      if (streamError != null) _scheduleReconnect();
       if (ownTimeline == null) await refresh();
       await syncNow();
     }
@@ -444,16 +789,28 @@ class ScheduleController extends ChangeNotifier {
   Future<void> applyManualPhoto(Uint8List photo) async {
     if (_disposed) return;
     final scope = _scopeVersion;
+    final consentVersion = ++_consentVersion;
+    partnerUpdatesBusy = false;
+    partnerUpdatesError = null;
     // Manual choice explicitly pauses auto-sync, preventing a later stream
     // event or already queued automatic write from overwriting that choice.
-    await setAutoSync(false);
-    if (!_current(scope) || autoSyncEnabled) return;
+    final pause = setAutoSync(false);
+    final persist = _persistConsent(false, scope, consentVersion);
+    await Future.wait([pause, persist]);
+    if (!_current(scope) ||
+        consentVersion != _consentVersion ||
+        autoSyncEnabled) {
+      return;
+    }
     if (syncError != null) throw syncError!;
     final sync = _syncVersion;
     await localWriter.write(
       photo,
       isCurrent: () =>
-          _current(scope) && sync == _syncVersion && !autoSyncEnabled,
+          _current(scope) &&
+          consentVersion == _consentVersion &&
+          sync == _syncVersion &&
+          !autoSyncEnabled,
     );
   }
 
@@ -473,6 +830,13 @@ class ScheduleController extends ChangeNotifier {
     }
     if (_syncFlightVersion == _syncVersion && _syncFuture != null) {
       return _syncFuture!;
+    }
+    if (identical(_lastSyncedTimeline, ownTimeline) &&
+        _lastSyncedAsset == ownCurrentAssetId &&
+        (ownCurrentAssetId == null
+            ? _appliedEmpty
+            : _appliedAsset == ownCurrentAssetId)) {
+      return Future.value();
     }
     final ticket = ++_syncFlightTicket;
     _syncFlightVersion = _syncVersion;
@@ -539,8 +903,7 @@ class ScheduleController extends ChangeNotifier {
             ..sort((a, b) => a.activeFrom.compareTo(b.activeFrom));
       final needed = <String>{
         ?currentAsset,
-        if (timeline.fallbackAssetId?.isNotEmpty == true)
-          timeline.fallbackAssetId!,
+        if (_baseline(timeline)?.isNotEmpty == true) _baseline(timeline)!,
         ...upcoming.map((s) => s.assetId),
       };
       final ids = needed.take(maxCachedAssets).toList();
@@ -562,8 +925,7 @@ class ScheduleController extends ChangeNotifier {
               .toList();
           final requiredPhotos = <String>{
             ?ownCurrentAssetId,
-            if (timeline.fallbackAssetId?.isNotEmpty == true)
-              timeline.fallbackAssetId!,
+            if (_baseline(timeline)?.isNotEmpty == true) _baseline(timeline)!,
             ...cachedSchedules.map((s) => s.assetId),
           };
           // Never truncate competing windows into incorrect cached truth. If
@@ -582,7 +944,7 @@ class ScheduleController extends ChangeNotifier {
               {
                 'scope': _scope!,
                 'serverTimeMs': publicationNow.millisecondsSinceEpoch,
-                'fallbackAssetId': timeline.fallbackAssetId,
+                'fallbackAssetId': _baseline(timeline),
                 'schedules': [
                   for (final entry in cachedSchedules)
                     {
@@ -618,7 +980,7 @@ class ScheduleController extends ChangeNotifier {
             );
             if (!_syncCurrent(scope, sync)) return;
             if (applied) {
-              _nativeCachedTimeline = timeline;
+              _nativeCachedTimeline = ownTimeline;
               status =
                   'Own Android timeline cached for up to 24h. OS may delay transitions; reconnect for new, changed or cancelled schedules.';
             }
@@ -626,6 +988,10 @@ class ScheduleController extends ChangeNotifier {
         } else {
           status =
               'Own timeline applied locally while the app is open. Background cache is unavailable on this platform.';
+        }
+        if (_syncCurrent(scope, sync)) {
+          _lastSyncedTimeline = ownTimeline;
+          _lastSyncedAsset = currentAsset;
         }
       }
     } catch (failure) {

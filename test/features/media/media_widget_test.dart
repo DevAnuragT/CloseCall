@@ -48,6 +48,7 @@ void main() {
     expect(find.textContaining('Authorization'), findsNothing);
     expect(repository.requestIds, hasLength(1));
     repository.uploadFailure = null;
+    await tester.ensureVisible(find.text('Retry photo operation'));
     await tester.tap(find.text('Retry photo operation'));
     await tester.pumpAndSettle();
     expect(repository.requestIds, hasLength(2));
@@ -83,73 +84,102 @@ void main() {
     },
   );
 
-  testWidgets(
-    'picked photo reaches editor and private upload waits for preview confirmation',
-    (tester) async {
-      final auth = FakeAuth()..change('me');
-      final pairing = PairingController(
-        session: auth,
-        repository: FakeCouples(),
-      );
-      await pairing.initialize();
-      final repository = FakeMedia();
-      var localApplied = 0;
-      final media = MediaController(
-        pairing: pairing,
-        repository: repository,
-        prepare: (bytes) async => bytes,
-        applyLocalPhoto: (_) async {
-          localApplied++;
-        },
-      );
-      addTearDown(() {
-        media.dispose();
-        pairing.dispose();
-        auth.dispose();
-      });
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: WidgetTabScreen(
-              media: media,
-              liveMode: true,
-              pickPhoto: () async => testPng,
+  for (final action in ['send', 'save', 'cancel']) {
+    testWidgets(
+      'picked photo reaches editor and preview explicitly confirms $action',
+      (tester) async {
+        final auth = FakeAuth()..change('me');
+        final pairing = PairingController(
+          session: auth,
+          repository: FakeCouples(),
+        );
+        await pairing.initialize();
+        final repository = FakeMedia();
+        var localApplied = 0;
+        final sends = <(String, String)>[];
+        final media = MediaController(
+          pairing: pairing,
+          repository: repository,
+          prepare: (bytes) async => bytes,
+          applyLocalPhoto: (_) async {
+            localApplied++;
+          },
+          sendAsset: (asset, request) async {
+            sends.add((asset, request));
+            return WidgetSendReceipt(
+              sendId: 'send',
+              requestId: request,
+              coupleId: 'couple',
+              senderId: 'me',
+              recipientId: 'partner',
+              assetId: asset,
+              version: 1,
+              createdAt: DateTime.utc(2026, 10, 5),
+              recipientAutoUpdateEnabled: true,
+            );
+          },
+        );
+        addTearDown(() {
+          media.dispose();
+          pairing.dispose();
+          auth.dispose();
+        });
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: WidgetTabScreen(
+                media: media,
+                liveMode: true,
+                pickPhoto: () async => testPng,
+              ),
             ),
           ),
-        ),
-      );
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Decorate and upload private photo'));
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
-      await tester.pumpAndSettle();
-      expect(find.byType(WidgetEditorScreen), findsOneWidget);
-      expect(
-        tester
-            .widget<WidgetEditorScreen>(find.byType(WidgetEditorScreen))
-            .background,
-        isA<Image>(),
-      );
-      expect(repository.requestIds, isEmpty);
-      // Inject the editor result; its draw/text/sticker behavior has separate tests.
-      await tester.runAsync(() async {
-        Navigator.of(
-          tester.element(find.byType(WidgetEditorScreen)),
-        ).pop(testPng);
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
-      await tester.pumpAndSettle();
-      expect(find.text('Upload private photo'), findsOneWidget);
-      expect(repository.requestIds, isEmpty);
-      await tester.runAsync(() async {
-        await tester.tap(find.byKey(const Key('preview-confirm')));
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
-      await tester.pumpAndSettle();
-      expect(repository.requestIds, hasLength(1));
-      expect(localApplied, 0);
-    },
-  );
+        );
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Choose photo'));
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        });
+        await tester.pumpAndSettle();
+        expect(find.byType(WidgetEditorScreen), findsOneWidget);
+        expect(
+          tester
+              .widget<WidgetEditorScreen>(find.byType(WidgetEditorScreen))
+              .background,
+          isA<Image>(),
+        );
+        expect(repository.requestIds, isEmpty);
+        // Inject the editor result; its draw/text/sticker behavior has separate tests.
+        await tester.runAsync(() async {
+          Navigator.of(
+            tester.element(find.byType(WidgetEditorScreen)),
+          ).pop(testPng);
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        });
+        await tester.pumpAndSettle();
+        expect(find.text('Send to partner'), findsOneWidget);
+        expect(find.text('Save privately'), findsOneWidget);
+        expect(repository.requestIds, isEmpty);
+        expect(sends, isEmpty);
+        await tester.runAsync(() async {
+          await tester.tap(
+            find.byKey(
+              Key(switch (action) {
+                'send' => 'preview-confirm',
+                'save' => 'preview-save-privately',
+                _ => 'preview-cancel',
+              }),
+            ),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        });
+        await tester.pumpAndSettle();
+        expect(repository.requestIds, hasLength(action == 'cancel' ? 0 : 1));
+        expect(sends, hasLength(action == 'send' ? 1 : 0));
+        if (action == 'send') expect(sends.single.$1, 'uploaded');
+        expect(localApplied, 0);
+      },
+    );
+  }
 
   testWidgets(
     'list/download/typed upload failure/retry/local apply need no plugins',
@@ -186,10 +216,14 @@ void main() {
           home: Scaffold(body: WidgetTabScreen(media: media, liveMode: true)),
         ),
       );
+      await tester.ensureVisible(find.text('Refresh private photos'));
       await tester.tap(find.text('Refresh private photos'));
       await tester.pumpAndSettle();
       expect(find.byType(Image), findsOneWidget);
       expect(applied, 0);
+      await tester.ensureVisible(
+        find.text('Apply downloaded photo to this device'),
+      );
       await tester.tap(find.text('Apply downloaded photo to this device'));
       await tester.pumpAndSettle();
       expect(applied, 1);
@@ -201,6 +235,7 @@ void main() {
         findsOneWidget,
       );
       repository.uploadFailure = null;
+      await tester.ensureVisible(find.text('Retry photo operation'));
       await tester.tap(find.text('Retry photo operation'));
       await tester.pumpAndSettle();
       expect(repository.requestIds.toSet(), hasLength(1));

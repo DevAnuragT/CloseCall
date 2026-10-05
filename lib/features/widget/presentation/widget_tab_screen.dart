@@ -46,7 +46,11 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
   Object? _error;
   String? _status;
 
-  Future<void> _openEditor({bool blank = false, bool upload = false}) async {
+  Future<void> _openEditor({
+    bool blank = false,
+    bool upload = false,
+    bool send = false,
+  }) async {
     if (_editing) return;
     setState(() {
       _editing = true;
@@ -59,13 +63,15 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
     final identity = pairing?.userId;
     final authRevision = pairing?.authRevision;
     final coupleId = pairing?.couple?.id;
+    final partnerId = pairing?.couple?.partnerOf(identity ?? '');
     bool current() =>
         mounted &&
         identical(scope, widget.media) &&
         identical(pairing, widget.pairing ?? widget.media?.pairing) &&
         identity == pairing?.userId &&
         authRevision == pairing?.authRevision &&
-        coupleId == pairing?.couple?.id;
+        coupleId == pairing?.couple?.id &&
+        partnerId == pairing?.couple?.partnerOf(pairing.userId ?? '');
     try {
       Uint8List? background;
       if (!blank) {
@@ -101,20 +107,33 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
       if (bytes == null || !current()) return;
       final prepared = await preparePhotoPng(bytes);
       if (!current()) return;
-      final confirmed = await navigator.push<bool>(
+      final confirmed = await navigator.push<Object>(
         MaterialPageRoute(
           builder: (_) => WidgetPreviewScreen(
             photo: prepared,
-            confirmLabel: upload ? 'Upload private photo' : 'Set widget photo',
-            actionDescription: upload
+            confirmLabel: send
+                ? 'Send to partner'
+                : upload
+                ? 'Save privately'
+                : 'Set widget photo',
+            allowPrivateSave: send,
+            actionDescription: send
+                ? 'Send this photo to your partner. They must allow updates and open CloseCall to receive new photos. Active schedules take priority. Save privately instead to keep it in your library without sending.'
+                : upload
                 ? 'Upload to your couple’s private server storage only. '
                       'Scheduling is a separate action; no background delivery.'
                 : 'Update this device only. This photo will not be uploaded.',
           ),
         ),
       );
-      if (confirmed != true || !current()) return;
-      if (upload) {
+      if (!current()) return;
+      if (confirmed == WidgetPreviewAction.savePrivately) {
+        await scope!.uploadConfirmed(prepared);
+      } else if (confirmed != true) {
+        return;
+      } else if (send) {
+        await scope!.sendConfirmed(prepared);
+      } else if (upload) {
         await scope!.uploadConfirmed(prepared);
       } else {
         if (widget.applyLocalPhoto != null) {
@@ -144,6 +163,8 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
     builder: (context, _) {
       final media = widget.media;
       final pairing = widget.pairing ?? media?.pairing;
+      final sharingAllowed =
+          media?.canShare == true && identical(pairing, media?.pairing);
       if (widget.liveMode || pairing != null) {
         if (pairing == null ||
             pairing.error != null ||
@@ -171,6 +192,8 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
         }
       }
       final busy = _editing || media?.busy == true;
+      final pending =
+          media?.hasPendingUpload == true || media?.hasPendingSend == true;
       return SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(
@@ -182,6 +205,20 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
           children: [
             _WidgetHeader(liveMode: widget.liveMode),
             const SizedBox(height: AppSpacing.md),
+            if (widget.liveMode &&
+                widget.schedules != null &&
+                identical(widget.schedules!.pairing, pairing)) ...[
+              _PartnerUpdatesCard(
+                key: ValueKey((
+                  pairing,
+                  pairing?.userId,
+                  pairing?.authRevision,
+                  pairing?.couple?.id,
+                )),
+                controller: widget.schedules!,
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             if (widget.liveMode)
               WidgetCard(
                 eyebrow: 'Share privately',
@@ -192,14 +229,11 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: FilledButton.tonalIcon(
-                    onPressed:
-                        busy ||
-                            media?.canShare != true ||
-                            media?.hasPendingUpload == true
+                    onPressed: busy || !sharingAllowed || pending
                         ? null
-                        : () => _openEditor(upload: true),
-                    icon: const Icon(Icons.cloud_upload_outlined),
-                    label: const Text('Decorate and upload private photo'),
+                        : () => _openEditor(send: true),
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    label: const Text('Choose photo'),
                   ),
                 ),
               ),
@@ -220,7 +254,7 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: busy ? null : () => _openEditor(),
+                      onPressed: busy || pending ? null : () => _openEditor(),
                       icon: const Icon(Icons.add_photo_alternate_outlined),
                       label: const Text('Decorate a photo — local widget only'),
                     ),
@@ -229,7 +263,9 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: busy ? null : () => _openEditor(blank: true),
+                      onPressed: busy || pending
+                          ? null
+                          : () => _openEditor(blank: true),
                       icon: const Icon(Icons.crop_square_rounded),
                       label: const Text('Blank canvas — local widget only'),
                     ),
@@ -265,21 +301,18 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.tonalIcon(
-                        onPressed:
-                            busy ||
-                                media?.canShare != true ||
-                                media?.hasPendingUpload == true
+                        onPressed: busy || !sharingAllowed || pending
                             ? null
                             : () => _openEditor(upload: true),
                         icon: const Icon(Icons.cloud_upload_outlined),
-                        label: const Text('Upload another private photo'),
+                        label: const Text('Save privately'),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: busy || media?.canShare != true
+                        onPressed: busy || pending || !sharingAllowed
                             ? null
                             : media!.refresh,
                         icon: const Icon(Icons.refresh_rounded),
@@ -323,7 +356,9 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                 child: WidgetStatusCard(
                   key: const Key('media-error'),
                   title: 'Private photo action needs attention',
-                  message: mediaErrorMessage(media!.error!),
+                  message: media!.hasPendingSend && !media.hasPendingUpload
+                      ? 'Could not confirm the send. Retry this same photo operation; no new photo will be uploaded after a confirmed upload.'
+                      : mediaErrorMessage(media.error!),
                   icon: Icons.cloud_off_rounded,
                   color: AppColors.error,
                   action: TextButton(
@@ -333,11 +368,13 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                 ),
               ),
             ],
-            if (media?.busy == true || media?.hasPendingUpload == true)
+            if (media?.busy == true || pending)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.md),
                 child: WidgetStatusCard(
-                  message: media!.hasPendingUpload
+                  message: media!.hasPendingSend
+                      ? 'Your photo send is pending. Retry explicitly or cancel; it will not resend automatically.'
+                      : media.hasPendingUpload
                       ? 'A private upload is waiting to be retried.'
                       : 'Working on your private photo…',
                   icon: Icons.hourglass_top_rounded,
@@ -385,7 +422,9 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: busy ? null : media.applyDownloadedLocally,
+                        onPressed: busy || pending
+                            ? null
+                            : media.applyDownloadedLocally,
                         icon: const Icon(Icons.phone_android_rounded),
                         label: const Text(
                           'Apply downloaded photo to this device',
@@ -417,8 +456,11 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                             _PrivateAssetTile(
                               asset: asset,
                               currentUserId: media.pairing.userId,
-                              enabled: !busy,
+                              enabled: !busy && !pending && sharingAllowed,
                               onTap: () => media.download(asset),
+                              onSend: asset.uploaderId == media.pairing.userId
+                                  ? () => media.sendUploaded(asset)
+                                  : null,
                             ),
                         ],
                       ),
@@ -430,8 +472,81 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                 child: SchedulePanel(
                   controller: widget.schedules!,
                   media: media,
+                  showPartnerUpdatesControl: false,
                 ),
               ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _PartnerUpdatesCard extends StatefulWidget {
+  const _PartnerUpdatesCard({super.key, required this.controller});
+  final ScheduleController controller;
+
+  @override
+  State<_PartnerUpdatesCard> createState() => _PartnerUpdatesCardState();
+}
+
+class _PartnerUpdatesCardState extends State<_PartnerUpdatesCard> {
+  bool _hasAllowed = false;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.controller,
+    builder: (context, _) {
+      final c = widget.controller;
+      _hasAllowed |= c.partnerUpdatesEnabled;
+      final disabled = !c.canSchedule || c.partnerUpdatesBusy;
+      return WidgetCard(
+        eyebrow: 'Photos from your partner',
+        title: 'Let their moments find you',
+        icon: Icons.favorite_outline_rounded,
+        accent: AppColors.plum,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Updates automatically while CloseCall is open. Cached schedules can run later; receiving new photos with the app closed is not available yet.',
+              style: TextStyle(color: AppColors.inkMuted, height: 1.35),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (!_hasAllowed)
+              FilledButton.icon(
+                key: const Key('allow-partner-updates'),
+                onPressed: disabled ? null : () => c.setPartnerUpdates(true),
+                icon: const Icon(Icons.favorite_outline_rounded),
+                label: const Text('Allow partner updates'),
+              )
+            else
+              Material(
+                color: Colors.transparent,
+                child: SwitchListTile(
+                  key: const Key('partner-updates-toggle'),
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Allow partner updates'),
+                  subtitle: Text(
+                    c.partnerUpdatesEnabled
+                        ? 'On — pause whenever you want. Local-only photo choices pause updates.'
+                        : 'Paused — resume when you’re ready.',
+                  ),
+                  value: c.partnerUpdatesEnabled,
+                  onChanged: disabled ? null : c.setPartnerUpdates,
+                ),
+              ),
+            if (c.partnerUpdatesBusy) const LinearProgressIndicator(),
+            if (c.partnerUpdatesError != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              WidgetStatusCard(
+                key: const Key('partner-updates-error'),
+                message:
+                    'Could not change partner updates. Check your connection and try again.',
+                icon: Icons.error_outline_rounded,
+                color: AppColors.error,
+              ),
+            ],
           ],
         ),
       );
@@ -478,7 +593,7 @@ class _WidgetHeader extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         Text(
           liveMode
-              ? 'Choose what this device shows. Sharing and schedules stay explicit.'
+              ? 'Send a photo to your partner, or make something just for this device.'
               : 'Create a small, personal moment for this device.',
           style: const TextStyle(
             color: AppColors.inkMuted,
@@ -543,12 +658,14 @@ class _PrivateAssetTile extends StatelessWidget {
     required this.currentUserId,
     required this.enabled,
     required this.onTap,
+    this.onSend,
   });
 
   final MediaAsset asset;
   final String? currentUserId;
   final bool enabled;
   final VoidCallback onTap;
+  final VoidCallback? onSend;
 
   @override
   Widget build(BuildContext context) {
@@ -575,7 +692,13 @@ class _PrivateAssetTile extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: const Icon(Icons.download_outlined),
+        trailing: onSend == null
+            ? const Icon(Icons.download_outlined)
+            : TextButton.icon(
+                onPressed: enabled ? onSend : null,
+                icon: const Icon(Icons.send_outlined),
+                label: const Text('Send to partner'),
+              ),
         onTap: enabled ? onTap : null,
       ),
     );

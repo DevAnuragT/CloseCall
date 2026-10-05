@@ -14,6 +14,13 @@ abstract interface class ScheduleRepository {
   Stream<WidgetTimeline> watchTimeline();
 }
 
+/// Account-scoped consent, separate from a device's local auto-sync opt-in.
+/// Optional so existing schedule-only adapters and fakes remain compatible.
+abstract interface class DeliveryConsentRepository {
+  Future<WidgetDeliveryState> setDeliveryConsent(bool enabled);
+  Future<WidgetDeliveryState> getDeliveryState();
+}
+
 String scheduleErrorMessage(Object error) {
   if (error is ScheduleFailure) {
     return switch (error.code) {

@@ -15,6 +15,7 @@ import '../../features/widget/data/home_widget_service.dart';
 import '../../features/widget/data/local_widget_writer.dart';
 import '../../features/widget/data/native_widget_timeline.dart';
 import '../../features/widget/data/serverpod_schedule_repository.dart';
+import '../../features/widget/data/shared_preferences_widget_consent_store.dart';
 import '../../features/widget/presentation/schedule_controller.dart';
 
 /// One secure persisted session, with separate regular and media transports.
@@ -46,11 +47,13 @@ class ServerpodBootstrap {
       repository: ServerpodScheduleRepository(client),
       mediaRepository: mediaRepository,
       localWriter: writer,
+      consentStore: SharedPreferencesWidgetConsentStore(),
     );
     media = MediaController(
       pairing: pairing,
       repository: mediaRepository,
       applyLocalPhoto: schedules.applyManualPhoto,
+      sendAsset: client.widgetSchedule.sendAsset,
       // ScheduleController owns shared auth/couple cleanup and the native queue.
     );
   }

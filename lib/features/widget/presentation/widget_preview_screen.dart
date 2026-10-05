@@ -23,6 +23,8 @@ enum WidgetShape {
 
 enum WidgetShapeClip { rounded, circle }
 
+enum WidgetPreviewAction { savePrivately }
+
 /// Confirmation screen shown after decorating: previews the photo across widget
 /// shapes and asks before the caller's explicit local update or private upload.
 /// Pops `true` to confirm, `false`/null to keep editing.
@@ -32,11 +34,13 @@ class WidgetPreviewScreen extends StatelessWidget {
     required this.photo,
     this.confirmLabel = 'Set widget photo',
     this.actionDescription,
+    this.allowPrivateSave = false,
   });
 
   final Uint8List photo;
   final String confirmLabel;
   final String? actionDescription;
+  final bool allowPrivateSave;
 
   @override
   Widget build(BuildContext context) {
@@ -133,6 +137,9 @@ class WidgetPreviewScreen extends StatelessWidget {
         label: confirmLabel,
         onConfirm: () => Navigator.of(context).pop(true),
         onCancel: () => Navigator.of(context).pop(false),
+        onSavePrivately: allowPrivateSave
+            ? () => Navigator.of(context).pop(WidgetPreviewAction.savePrivately)
+            : null,
       ),
     );
   }
@@ -203,11 +210,13 @@ class _ConfirmBar extends StatelessWidget {
     required this.onConfirm,
     required this.onCancel,
     required this.label,
+    this.onSavePrivately,
   });
   final String label;
 
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
+  final VoidCallback? onSavePrivately;
 
   @override
   Widget build(BuildContext context) {
@@ -252,6 +261,12 @@ class _ConfirmBar extends StatelessWidget {
                 ),
               ),
             ),
+            if (onSavePrivately != null)
+              TextButton(
+                key: const Key('preview-save-privately'),
+                onPressed: onSavePrivately,
+                child: const Text('Save privately'),
+              ),
             TextButton(
               key: const Key('preview-cancel'),
               onPressed: onCancel,

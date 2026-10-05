@@ -1,7 +1,8 @@
 import 'package:closecall_client/closecall_client.dart';
 import 'schedule_repository.dart';
 
-class ServerpodScheduleRepository implements ScheduleRepository {
+class ServerpodScheduleRepository
+    implements ScheduleRepository, DeliveryConsentRepository {
   ServerpodScheduleRepository(Client client)
     : this.withCalls(
         current: client.widgetSchedule.currentTimeline,
@@ -10,6 +11,8 @@ class ServerpodScheduleRepository implements ScheduleRepository {
         fallback: client.widgetSchedule.setFallback,
         cancel: client.widgetSchedule.cancelSchedule,
         watch: client.widgetSchedule.watchTimeline,
+        consent: client.widgetSchedule.setDeliveryConsent,
+        delivery: client.widgetSchedule.getDeliveryState,
       );
 
   /// Inject generated RPC signatures without a transport or Flutter plugins.
@@ -26,7 +29,18 @@ class ServerpodScheduleRepository implements ScheduleRepository {
     required Future<WidgetTimeline> Function(String) fallback,
     required Future<void> Function(String) cancel,
     required Stream<WidgetTimeline> Function() watch,
-  }) : this._(current, partner, create, fallback, cancel, watch);
+    Future<WidgetDeliveryState> Function(bool)? consent,
+    Future<WidgetDeliveryState> Function()? delivery,
+  }) : this._(
+         current,
+         partner,
+         create,
+         fallback,
+         cancel,
+         watch,
+         consent,
+         delivery,
+       );
 
   ServerpodScheduleRepository._(
     this._current,
@@ -35,6 +49,8 @@ class ServerpodScheduleRepository implements ScheduleRepository {
     this._fallback,
     this._cancel,
     this._watch,
+    this._consent,
+    this._delivery,
   );
 
   final Future<WidgetTimeline> Function() _current;
@@ -44,6 +60,16 @@ class ServerpodScheduleRepository implements ScheduleRepository {
   final Future<WidgetTimeline> Function(String) _fallback;
   final Future<void> Function(String) _cancel;
   final Stream<WidgetTimeline> Function() _watch;
+  final Future<WidgetDeliveryState> Function(bool)? _consent;
+  final Future<WidgetDeliveryState> Function()? _delivery;
+  @override
+  Future<WidgetDeliveryState> setDeliveryConsent(bool enabled) =>
+      _consent?.call(enabled) ??
+      Future.error(UnsupportedError('Delivery consent is unavailable.'));
+  @override
+  Future<WidgetDeliveryState> getDeliveryState() =>
+      _delivery?.call() ??
+      Future.error(UnsupportedError('Delivery consent is unavailable.'));
   @override
   Future<WidgetTimeline> currentTimeline() => _current();
   @override

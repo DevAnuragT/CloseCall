@@ -8,15 +8,33 @@ import '../data/schedule_repository.dart';
 import 'schedule_controller.dart';
 import 'widget_ui_components.dart';
 
+String _safeScheduleError(Object error) {
+  if (error is ScheduleFailure &&
+      const {
+        'not_paired',
+        'asset_not_found',
+        'invalid_window',
+        'invalid_request_id',
+        'request_conflict',
+        'schedule_not_found',
+        'quota_exceeded',
+      }.contains(error.code)) {
+    return scheduleErrorMessage(error);
+  }
+  return 'Could not confirm the schedule operation. Check your connection and retry.';
+}
+
 /// Server schedules target the partner; fallback and auto-sync target oneself.
 class SchedulePanel extends StatefulWidget {
   const SchedulePanel({
     super.key,
     required this.controller,
     required this.media,
+    this.showPartnerUpdatesControl = true,
   });
   final ScheduleController controller;
   final MediaController media;
+  final bool showPartnerUpdatesControl;
   @override
   State<SchedulePanel> createState() => _SchedulePanelState();
 }
@@ -106,41 +124,50 @@ class _SchedulePanelState extends State<SchedulePanel> {
                   style: TextStyle(color: AppColors.inkMuted, height: 1.35),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.cream.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                    child: SwitchListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.xs,
-                      ),
-                      title: Text(
-                        c.backgroundCacheSupported
-                            ? 'Auto-sync + cached Android transitions'
-                            : 'Foreground auto-sync on this device',
-                        style: const TextStyle(
-                          color: AppColors.ink,
-                          fontWeight: FontWeight.w700,
+                if (widget.showPartnerUpdatesControl)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.cream.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                      child: SwitchListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.xs,
                         ),
-                      ),
-                      subtitle: Text(
-                        'Opt-in for this account/couple only. Local-only photo choices pause it. '
-                        '${c.backgroundCacheSupported ? 'Cached Android transitions may run while app closed; OS can delay. New, changed or cancelled schedules require reconnect; cache expires after 24h.' : 'Background cache is unavailable on this platform; keep the app open.'}',
-                        style: const TextStyle(
-                          color: AppColors.inkMuted,
-                          height: 1.3,
+                        title: Text(
+                          c.backgroundCacheSupported
+                              ? 'Auto-sync + cached Android transitions'
+                              : 'Foreground auto-sync on this device',
+                          style: const TextStyle(
+                            color: AppColors.ink,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
+                        subtitle: Text(
+                          'Opt-in for this account/couple only. Local-only photo choices pause it. '
+                          '${c.backgroundCacheSupported ? 'Cached Android transitions may run while app closed; OS can delay. New, changed or cancelled schedules require reconnect; cache expires after 24h.' : 'Background cache is unavailable on this platform; keep the app open.'}',
+                          style: const TextStyle(
+                            color: AppColors.inkMuted,
+                            height: 1.3,
+                          ),
+                        ),
+                        value: c.partnerUpdatesEnabled,
+                        // Schedule-only adapters predate account delivery
+                        // consent. Production delivery adapters always use the
+                        // shared partner-updates API; the tab hides this switch
+                        // in favor of its prominent consent card.
+                        onChanged: c.canSchedule && !c.partnerUpdatesBusy
+                            ? c.repository is DeliveryConsentRepository
+                                  ? c.setPartnerUpdates
+                                  : c.setAutoSync
+                            : null,
                       ),
-                      value: c.autoSyncEnabled,
-                      onChanged: c.canSchedule ? c.setAutoSync : null,
                     ),
                   ),
-                ),
                 if (!c.canSchedule) ...[
                   const SizedBox(height: AppSpacing.md),
                   const WidgetStatusCard(
@@ -267,7 +294,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
                   const SizedBox(height: AppSpacing.md),
                   WidgetStatusCard(
                     message:
-                        'Pending request: ${c.pendingCreate!.requestId}. Retry preserves this exact photo and UTC window.',
+                        'Pending schedule. Retry preserves this exact photo and UTC window.',
                     icon: Icons.pending_actions_rounded,
                     color: AppColors.warning,
                     action: Wrap(
@@ -357,7 +384,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
         padding: const EdgeInsets.only(top: AppSpacing.md),
         child: WidgetStatusCard(
           key: const Key('schedule-error'),
-          message: scheduleErrorMessage(c.error!),
+          message: _safeScheduleError(c.error!),
           icon: Icons.error_outline_rounded,
           color: AppColors.error,
           action: TextButton(
@@ -370,7 +397,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
       Padding(
         padding: const EdgeInsets.only(top: AppSpacing.md),
         child: WidgetStatusCard(
-          message: 'Live timeline: ${scheduleErrorMessage(c.streamError!)}',
+          message: 'Live timeline: ${_safeScheduleError(c.streamError!)}',
           icon: Icons.wifi_off_rounded,
           color: AppColors.warning,
           action: TextButton(
@@ -383,7 +410,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
       Padding(
         padding: const EdgeInsets.only(top: AppSpacing.md),
         child: WidgetStatusCard(
-          message: 'Timeline sync: ${c.syncError}',
+          message: 'Timeline sync: ${_safeScheduleError(c.syncError!)}',
           icon: Icons.sync_problem_rounded,
           color: AppColors.error,
           action: TextButton(

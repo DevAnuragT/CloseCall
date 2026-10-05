@@ -9,6 +9,57 @@ import '../../support/schedule_fakes.dart';
 
 void main() {
   test(
+    'optional delivery interface delegates account consent and state without changing schedule fakes',
+    () async {
+      final calls = <bool>[];
+      final state = WidgetDeliveryState(
+        coupleId: 'couple',
+        recipientId: 'me',
+        autoUpdateEnabled: true,
+        version: 7,
+        latestAssetId: 'latest',
+      );
+      final repository = ServerpodScheduleRepository.withCalls(
+        current: () async => scheduleTimeline(),
+        partner: () async => scheduleTimeline(recipient: 'partner'),
+        create: (_, _, _, _) async => scheduleEntry(),
+        fallback: (_) async => scheduleTimeline(),
+        cancel: (_) async {},
+        watch: () => const Stream.empty(),
+        consent: (enabled) async {
+          calls.add(enabled);
+          return state;
+        },
+        delivery: () async => state,
+      );
+      final DeliveryConsentRepository delivery = repository;
+      expect(await delivery.setDeliveryConsent(true), same(state));
+      expect(await delivery.getDeliveryState(), same(state));
+      expect(calls, [true]);
+      expect(FakeSchedules(), isNot(isA<DeliveryConsentRepository>()));
+    },
+  );
+
+  test('delivery RPC errors preserve the original failure', () async {
+    final failure = ScheduleFailure(code: 'not_paired');
+    final repository = ServerpodScheduleRepository.withCalls(
+      current: () async => scheduleTimeline(),
+      partner: () async => scheduleTimeline(recipient: 'partner'),
+      create: (_, _, _, _) async => scheduleEntry(),
+      fallback: (_) async => scheduleTimeline(),
+      cancel: (_) async {},
+      watch: () => const Stream.empty(),
+      consent: (_) async => throw failure,
+      delivery: () async => throw failure,
+    );
+    await expectLater(
+      repository.setDeliveryConsent(false),
+      throwsA(same(failure)),
+    );
+    await expectLater(repository.getDeliveryState(), throwsA(same(failure)));
+  });
+
+  test(
     'generated calls preserve DTOs, own/partner targets and immutable UTC request',
     () async {
       final own = scheduleTimeline();
