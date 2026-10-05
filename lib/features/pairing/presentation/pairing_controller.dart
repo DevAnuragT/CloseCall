@@ -64,7 +64,7 @@ class PairingController extends ChangeNotifier {
     _notify();
     try {
       await action();
-      _retry = null;
+      if (error == null) _retry = null;
     } catch (failure) {
       error = failure;
       _retry = action;
@@ -79,9 +79,17 @@ class PairingController extends ChangeNotifier {
   }
 
   Future<void> initialize() => _run(() async {
+    initialized = false;
     await session.initialize();
+    if (_disposed) return;
     initialized = true;
-    await _load();
+    // Pairing read failures retry only the read, not authentication/rotation.
+    _retry = _load;
+    try {
+      await _load();
+    } catch (failure) {
+      error = failure;
+    }
   });
 
   Future<void> signIn() => _run(() async {
@@ -94,7 +102,17 @@ class PairingController extends ChangeNotifier {
     await _load();
   });
 
-  Future<void> signOut() => _run(session.signOut);
+  Future<void> signOut() => _run(() async {
+    try {
+      await session.signOut();
+    } on LocalSignOutException {
+      // Remote revocation may fail after the SDK successfully cleared locally.
+      // Never strand that signed-out device on the connection-error screen.
+      if (!_disposed && userId == null) initialized = true;
+      rethrow;
+    }
+    if (!_disposed && userId == null) initialized = true;
+  });
 
   Future<void> refresh() => _run(_load);
 

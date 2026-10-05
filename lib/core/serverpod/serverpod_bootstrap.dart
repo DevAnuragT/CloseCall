@@ -3,6 +3,7 @@ import 'package:serverpod_auth_idp_flutter/serverpod_auth_idp_flutter.dart';
 import 'package:serverpod_flutter/serverpod_flutter.dart';
 
 import '../../features/auth/data/auth_session.dart';
+import '../../features/auth/data/session_restoration.dart';
 import '../../features/couple/data/serverpod_couple_repository.dart';
 import '../../features/pairing/presentation/pairing_controller.dart';
 import '../../features/auth/presentation/account_controller.dart';
@@ -18,9 +19,8 @@ import '../../features/widget/presentation/schedule_controller.dart';
 /// One client and secure persisted session per configured app instance.
 class ServerpodBootstrap {
   ServerpodBootstrap(String url) {
-    client = Client(url)
-      ..connectivityMonitor = FlutterConnectivityMonitor()
-      ..authSessionManager = FlutterAuthSessionManager();
+    client = Client(url)..connectivityMonitor = FlutterConnectivityMonitor();
+    client.authSessionManager = createRestorableAuthManager(client);
     session = ServerpodAuthSession(client);
     pairing = PairingController(
       allowDevGuest: AppConfig.allowDevGuest,
@@ -71,11 +71,13 @@ class ServerpodBootstrap {
 }
 
 class ServerpodAuthSession extends AuthSession {
-  ServerpodAuthSession(this.client) {
+  ServerpodAuthSession(this.client)
+    : _restoration = SessionRestoration(client.auth) {
     client.auth.authInfoListenable.addListener(_changed);
   }
 
   final Client client;
+  final SessionRestoration _restoration;
 
   @override
   String? get userId => client.auth.authInfo?.authUserId.toString();
@@ -83,13 +85,7 @@ class ServerpodAuthSession extends AuthSession {
   void _changed() => notifyListeners();
 
   @override
-  Future<void> initialize() async {
-    if (!await client.auth.initialize()) {
-      throw StateError(
-        'Unable to validate the server session. Retry when online.',
-      );
-    }
-  }
+  Future<void> initialize() => _restoration.initialize();
 
   @override
   Future<AccountState?> currentAccount() => client.account.currentAccount();
@@ -104,17 +100,11 @@ class ServerpodAuthSession extends AuthSession {
   }
 
   @override
-  Future<void> signOut() async {
-    if (!await client.auth.signOutDevice()) {
-      throw StateError(
-        'Signed out locally, but server session revocation failed. '
-        'Sign in again when online to verify your account.',
-      );
-    }
-  }
+  Future<void> signOut() => _restoration.signOut();
 
   @override
   void dispose() {
+    _restoration.dispose();
     client.auth.authInfoListenable.removeListener(_changed);
     super.dispose();
   }
