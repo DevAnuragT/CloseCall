@@ -80,7 +80,9 @@ new/changed/cancelled server schedules still requires reconnect.
   uses a bounded wall-clock approximation until reconnect.
 - Missing/expired cache shows fallback or empty, not a stale scheduled photo.
   Cache expires after 24h. Auth/couple changes clear it; manual choices stop it.
-- Relaunch starts with cleanup and requires fresh opt-in. Force-stop suppresses
+- Relaunch starts with identity-safe cleanup and restores validated persisted
+  partner consent on this same account/couple/device before fetching fresh truth.
+  Force-stop suppresses
   Android alarms. Physical Doze/reboot behaviour still needs real-device testing.
 
 ## Cloud Starter deployment
@@ -250,7 +252,22 @@ startup. Existing private `.env` and Firebase files have not been removed.
    alarms after force-stop. Allow for OS-delayed transitions.
 6. Mark reboot/battery-saving acceptance separately. New/changed/cancelled
    server windows require reconnect; there is no closed-app network-update or
-   exact-time delivery guarantee. Relaunch requires fresh cache opt-in.
+  exact-time delivery guarantee. Relaunch validates persisted partner opt-in
+  and fetches fresh truth before repopulating the cache.
 
 The paired scheduling form still uses explicit-zone timestamp text and asset
 identifiers. Friendly date/time and photo selection remain a usability gap.
+
+## Live Send-to-partner release — 5 October 2026
+
+See `partner-widget-delivery-plan.md` for implementation and evidence. Serverpod
+Send now and persistent recipient consent are deployed on Starter, commit
+`2e455ce`, attempt `399c172e-344d-4716-805e-7376d82a7001`. The paired Widget tab
+now offers Send to partner and Allow partner updates; an opted-in foreground
+recipient automatically downloads/applies the latest sent state. Save privately
+alone still does not send. Closed-app network reception still needs FCM work.
+
+Checks: 292 Flutter, 83 backend, 7 shared resolver, 25 packaging checks; local
+HTTP/WebSocket delivery smoke and 7 production access probes passed. Android
+debug APK built, but the phone disconnected before install. Both phones must
+receive this APK before genuine automatic two-device acceptance is claimed.

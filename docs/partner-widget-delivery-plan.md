@@ -1,0 +1,213 @@
+# Partner widget delivery — implementation plan
+
+## Outcome and observed gap
+
+After pairing and one explicit recipient opt-in, **Send to partner** should
+automatically update their installed Android widget without opening the app or
+tapping Download. Aim for seconds on healthy online devices; Android/network
+conditions prevent a universal instantaneous-delivery guarantee.
+
+User acceptance so far: pairing succeeded on two phones; private upload now
+succeeds; local widget application succeeds. Partner delivery did not happen
+automatically, and the partner downloaded manually after opening the app.
+
+## Why the current implementation does not meet this outcome
+
+- `MediaEndpoint.uploadPhoto` stores private bytes and metadata. It creates no
+  recipient display state or widget delivery event. Upload is not Send.
+- `MediaController` refreshes on a pairing scope change or manual action, not
+  every new partner upload. Download alone intentionally does not apply a widget.
+- The foreground timeline contains schedules and recipient fallback, not a
+  latest-sent-photo baseline. Unscheduled uploads never enter that timeline.
+- Timeline auto-sync is off by default, reset at scope startup, and requires
+  foreground Flutter for network downloads. Cached native alarms only resolve
+  previously downloaded windows; they cannot receive a new network photo.
+- Firebase core/config presence is not a push pipeline: there is no messaging
+  registration, Serverpod push dispatch, background fetch or applied receipt.
+
+This needs a missing delivery feature, not just a longer timeout or auto-download
+inside the existing library. Do not silently apply every historical upload.
+
+## Product flow
+
+1. Pairing complete: ask once **Allow your partner to update your widget?**
+   Explain that local photo selection pauses automatic updates. Consent persists
+   across app restarts for this account, couple and device. Sign-out/re-pair clears
+   it; do not reuse it for another account/couple.
+2. Sender: choose photo → editor → preview → **Send to partner**. Save privately
+   remains a separate secondary action; scheduling uses **Send later**.
+3. Send privately uploads and commits recipient display state. If upload succeeds
+   but sending fails, retry the send with the same operation ID, not a new upload.
+4. Recipient: automatically fetch authorized current display state, download,
+   validate, and update widget through the existing serialized native writer.
+   No Download or Apply tap in the opted-in automatic path.
+5. Sender sees truthful progress: **Sending**, **Sent**, then **Widget updated**
+   only after recipient application acknowledgement. Push acceptance is not an
+   application receipt. Paused/offline/unsupported states remain distinct.
+
+## State and priority rules
+
+- Serverpod remains authoritative for membership, private assets, display state,
+  recipient/device consent and delivery records. Firebase transports wake hints.
+- Add an idempotent send record and versioned recipient latest-photo pointer;
+  derive sender/partner from the authenticated session, not client-supplied IDs.
+- Never alter the recipient's personal fallback as a side effect of a send.
+- One resolver on server, Flutter and native: active schedule overrides latest
+  directly sent photo, which overrides personal fallback, which overrides empty.
+  On schedule expiry, show the latest sent photo (or fallback if absent).
+- If an active schedule masks Send now, tell the sender it is queued behind that
+  scheduled window; do not falsely acknowledge that the new photo is visible.
+- Fetch current truth rather than replaying payloads. Duplicate/delayed/reordered
+  push events cannot overwrite a newer photo. Multiple recipient devices have
+  independent consent, installation state and applied receipts.
+- Manual local selection pauses updates; explicit **Resume partner updates**
+  reconciles newest state. No incoming event may bypass that local override.
+
+## Implementation slices
+
+### 1. Serverpod send state and foreground automatic application
+
+- Add schema/migration, authenticated Send RPC, display snapshot/version, stream
+  notice and reconciliation. Preserve same-couple foreign keys, quotas and upload
+  idempotency. Use the existing verified generation wrapper.
+- Keep upload and send retry stages explicit; reject sending another person's
+  asset unless a separate product requirement authorizes it.
+- Wire one opt-in display coordinator to download/apply/ack from committed state.
+  It shares primary auth refresh and the longer media transport, never creates
+  another session owner. Reconnect the stream with bounded backoff.
+- Persist scope-bound consent and pause state safely. Remove current
+  unconditional restart opt-out only once identity-safe startup is implemented.
+- Verify both apps open: send → automatic widget update without manual download.
+  This is a foreground milestone, not closed-app delivery completion.
+
+### 2. Durable push dispatch, compatible with Cloud Starter
+
+- Register/rotate/revoke FCM installation tokens through authenticated Serverpod
+  endpoints. Tokens are private server data, excluded from DTOs and logs.
+- Commit send state and an outbox event atomically. Dispatch after commit, retry
+  with leases/backoff, expire obsolete jobs, and remove invalid device tokens.
+  FCM failures must not undo a committed send or require duplicate uploads.
+- Implement a bounded server-run outbox reconciler with PostgreSQL leases for
+  multi-pod safety; verify Starter lifecycle/resource limits before deployment.
+  Do not depend on unavailable future calls, upgrade plans, or substitute desktop
+  scheduling. Persisted outbox survives restarts; recovery cannot rely solely on
+  an in-memory timer or fire-and-forget send.
+- Push contains only an opaque invalidation/version hint, no photo bytes,
+  credentials, download URLs or trusted authorization claims. Sensitive content
+  is downloaded only after fresh recipient authorization.
+- Evaluate Android FCM delivery priority against platform policy. Silent widget
+  updates must not depend on unlimited high-priority data pushes: they may be
+  throttled/deprioritized, particularly without user-visible notifications.
+
+### 3. Android closed-app receiver and authorized background fetch
+
+- Add messaging/background execution using supported Firebase/Android APIs.
+  A receiver queues unique bounded work; it does not perform a long HTTP download
+  directly in its callback. Foreground and background paths converge on the same
+  state resolver and serialized, identity-safe native writer.
+- Design background authentication before implementation: either prove safe
+  shared SDK session access with cross-isolate refresh serialization, or introduce
+  revocable device-scoped widget-read credentials with narrow endpoint authority,
+  secure storage, expiry and explicit revoke. Never copy rotating user refresh
+  tokens into an independent native client that can race Flutter.
+- Check account/couple/device consent and state revision before download and
+  again before applying. Sign-out/re-pair cancels jobs and prevents stale photos
+  from returning. Validate bytes and preserve app-private storage/no backup.
+- Confirm widget presence; publish an idempotent per-device applied receipt only
+  after successful state write/update request. Describe it as device application,
+  not proof of rendered pixels or that the person saw the image.
+- Offline/Doze/OEM restrictions queue reconciliation. Android force-stop blocks
+  automatic delivery until reopening; disclose it, do not claim a workaround.
+  Flutter/native/background timeouts remain bounded and retries fetch latest
+  truth rather than repeatedly sending an uncertain command.
+
+### 4. Scheduled delivery integration
+
+- Include latest-sent baseline in downloaded native timeline snapshots and update
+  shared resolver/native tests together. Push schedule creation/change/cancellation
+  to refresh caches; cache known start/end transitions locally.
+- Starter lacks durable future calls. Preloaded device alarms remain inexact;
+  a device without the new cache cannot promise exact scheduled delivery. Verify
+  reconciler support for due events without a paid plan change.
+- Keep safety TTLs explicit; persistent opt-in does not mean expired private
+  photo authorization/cache can be retained indefinitely.
+
+## Required external setup
+
+Use the existing Firebase project if appropriate; inspect only non-secret project
+settings when authorized. Existing client config does **not** grant server FCM
+send authority. Enable FCM HTTP v1 and provision least-privilege server service
+credentials through Cloud secret management, never chat, app assets or git.
+Check that both Android package IDs and signing configurations match. No paid
+Serverpod upgrade or Firebase resource change is authorized by this plan.
+
+Foreground delivery can be built first without external credentials. Closed-app
+production acceptance requires authorized push provisioning; do not mark it
+complete merely because Firebase config files exist.
+
+## Acceptance matrix
+
+- Two real signed-in paired devices with widgets and recipient consent: Send
+  reaches recipient automatically while both apps open; no Download/Apply taps.
+- Recipient backgrounded and normally terminated: receive/fetch/apply without
+  opening it, subject to measured platform conditions. Record upload time,
+  committed-send time and applied-ack time separately, excluding private values.
+- Offline then reconnect: newest photo applies, no old-event replay.
+- Opt-out, manual pause, no installed widget: honest status; no unwanted overwrite.
+- Duplicate send retries/push, reordered events, uncertain commit, restart during
+  dispatch: one effective current state and no duplicate photo records.
+- Sign-out, account switch, re-pair, revoked device and stranger download/send:
+  authorization holds; pending jobs cannot restore old private content.
+- Active schedule/latest-send priority, cancellation, fallback, expired cache,
+  reboot, Doze and battery saver are separate observable tests.
+- Target normal-online receipt within a few seconds **after upload/send commit**;
+  measure real latency instead of calling transport acceptance instant delivery.
+
+## Implemented and checked — 5 October 2026
+
+- Serverpod now exposes authenticated `sendAsset`, `getDeliveryState` and
+  `setDeliveryConsent`. Send derives the partner from current membership and
+  accepts only the sender's own couple asset. Same-couple composite constraints
+  and exact-request idempotency preserve isolation and ordering.
+- `watchTimeline` carries versioned latest-photo state after commit. Active
+  schedule → latest sent photo → personal fallback → empty is resolved consistently
+  in foreground and existing native snapshots, without changing personal fallback.
+- Primary paired UI is **Send to partner**, with **Save privately** separate.
+  Already uploaded own photos can be sent without uploading again. Uncertain
+  send retries retain the asset and operation ID; no automatic command replay.
+- Recipient uses **Allow partner updates**. Consent is account/couple-scoped on
+  the server plus a persistent, scoped device opt-in locally. Restart restores
+  only validated consent/current truth; account changes clear it. Manual local
+  selection pauses this device; incoming versions cannot bypass that pause.
+- Opted-in foreground recipient automatically downloads/applies through the
+  existing serialized native writer. Stream reconnect uses bounded backoff.
+  Sender **Sent** is a committed-server receipt, not a remote-rendered receipt.
+- Full Flutter analysis clean; **292 Flutter tests passed**. Backend analysis and
+  generation roundtrip clean; **83 backend tests passed**. Shared resolver
+  **7 passed**. Client standalone production-smoke tests passed using
+  `dart run test/smoke_production_test.dart` (not a package:test suite).
+- Real local HTTP/WebSocket smoke passed: three isolated guest clients, pairing,
+  private upload/download, consent, idempotent Send, live recipient state,
+  schedule/cancellation, and stranger denial. This does not prove two physical
+  widgets updated.
+- Cloud packaging: **25 checks passed**, including offline staged compile and
+  archive allowlist inspection. Existing SQLite verification remains enabled.
+- Deployed on unchanged Cloud Starter: attempt
+  `399c172e-344d-4716-805e-7376d82a7001`, serving commit `2e455ce`, one ready
+  podlet. Migration `20261005132731105` is included. Production access smoke
+  **7 passed**; anonymous 500 remains generic denial, not proof of its cause.
+- Cloud-connected APK built at `build/app/outputs/flutter-apk/app-debug.apk`.
+  Phone disconnected before installation; install attempt returned device not
+  found, so the new delivery build is **not yet installed/verified on a phone**.
+
+### Remaining acceptance and external blocker
+
+Update **both** phones, preserving accounts. Recipient: Widget → Allow partner
+updates. Sender: send a test photo. Keep recipient CloseCall foregrounded and
+verify widget changes without Download/Apply. Verify restart persistence, local
+pause, resume and schedule priority separately.
+
+Closed-app reception remains unimplemented: secure server FCM credentials,
+durable dispatch, background authorization/execution and per-device applied
+acknowledgements remain the next slice. No credentials or paid settings were
+changed. Do not describe foreground delivery as closed-app instant delivery.
