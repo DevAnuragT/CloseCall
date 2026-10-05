@@ -210,7 +210,7 @@ complete merely because Firebase config files exist.
   never grants partner-update consent automatically; that remains a separate
   explicit control. Returning from Settings refreshes the real OS state.
 - Android notification/widget readiness is now covered by the new permission and
-  widget UI tests; full Flutter suite after this change: **335 passed**.
+  widget UI tests; full Flutter suite after this change: **339 passed**.
 - Added the FCM registration foundation: after complete pairing and granted
   notification access, the Android installation registers its current FCM token
   and scoped device ID through authenticated Serverpod RPCs. Token rotation is
@@ -223,6 +223,11 @@ complete merely because Firebase config files exist.
   The app also reconciles registration when notification permission changes and
   on returning to the foreground, so granting the first-launch prompt does not
   require an app restart.
+- Final verification for this slice: **339 Flutter tests**, **87 backend tests**,
+  generation roundtrip clean, client production smoke passed, Cloud packaging
+  checks passed, and Android debug APK build passed. The FCM registration
+  migration/backend is deployed on Cloud Starter; no Firebase server credential
+  or dispatch secret was added.
 
 ### Remaining acceptance and external blocker
 
