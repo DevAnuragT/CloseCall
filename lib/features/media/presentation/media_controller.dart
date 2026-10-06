@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'package:closecall_client/closecall_client.dart' hide Uuid;
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
@@ -44,6 +45,135 @@ class MediaController extends ChangeNotifier {
   String? _pendingSendRequestId;
   Future<void> Function()? _retry;
   Future<void> _localQueue = Future.value();
+  // Preview reads have their own lifecycle: a new upload/send command must not
+  // invalidate them, and reading a picture must not steal the command's retry.
+  int _photoRevision = 0;
+  int _photoDownloads = 0;
+  int _photoBytes = 0;
+  final _photos = <String, Uint8List>{};
+  final _photoErrors = <String, Object>{};
+  final _photoRequests = <String, _PhotoRequest>{};
+  final _photoQueue = Queue<_PhotoRequest>();
+
+  /// Scope-private, immutable encoded PNG bytes. Reading promotes an LRU entry.
+  /// At most 12 photos / 24 MiB are retained; evicted photos can be loaded again.
+  Uint8List? photoFor(String assetId) {
+    if (!_photoScopeCurrent) return null;
+    final photo = _photos.remove(assetId);
+    if (photo != null) _photos[assetId] = photo;
+    return photo;
+  }
+
+  Object? photoLoadErrorFor(String assetId) =>
+      _photoScopeCurrent ? _photoErrors[assetId] : null;
+
+  bool photoLoading(String assetId) =>
+      _photoScopeCurrent && _photoRequests.containsKey(assetId);
+
+  bool get _photoScopeCurrent =>
+      !_disposed && _scope != null && _scope == _currentScope;
+
+  void _validatePhotoAsset(MediaAsset asset) {
+    if (!_photoScopeCurrent ||
+        asset.assetId.isEmpty ||
+        asset.coupleId != pairing.couple?.id ||
+        !pairing.couple!.memberIds.contains(asset.uploaderId)) {
+      throw StateError('Photo is outside this couple.');
+    }
+  }
+
+  /// Read-only preview request. Deduplicates by asset, runs at most two private
+  /// downloads, and never changes busy, operation errors, selection or retries.
+  /// Failures are available via [photoLoadErrorFor]; call again to retry.
+  Future<void> loadPhoto(MediaAsset asset) {
+    if (_disposed) return Future.value();
+    try {
+      _validatePhotoAsset(asset);
+    } catch (failure) {
+      if (_photoScopeCurrent) {
+        _rememberPhotoError(asset.assetId, failure);
+        _notify();
+      }
+      return Future.value();
+    }
+    if (photoFor(asset.assetId) != null) return Future.value();
+    final existing = _photoRequests[asset.assetId];
+    if (existing != null) return existing.completion.future;
+    _photoErrors.remove(asset.assetId);
+    final request = _PhotoRequest(asset.copyWith(), _photoRevision);
+    _photoRequests[asset.assetId] = request;
+    _photoQueue.add(request);
+    _drainPhotoQueue();
+    _notify();
+    return request.completion.future;
+  }
+
+  void _rememberPhotoError(String id, Object failure) {
+    _photoErrors.remove(id);
+    _photoErrors[id] = failure;
+    while (_photoErrors.length > 12) {
+      _photoErrors.remove(_photoErrors.keys.first);
+    }
+  }
+
+  void _cachePhoto(MediaAsset asset, Uint8List bytes) {
+    _validatePhotoAsset(asset);
+    validateUploadPng(bytes);
+    final photo = Uint8List.fromList(bytes).asUnmodifiableView();
+    _photoBytes -= _photos.remove(asset.assetId)?.length ?? 0;
+    _photos[asset.assetId] = photo;
+    _photoBytes += photo.length;
+    _photoErrors.remove(asset.assetId);
+    while (_photos.length > 12 || _photoBytes > 24 * 1024 * 1024) {
+      _photoBytes -= _photos.remove(_photos.keys.first)!.length;
+    }
+  }
+
+  bool _photoRequestCurrent(_PhotoRequest request) =>
+      _photoScopeCurrent && request.revision == _photoRevision;
+
+  void _drainPhotoQueue() {
+    while (!_disposed && _photoDownloads < 2 && _photoQueue.isNotEmpty) {
+      final request = _photoQueue.removeFirst();
+      if (!_photoRequestCurrent(request)) continue;
+      _photoDownloads++;
+      unawaited(_fetchPhoto(request));
+    }
+  }
+
+  Future<void> _fetchPhoto(_PhotoRequest request) async {
+    try {
+      _validatePhotoAsset(request.asset);
+      final bytes = await repository.downloadPhoto(request.asset.assetId);
+      if (_photoRequestCurrent(request)) _cachePhoto(request.asset, bytes);
+    } catch (failure) {
+      if (_photoRequestCurrent(request)) {
+        _rememberPhotoError(request.asset.assetId, failure);
+      }
+    } finally {
+      _photoDownloads--;
+      if (identical(_photoRequests[request.asset.assetId], request)) {
+        _photoRequests.remove(request.asset.assetId);
+      }
+      if (!request.completion.isCompleted) request.completion.complete();
+      _drainPhotoQueue();
+      _notify();
+    }
+  }
+
+  void _clearPhotoCache() {
+    _photoRevision++;
+    _photos.clear();
+    _photoBytes = 0;
+    _photoErrors.clear();
+    _photoQueue.clear();
+    for (final request in _photoRequests.values) {
+      if (!request.completion.isCompleted) request.completion.complete();
+    }
+    _photoRequests.clear();
+    // Keep physical download accounting until old transports actually finish.
+  }
+
   bool get canShare => _currentScope != null;
   bool get hasPendingUpload => _pendingPhoto != null;
   bool get hasPendingSend => _pendingSendRequestId != null;
@@ -66,6 +196,7 @@ class MediaController extends ChangeNotifier {
     final previous = _scope;
     _scope = _currentScope;
     _revision++;
+    _clearPhotoCache();
     assets = [];
     downloadedPhoto = null;
     selectedAsset = null;
@@ -244,6 +375,7 @@ class MediaController extends ChangeNotifier {
     final result = await repository.uploadPhoto(prepared, id);
     if (!_current(revision)) return null;
     _validateOwnAsset(result);
+    _cachePhoto(result, prepared);
     _pendingPhoto = null;
     pendingRequestId = null;
     assets = [result, ...assets.where((a) => a.assetId != result.assetId)];
@@ -253,8 +385,15 @@ class MediaController extends ChangeNotifier {
   Future<void> refresh() => _run((revision) async {
     final result = await repository.listAssets();
     if (!_current(revision)) return;
-    assets = result.where((a) => a.coupleId == pairing.couple!.id).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    assets =
+        result
+            .where(
+              (a) =>
+                  a.coupleId == pairing.couple!.id &&
+                  pairing.couple!.memberIds.contains(a.uploaderId),
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     downloadedPhoto = null;
     selectedAsset = null;
     final received = assets.where((a) => a.uploaderId != pairing.userId);
@@ -264,15 +403,17 @@ class MediaController extends ChangeNotifier {
   Future<void> download(MediaAsset asset) =>
       _run((revision) => _download(asset, revision), () => download(asset));
   Future<void> _download(MediaAsset asset, int revision) async {
-    if (asset.coupleId != pairing.couple?.id) {
-      throw StateError('Photo is outside this couple.');
-    }
+    _validatePhotoAsset(asset);
     downloadedPhoto = null;
     selectedAsset = null;
     _notify();
-    final photo = await repository.downloadPhoto(asset.assetId);
+    await loadPhoto(asset);
     if (!_current(revision)) return;
-    validateUploadPng(photo);
+    final photo = photoFor(asset.assetId);
+    if (photo == null) {
+      throw photoLoadErrorFor(asset.assetId) ??
+          StateError('Private photo is no longer available.');
+    }
     selectedAsset = asset;
     downloadedPhoto = Uint8List.fromList(photo);
     status =
@@ -322,6 +463,7 @@ class MediaController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _revision++;
+    _clearPhotoCache();
     _pendingPhoto = null;
     _pendingSendAsset = null;
     _pendingSendRequestId = null;
@@ -331,4 +473,11 @@ class MediaController extends ChangeNotifier {
     pairing.session.removeListener(_scopeChanged);
     super.dispose();
   }
+}
+
+class _PhotoRequest {
+  _PhotoRequest(this.asset, this.revision);
+  final MediaAsset asset;
+  final int revision;
+  final completion = Completer<void>();
 }
