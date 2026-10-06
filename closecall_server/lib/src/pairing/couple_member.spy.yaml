@@ -7,6 +7,10 @@ fields:
   # A non-null boolean gives exactly two possible slots, without a SQL CHECK.
   # Combined with the unique index, a third member is impossible even via SQL.
   creatorSlot: bool
+  # Private preferences owned by this member, never another member's row.
+  ownNickname: String?
+  partnerNickname: String?
+  nicknamesUpdatedAt: DateTime?
 indexes:
   closecall_member_couple_id_unique:
     fields: coupleId, id

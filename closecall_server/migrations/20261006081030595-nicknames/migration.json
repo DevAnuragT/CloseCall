@@ -1,0 +1,348 @@
+{
+  "__className__": "serverpod.DatabaseMigration",
+  "actions": [
+    {
+      "__className__": "serverpod.DatabaseMigrationAction",
+      "type": "alterTable",
+      "alterTable": {
+        "__className__": "serverpod.TableMigration",
+        "name": "closecall_couple_member",
+        "schema": "public",
+        "addColumns": [
+          {
+            "__className__": "serverpod.ColumnDefinition",
+            "name": "ownNickname",
+            "fieldName": "ownNickname",
+            "columnType": 0,
+            "isNullable": true,
+            "dartType": "String?"
+          },
+          {
+            "__className__": "serverpod.ColumnDefinition",
+            "name": "partnerNickname",
+            "fieldName": "partnerNickname",
+            "columnType": 0,
+            "isNullable": true,
+            "dartType": "String?"
+          },
+          {
+            "__className__": "serverpod.ColumnDefinition",
+            "name": "nicknamesUpdatedAt",
+            "fieldName": "nicknamesUpdatedAt",
+            "columnType": 4,
+            "isNullable": true,
+            "dartType": "DateTime?"
+          }
+        ],
+        "deleteColumns": [],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "addForeignKeys": [],
+        "deleteForeignKeys": [],
+        "warnings": []
+      }
+    },
+    {
+      "__className__": "serverpod.DatabaseMigrationAction",
+      "type": "alterTable",
+      "alterTable": {
+        "__className__": "serverpod.TableMigration",
+        "name": "closecall_push_device_registration",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "addForeignKeys": [
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_push_registration_same_couple_member",
+            "columns": [
+              "coupleId",
+              "memberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          }
+        ],
+        "deleteForeignKeys": [
+          "closecall_push_registration_same_couple_member"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "__className__": "serverpod.DatabaseMigrationAction",
+      "type": "alterTable",
+      "alterTable": {
+        "__className__": "serverpod.TableMigration",
+        "name": "closecall_widget_delivery",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "addForeignKeys": [
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_delivery_same_couple_asset",
+            "columns": [
+              "coupleId",
+              "assetId"
+            ],
+            "referenceTable": "closecall_media",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_delivery_same_couple_sender",
+            "columns": [
+              "coupleId",
+              "senderMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_delivery_same_couple_recipient",
+            "columns": [
+              "coupleId",
+              "recipientMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          }
+        ],
+        "deleteForeignKeys": [
+          "closecall_widget_delivery_same_couple_asset",
+          "closecall_widget_delivery_same_couple_sender",
+          "closecall_widget_delivery_same_couple_recipient"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "__className__": "serverpod.DatabaseMigrationAction",
+      "type": "alterTable",
+      "alterTable": {
+        "__className__": "serverpod.TableMigration",
+        "name": "closecall_widget_fallback",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "addForeignKeys": [
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_fallback_same_couple_asset",
+            "columns": [
+              "coupleId",
+              "assetId"
+            ],
+            "referenceTable": "closecall_media",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_fallback_same_couple_recipient",
+            "columns": [
+              "coupleId",
+              "recipientMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          }
+        ],
+        "deleteForeignKeys": [
+          "closecall_widget_fallback_same_couple_asset",
+          "closecall_widget_fallback_same_couple_recipient"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "__className__": "serverpod.DatabaseMigrationAction",
+      "type": "alterTable",
+      "alterTable": {
+        "__className__": "serverpod.TableMigration",
+        "name": "closecall_widget_schedule",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "addForeignKeys": [
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_schedule_same_couple_asset",
+            "columns": [
+              "coupleId",
+              "assetId"
+            ],
+            "referenceTable": "closecall_media",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_schedule_same_couple_sender",
+            "columns": [
+              "coupleId",
+              "senderMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_schedule_same_couple_recipient",
+            "columns": [
+              "coupleId",
+              "recipientMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          }
+        ],
+        "deleteForeignKeys": [
+          "closecall_widget_schedule_same_couple_asset",
+          "closecall_widget_schedule_same_couple_sender",
+          "closecall_widget_schedule_same_couple_recipient"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "__className__": "serverpod.DatabaseMigrationAction",
+      "type": "alterTable",
+      "alterTable": {
+        "__className__": "serverpod.TableMigration",
+        "name": "closecall_widget_send",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "addForeignKeys": [
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_send_same_couple_asset",
+            "columns": [
+              "coupleId",
+              "assetId"
+            ],
+            "referenceTable": "closecall_media",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_send_same_couple_sender",
+            "columns": [
+              "coupleId",
+              "senderMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          },
+          {
+            "__className__": "serverpod.ForeignKeyDefinition",
+            "constraintName": "closecall_widget_send_same_couple_recipient",
+            "columns": [
+              "coupleId",
+              "recipientMemberId"
+            ],
+            "referenceTable": "closecall_couple_member",
+            "referenceTableSchema": "public",
+            "referenceColumns": [
+              "coupleId",
+              "id"
+            ],
+            "onUpdate": 3,
+            "onDelete": 4
+          }
+        ],
+        "deleteForeignKeys": [
+          "closecall_widget_send_same_couple_asset",
+          "closecall_widget_send_same_couple_sender",
+          "closecall_widget_send_same_couple_recipient"
+        ],
+        "warnings": []
+      }
+    }
+  ],
+  "warnings": [],
+  "migrationApiVersion": 1
+}

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../auth/data/auth_session.dart';
 import '../../couple/data/couple_repository.dart';
 import '../../couple/domain/couple.dart';
+import '../../couple/domain/nickname.dart';
 
 /// Owns async lifecycle; never uses mocks to mask a backend failure.
 class PairingController extends ChangeNotifier {
@@ -40,10 +41,22 @@ class PairingController extends ChangeNotifier {
   Object? error;
   Couple? couple;
   String? inviteCode;
+  bool nicknameSaving = false;
+  Object? nicknameError;
+  Future<bool> Function()? _nicknameRetry;
+  int _pairingRevision = 0;
   Future<void> Function()? _retry;
 
   String? get userId => session.userId;
   int get authRevision => _authRevision;
+  bool get canSaveNicknames =>
+      !_disposed &&
+      initialized &&
+      hasLoadedPairing &&
+      userId != null &&
+      couple?.isComplete == true &&
+      couple!.memberIds.contains(userId) &&
+      repository is NicknameRepository;
 
   /// Opt-in for the live app only. Demo/fake controllers never start timers.
   void enableForegroundSync({bool foreground = true}) {
@@ -80,7 +93,7 @@ class PairingController extends ChangeNotifier {
   void _schedulePoll({bool immediate = false}) {
     _pollTimer?.cancel();
     _pollTimer = null;
-    if (!_canPoll || busy) return;
+    if (!_canPoll || busy || nicknameSaving) return;
     if (_quietFlight != null) {
       _refreshOnResume |= immediate;
       return;
@@ -100,7 +113,7 @@ class PairingController extends ChangeNotifier {
 
   void _poll() {
     _pollTimer = null;
-    if (!_canPoll || busy || _quietFlight != null) return;
+    if (!_canPoll || busy || nicknameSaving || _quietFlight != null) return;
     _quietFlight = _readQuiet().whenComplete(() {
       _quietFlight = null;
       _schedulePoll();
@@ -112,7 +125,11 @@ class PairingController extends ChangeNotifier {
     final revision = _authRevision;
     final sync = _syncVersion;
     bool current() =>
-        _isCurrent(id, revision) && _canPoll && !busy && sync == _syncVersion;
+        _isCurrent(id, revision) &&
+        _canPoll &&
+        !busy &&
+        !nicknameSaving &&
+        sync == _syncVersion;
     try {
       final result = await repository.coupleForUser(id);
       if (!current()) return;
@@ -137,6 +154,12 @@ class PairingController extends ChangeNotifier {
       : null;
 
   bool _accept(Couple? result, String? code) {
+    if (couple?.id != result?.id ||
+        !listEquals(couple?.memberIds, result?.memberIds)) {
+      _pairingRevision++;
+      nicknameError = null;
+      _nicknameRetry = null;
+    }
     final changed = !hasLoadedPairing || couple != result || inviteCode != code;
     if (couple != result) couple = result;
     inviteCode = code;
@@ -152,6 +175,9 @@ class PairingController extends ChangeNotifier {
     if (_identity == userId) return; // Token refresh is not an identity change.
     _identity = userId;
     _authRevision++;
+    _pairingRevision++;
+    nicknameError = null;
+    _nicknameRetry = null;
     _syncVersion++;
     _quietFailures = 0;
     _pollTimer?.cancel();
@@ -164,7 +190,7 @@ class PairingController extends ChangeNotifier {
     _retry = null;
     _notify();
     if (!initialized || userId == null) return;
-    if (busy) {
+    if (busy || nicknameSaving) {
       _reloadAfter = true;
     } else {
       unawaited(refresh());
@@ -175,7 +201,7 @@ class PairingController extends ChangeNotifier {
     Future<void> Function() action, {
     bool readOnly = false,
   }) async {
-    if (busy || _disposed) return;
+    if (busy || nicknameSaving || _disposed) return;
     _syncVersion++; // A late quiet read cannot overwrite this operation.
     _pollTimer?.cancel();
     _pollTimer = null;
@@ -255,6 +281,92 @@ class PairingController extends ChangeNotifier {
   Future<void> retry() async {
     final action = _retry;
     if (action != null) await _run(action, readOnly: _retryIsRead);
+  }
+
+  Future<bool> saveNicknames({
+    required String ownNickname,
+    required String partnerNickname,
+  }) async {
+    final repository = this.repository;
+    if (repository is! NicknameRepository) {
+      throw UnsupportedError('Nickname editing is unavailable.');
+    }
+    final nicknameRepository = repository as NicknameRepository;
+    final id = userId;
+    final current = couple;
+    final revision = _authRevision;
+    if (!canSaveNicknames || id == null || current == null) {
+      throw const NicknameScopeException();
+    }
+    final own = normalizeNickname(ownNickname);
+    final partner = normalizeNickname(partnerNickname);
+    final pairRevision = _pairingRevision;
+    bool valid() =>
+        _isCurrent(id, revision) &&
+        canSaveNicknames &&
+        couple?.id == current.id &&
+        pairRevision == _pairingRevision;
+    Future<bool> action() async {
+      // Retry must validate BEFORE sending the exact original payload, not only
+      // after receiving a result. Never replay into a new account/couple.
+      if (!valid()) throw const NicknameScopeException();
+      final updated = await nicknameRepository.saveNicknames(
+        id,
+        current.id,
+        ownNickname: own,
+        partnerNickname: partner,
+      );
+      if (!valid()) return false;
+      if (updated.id != current.id ||
+          !updated.isComplete ||
+          !listEquals(updated.memberIds, current.memberIds)) {
+        throw const NicknameScopeException();
+      }
+      _accept(updated, inviteCode);
+      return true;
+    }
+
+    return _runNicknames(action);
+  }
+
+  Future<bool> retryNicknames() async {
+    final action = _nicknameRetry;
+    return action == null ? false : _runNicknames(action);
+  }
+
+  Future<bool> _runNicknames(Future<bool> Function() action) async {
+    if (_disposed || busy || nicknameSaving) return false;
+    final revision = _authRevision;
+    final pairRevision = _pairingRevision;
+    _syncVersion++;
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    nicknameSaving = true;
+    nicknameError = null;
+    _nicknameRetry = action;
+    _notify();
+    try {
+      final confirmed = await action();
+      if (confirmed) _nicknameRetry = null;
+      return confirmed;
+    } catch (failure) {
+      if (!_disposed &&
+          revision == _authRevision &&
+          pairRevision == _pairingRevision) {
+        nicknameError = failure;
+        if (failure is NicknameScopeException) _nicknameRetry = null;
+      }
+      return false;
+    } finally {
+      nicknameSaving = false;
+      _notify();
+      if (_reloadAfter && !_disposed) {
+        _reloadAfter = false;
+        unawaited(refresh());
+      } else {
+        _schedulePoll();
+      }
+    }
   }
 
   /// Allows scoped services to revoke authenticated device state before the

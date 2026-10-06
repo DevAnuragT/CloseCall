@@ -18,6 +18,7 @@ abstract class PairingState
   PairingState._({
     required this.coupleId,
     required this.memberIds,
+    this.ownNickname,
     this.partnerNickname,
     this.anniversary,
     String? themeKey,
@@ -27,6 +28,7 @@ abstract class PairingState
   factory PairingState({
     required String coupleId,
     required List<String> memberIds,
+    String? ownNickname,
     String? partnerNickname,
     DateTime? anniversary,
     String? themeKey,
@@ -39,6 +41,7 @@ abstract class PairingState
       memberIds: _ian6hnlh.Protocol().deserialize<List<String>>(
         jsonSerialization['memberIds'],
       ),
+      ownNickname: jsonSerialization['ownNickname'] as String?,
       partnerNickname: jsonSerialization['partnerNickname'] as String?,
       anniversary: jsonSerialization['anniversary'] == null
           ? null
@@ -54,6 +57,8 @@ abstract class PairingState
 
   List<String> memberIds;
 
+  String? ownNickname;
+
   String? partnerNickname;
 
   DateTime? anniversary;
@@ -68,6 +73,7 @@ abstract class PairingState
   PairingState copyWith({
     String? coupleId,
     List<String>? memberIds,
+    String? ownNickname,
     String? partnerNickname,
     DateTime? anniversary,
     String? themeKey,
@@ -79,6 +85,7 @@ abstract class PairingState
       '__className__': 'PairingState',
       'coupleId': coupleId,
       'memberIds': memberIds.toJson(),
+      if (ownNickname != null) 'ownNickname': ownNickname,
       if (partnerNickname != null) 'partnerNickname': partnerNickname,
       if (anniversary != null) 'anniversary': anniversary?.toJson(),
       'themeKey': themeKey,
@@ -92,6 +99,7 @@ abstract class PairingState
       '__className__': 'PairingState',
       'coupleId': coupleId,
       'memberIds': memberIds.toJson(),
+      if (ownNickname != null) 'ownNickname': ownNickname,
       if (partnerNickname != null) 'partnerNickname': partnerNickname,
       if (anniversary != null) 'anniversary': anniversary?.toJson(),
       'themeKey': themeKey,
@@ -111,6 +119,7 @@ class _PairingStateImpl extends PairingState {
   _PairingStateImpl({
     required String coupleId,
     required List<String> memberIds,
+    String? ownNickname,
     String? partnerNickname,
     DateTime? anniversary,
     String? themeKey,
@@ -118,6 +127,7 @@ class _PairingStateImpl extends PairingState {
   }) : super._(
          coupleId: coupleId,
          memberIds: memberIds,
+         ownNickname: ownNickname,
          partnerNickname: partnerNickname,
          anniversary: anniversary,
          themeKey: themeKey,
@@ -131,6 +141,7 @@ class _PairingStateImpl extends PairingState {
   PairingState copyWith({
     String? coupleId,
     List<String>? memberIds,
+    Object? ownNickname = _Undefined,
     Object? partnerNickname = _Undefined,
     Object? anniversary = _Undefined,
     String? themeKey,
@@ -139,6 +150,7 @@ class _PairingStateImpl extends PairingState {
     return PairingState(
       coupleId: coupleId ?? this.coupleId,
       memberIds: memberIds ?? this.memberIds.map((e0) => e0).toList(),
+      ownNickname: ownNickname is String? ? ownNickname : this.ownNickname,
       partnerNickname: partnerNickname is String?
           ? partnerNickname
           : this.partnerNickname,

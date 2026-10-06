@@ -43,3 +43,13 @@ abstract interface class CoupleRepository {
 abstract interface class PairingCodeReader {
   String? get currentInviteCode;
 }
+
+/// Optional capability: existing pairing-only repositories remain compatible.
+abstract interface class NicknameRepository {
+  Future<Couple> saveNicknames(
+    String userId,
+    String coupleId, {
+    String? ownNickname,
+    String? partnerNickname,
+  });
+}

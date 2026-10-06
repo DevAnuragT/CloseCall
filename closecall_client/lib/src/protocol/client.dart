@@ -321,6 +321,20 @@ class EndpointPairing extends _isc.EndpointRef {
         'currentCouple',
         {},
       );
+
+  _ida.Future<_i9hl8iq9.PairingState> updateNicknames(
+    String coupleId,
+    String? ownNickname,
+    String? partnerNickname,
+  ) => caller.callServerEndpoint<_i9hl8iq9.PairingState>(
+    'pairing',
+    'updateNicknames',
+    {
+      'coupleId': coupleId,
+      'ownNickname': ownNickname,
+      'partnerNickname': partnerNickname,
+    },
+  );
 }
 
 /// Registers an FCM installation for later opaque wake dispatch. Tokens are

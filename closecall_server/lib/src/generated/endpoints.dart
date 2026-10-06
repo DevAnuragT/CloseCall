@@ -335,6 +335,34 @@ class Endpoints extends _is.EndpointDispatch {
                 session,
               ),
         ),
+        'updateNicknames': _is.MethodConnector(
+          name: 'updateNicknames',
+          params: {
+            'coupleId': _is.ParameterDescription(
+              name: 'coupleId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'ownNickname': _is.ParameterDescription(
+              name: 'ownNickname',
+              type: _is.getType<String?>(),
+              nullable: true,
+            ),
+            'partnerNickname': _is.ParameterDescription(
+              name: 'partnerNickname',
+              type: _is.getType<String?>(),
+              nullable: true,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['pairing'] as _iku2870h.PairingEndpoint)
+                  .updateNicknames(
+                    session,
+                    params['coupleId'],
+                    params['ownNickname'],
+                    params['partnerNickname'],
+                  ),
+        ),
       },
     );
     connectors['push'] = _is.EndpointConnector(

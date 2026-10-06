@@ -19,6 +19,9 @@ abstract class CoupleMember
     required this.coupleId,
     required this.userIdentifier,
     required this.creatorSlot,
+    this.ownNickname,
+    this.partnerNickname,
+    this.nicknamesUpdatedAt,
   });
 
   factory CoupleMember({
@@ -26,6 +29,9 @@ abstract class CoupleMember
     required _is.UuidValue coupleId,
     required String userIdentifier,
     required bool creatorSlot,
+    String? ownNickname,
+    String? partnerNickname,
+    DateTime? nicknamesUpdatedAt,
   }) = _CoupleMemberImpl;
 
   factory CoupleMember.fromJson(Map<String, dynamic> jsonSerialization) {
@@ -38,6 +44,13 @@ abstract class CoupleMember
       creatorSlot: _is.BoolJsonExtension.fromJson(
         jsonSerialization['creatorSlot'],
       ),
+      ownNickname: jsonSerialization['ownNickname'] as String?,
+      partnerNickname: jsonSerialization['partnerNickname'] as String?,
+      nicknamesUpdatedAt: jsonSerialization['nicknamesUpdatedAt'] == null
+          ? null
+          : _is.DateTimeJsonExtension.fromJson(
+              jsonSerialization['nicknamesUpdatedAt'],
+            ),
     );
   }
 
@@ -54,6 +67,12 @@ abstract class CoupleMember
 
   bool creatorSlot;
 
+  String? ownNickname;
+
+  String? partnerNickname;
+
+  DateTime? nicknamesUpdatedAt;
+
   @override
   _is.Table<int?> get table => t;
 
@@ -65,6 +84,9 @@ abstract class CoupleMember
     _is.UuidValue? coupleId,
     String? userIdentifier,
     bool? creatorSlot,
+    String? ownNickname,
+    String? partnerNickname,
+    DateTime? nicknamesUpdatedAt,
   });
   @override
   Map<String, dynamic> toJson() {
@@ -74,6 +96,10 @@ abstract class CoupleMember
       'coupleId': coupleId.toJson(),
       'userIdentifier': userIdentifier,
       'creatorSlot': creatorSlot,
+      if (ownNickname != null) 'ownNickname': ownNickname,
+      if (partnerNickname != null) 'partnerNickname': partnerNickname,
+      if (nicknamesUpdatedAt != null)
+        'nicknamesUpdatedAt': nicknamesUpdatedAt?.toJson(),
     };
   }
 
@@ -118,11 +144,17 @@ class _CoupleMemberImpl extends CoupleMember {
     required _is.UuidValue coupleId,
     required String userIdentifier,
     required bool creatorSlot,
+    String? ownNickname,
+    String? partnerNickname,
+    DateTime? nicknamesUpdatedAt,
   }) : super._(
          id: id,
          coupleId: coupleId,
          userIdentifier: userIdentifier,
          creatorSlot: creatorSlot,
+         ownNickname: ownNickname,
+         partnerNickname: partnerNickname,
+         nicknamesUpdatedAt: nicknamesUpdatedAt,
        );
 
   /// Returns a shallow copy of this [CoupleMember]
@@ -134,12 +166,22 @@ class _CoupleMemberImpl extends CoupleMember {
     _is.UuidValue? coupleId,
     String? userIdentifier,
     bool? creatorSlot,
+    Object? ownNickname = _Undefined,
+    Object? partnerNickname = _Undefined,
+    Object? nicknamesUpdatedAt = _Undefined,
   }) {
     return CoupleMember(
       id: id is int? ? id : this.id,
       coupleId: coupleId ?? this.coupleId,
       userIdentifier: userIdentifier ?? this.userIdentifier,
       creatorSlot: creatorSlot ?? this.creatorSlot,
+      ownNickname: ownNickname is String? ? ownNickname : this.ownNickname,
+      partnerNickname: partnerNickname is String?
+          ? partnerNickname
+          : this.partnerNickname,
+      nicknamesUpdatedAt: nicknamesUpdatedAt is DateTime?
+          ? nicknamesUpdatedAt
+          : this.nicknamesUpdatedAt,
     );
   }
 }
@@ -155,6 +197,15 @@ class CoupleMemberUpdateTable extends _is.UpdateTable<CoupleMemberTable> {
 
   _is.ColumnValue<bool, bool> creatorSlot(bool value) =>
       _is.ColumnValue(table.creatorSlot, value);
+
+  _is.ColumnValue<String, String> ownNickname(String? value) =>
+      _is.ColumnValue(table.ownNickname, value);
+
+  _is.ColumnValue<String, String> partnerNickname(String? value) =>
+      _is.ColumnValue(table.partnerNickname, value);
+
+  _is.ColumnValue<DateTime, DateTime> nicknamesUpdatedAt(DateTime? value) =>
+      _is.ColumnValue(table.nicknamesUpdatedAt, value);
 }
 
 class CoupleMemberTable extends _is.Table<int?> {
@@ -164,6 +215,9 @@ class CoupleMemberTable extends _is.Table<int?> {
     coupleId = _is.ColumnUuid('coupleId', this);
     userIdentifier = _is.ColumnString('userIdentifier', this);
     creatorSlot = _is.ColumnBool('creatorSlot', this);
+    ownNickname = _is.ColumnString('ownNickname', this);
+    partnerNickname = _is.ColumnString('partnerNickname', this);
+    nicknamesUpdatedAt = _is.ColumnDateTime('nicknamesUpdatedAt', this);
   }
 
   late final CoupleMemberUpdateTable updateTable;
@@ -174,8 +228,22 @@ class CoupleMemberTable extends _is.Table<int?> {
 
   late final _is.ColumnBool creatorSlot;
 
+  late final _is.ColumnString ownNickname;
+
+  late final _is.ColumnString partnerNickname;
+
+  late final _is.ColumnDateTime nicknamesUpdatedAt;
+
   @override
-  List<_is.Column> get columns => [id, coupleId, userIdentifier, creatorSlot];
+  List<_is.Column> get columns => [
+    id,
+    coupleId,
+    userIdentifier,
+    creatorSlot,
+    ownNickname,
+    partnerNickname,
+    nicknamesUpdatedAt,
+  ];
 }
 
 class CoupleMemberInclude extends _is.IncludeObject {

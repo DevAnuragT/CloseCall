@@ -1,10 +1,12 @@
 import 'package:closecall_client/closecall_client.dart' as api;
 
 import '../domain/couple.dart';
+import '../domain/nickname.dart';
 import 'couple_repository.dart';
 
 /// The server derives identity from the session: userId is never sent over RPC.
-class ServerpodCoupleRepository implements CoupleRepository, PairingCodeReader {
+class ServerpodCoupleRepository
+    implements CoupleRepository, PairingCodeReader, NicknameRepository {
   ServerpodCoupleRepository(
     api.Client client, {
     required String? Function() userId,
@@ -13,6 +15,7 @@ class ServerpodCoupleRepository implements CoupleRepository, PairingCodeReader {
          create: client.pairing.createCouple,
          join: client.pairing.joinByCode,
          current: client.pairing.currentCouple,
+         updateNicknames: client.pairing.updateNicknames,
        );
 
   /// Injectable typed RPC boundaries, without fabricating a generated client.
@@ -21,19 +24,24 @@ class ServerpodCoupleRepository implements CoupleRepository, PairingCodeReader {
     required Future<api.PairingState> Function() create,
     required Future<api.PairingState> Function(String) join,
     required Future<api.PairingState?> Function() current,
-  }) : this._(userId, create, join, current);
+    Future<api.PairingState> Function(String, String?, String?)?
+    updateNicknames,
+  }) : this._(userId, create, join, current, updateNicknames);
 
   ServerpodCoupleRepository._(
     this._userId,
     this._create,
     this._join,
     this._current,
+    this._updateNicknames,
   );
 
   final String? Function() _userId;
   final Future<api.PairingState> Function() _create;
   final Future<api.PairingState> Function(String) _join;
   final Future<api.PairingState?> Function() _current;
+  final Future<api.PairingState> Function(String, String?, String?)?
+  _updateNicknames;
 
   @override
   String? currentInviteCode;
@@ -47,6 +55,7 @@ class ServerpodCoupleRepository implements CoupleRepository, PairingCodeReader {
   static Couple toCouple(api.PairingState state) => Couple(
     id: state.coupleId,
     memberIds: List<String>.unmodifiable(state.memberIds),
+    ownNickname: state.ownNickname,
     partnerNickname: state.partnerNickname,
     anniversary: state.anniversary,
     themeKey: state.themeKey,
@@ -95,5 +104,31 @@ class ServerpodCoupleRepository implements CoupleRepository, PairingCodeReader {
     final state = await _translate(_current);
     currentInviteCode = state?.pairingCode;
     return state == null ? null : toCouple(state);
+  }
+
+  @override
+  Future<Couple> saveNicknames(
+    String userId,
+    String coupleId, {
+    String? ownNickname,
+    String? partnerNickname,
+  }) async {
+    _checkIdentity(userId);
+    final call = _updateNicknames;
+    if (call == null) throw UnsupportedError('Nickname editing unavailable.');
+    try {
+      final state = await call(coupleId, ownNickname, partnerNickname);
+      _checkIdentity(userId);
+      if (state.coupleId != coupleId || !state.memberIds.contains(userId)) {
+        throw const NicknameScopeException();
+      }
+      return toCouple(state);
+    } on api.PairingFailure catch (failure) {
+      if (failure.code == 'invalid_nickname') {
+        throw const NicknameValidationException();
+      }
+      if (failure.code == 'not_paired') throw const NicknameScopeException();
+      rethrow;
+    }
   }
 }

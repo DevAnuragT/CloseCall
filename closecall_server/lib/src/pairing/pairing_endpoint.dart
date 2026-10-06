@@ -112,6 +112,65 @@ class PairingEndpoint extends Endpoint {
     );
   }
 
+  Future<PairingState> updateNicknames(
+    Session session,
+    String coupleId,
+    String? ownNickname,
+    String? partnerNickname,
+  ) async {
+    final user = session.authenticated!.userIdentifier;
+    final own = _nickname(ownNickname);
+    final partner = _nickname(partnerNickname);
+    return session.db.transaction((transaction) async {
+      await _lockUser(session, user, transaction);
+      final member = await _membership(session, user, transaction);
+      if (member == null || member.coupleId.toString() != coupleId) {
+        throw PairingFailure(code: 'not_paired');
+      }
+      // Same lock order as pairing: user, then couple. Serialize with joining
+      // and validate the authoritative membership inside this transaction.
+      await session.db.unsafeQuery(
+        'SELECT id FROM closecall_couple WHERE id = CAST(@id AS uuid) FOR UPDATE',
+        parameters: QueryParameters.named({'id': coupleId}),
+        transaction: transaction,
+      );
+      final count = await CoupleMember.db.count(
+        session,
+        where: (t) => t.coupleId.equals(member.coupleId),
+        transaction: transaction,
+      );
+      if (count != 2) throw PairingFailure(code: 'not_paired');
+      member.ownNickname = own;
+      member.partnerNickname = partner;
+      member.nicknamesUpdatedAt = DateTime.now().toUtc();
+      await CoupleMember.db.updateRow(session, member, transaction: transaction);
+      return _state(
+        session,
+        await _couple(session, member.coupleId, transaction),
+        transaction,
+      );
+    });
+  }
+
+  String? _nickname(String? value) {
+    if (value == null) return null;
+    // Bound work before normalization. Reject controls rather than silently
+    // turning newlines or invisible direction-changing marks into spaces.
+    if (value.length > 1024 ||
+        RegExp(r'[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]').hasMatch(value)) {
+      throw PairingFailure(code: 'invalid_nickname');
+    }
+    final normalized = value.replaceAll(
+      RegExp(r'[ \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]+'),
+      ' ',
+    ).trim();
+    if (normalized.isEmpty) return null;
+    if (normalized.runes.length > 40) {
+      throw PairingFailure(code: 'invalid_nickname');
+    }
+    return normalized;
+  }
+
   Future<void> _lockUser(
     Session session,
     String user,
@@ -182,10 +241,18 @@ class PairingEndpoint extends Endpoint {
     members.sort(
       (a, b) => a.creatorSlot == b.creatorSlot ? 0 : (a.creatorSlot ? -1 : 1),
     );
+    final requester = members.singleWhere(
+      (member) => member.userIdentifier == session.authenticated!.userIdentifier,
+    );
     return PairingState(
       coupleId: couple.id!.toString(),
       memberIds: members.map((member) => member.userIdentifier).toList(),
-      partnerNickname: couple.partnerNickname,
+      ownNickname: requester.ownNickname,
+      // Legacy couple labels were creator-authored. Never expose that private
+      // label as the joiner's preference; an explicit clear stays cleared.
+      partnerNickname: requester.nicknamesUpdatedAt != null
+          ? requester.partnerNickname
+          : (requester.creatorSlot ? couple.partnerNickname : null),
       anniversary: couple.anniversary,
       themeKey: couple.themeKey,
       pairingCode: couple.pairingCode,

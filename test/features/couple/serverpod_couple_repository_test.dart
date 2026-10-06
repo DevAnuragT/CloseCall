@@ -8,6 +8,7 @@ api.PairingState state({String? code = 'ABC123', bool paired = false}) =>
       coupleId: 'couple-1',
       memberIds: paired ? ['me', 'partner'] : ['me'],
       partnerNickname: 'Love',
+      ownNickname: 'Me',
       anniversary: DateTime(2024, 2, 3),
       themeKey: 'blush',
       pairingCode: code,
@@ -27,6 +28,7 @@ void main() {
     expect(created.couple.id, 'couple-1');
     expect(created.couple.memberIds, ['me']);
     expect(created.couple.partnerNickname, 'Love');
+    expect(created.couple.ownNickname, 'Me');
     expect(created.couple.anniversary, DateTime(2024, 2, 3).toUtc());
     expect(created.couple.themeKey, 'blush');
     expect(
@@ -42,6 +44,55 @@ void main() {
     current = null;
     expect(await repository.coupleForUser('me'), isNull);
     expect(repository.currentInviteCode, isNull);
+  });
+
+  test('maps and scopes the optional nickname mutation callback', () async {
+    String? seenCouple;
+    String? seenOwn;
+    String? seenPartner;
+    final repository = ServerpodCoupleRepository.withCalls(
+      userId: () => 'me',
+      create: () async => state(),
+      join: (_) async => state(paired: true, code: null),
+      current: () async => state(paired: true, code: null),
+      updateNicknames: (couple, own, partner) async {
+        seenCouple = couple;
+        seenOwn = own;
+        seenPartner = partner;
+        return state(paired: true, code: null);
+      },
+    );
+    final result = await repository.saveNicknames(
+      'me',
+      'couple-1',
+      ownNickname: 'Me',
+      partnerNickname: 'Love',
+    );
+    expect(result.ownNickname, 'Me');
+    expect(seenCouple, 'couple-1');
+    expect(seenOwn, 'Me');
+    expect(seenPartner, 'Love');
+    await expectLater(
+      repository.saveNicknames('other', 'couple-1'),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('translates nickname server validation and scope errors', () async {
+    for (final code in ['invalid_nickname', 'not_paired']) {
+      final repository = ServerpodCoupleRepository.withCalls(
+        userId: () => 'me',
+        create: () async => state(),
+        join: (_) async => state(),
+        current: () async => state(paired: true, code: null),
+        updateNicknames: (_, _, _) async =>
+            throw api.PairingFailure(code: code),
+      );
+      await expectLater(
+        repository.saveNicknames('me', 'couple-1'),
+        throwsA(isA<Exception>()),
+      );
+    }
   });
 
   test(

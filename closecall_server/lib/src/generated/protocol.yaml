@@ -21,6 +21,7 @@ pairing:
   - createCouple:
   - joinByCode:
   - currentCouple:
+  - updateNicknames:
 push:
   - registerDevice:
   - revokeDevice:

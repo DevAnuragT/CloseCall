@@ -799,6 +799,43 @@ class _PairingEndpoint {
       }
     });
   }
+
+  _ida.Future<_iye5whdh.PairingState> updateNicknames(
+    _ist.TestSessionBuilder sessionBuilder,
+    String coupleId,
+    String? ownNickname,
+    String? partnerNickname,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'pairing',
+            method: 'updateNicknames',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'pairing',
+          methodName: 'updateNicknames',
+          parameters: _ist.testObjectToJson({
+            'coupleId': coupleId,
+            'ownNickname': ownNickname,
+            'partnerNickname': partnerNickname,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_iye5whdh.PairingState>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
 }
 
 class _PushEndpoint {
