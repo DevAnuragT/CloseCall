@@ -3,9 +3,21 @@ import 'package:closecall/features/media/presentation/media_controller.dart';
 import 'package:closecall/features/pairing/presentation/pairing_controller.dart';
 import 'package:closecall/features/widget/presentation/widget_tab_screen.dart';
 import 'package:closecall/features/widget/presentation/editor/widget_editor_screen.dart';
+import 'package:closecall/features/widget/presentation/widget_preview_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../support/live_fakes.dart';
+
+Future<void> waitForRoute(WidgetTester tester, Type type) async {
+  for (var attempt = 0; attempt < 30; attempt++) {
+    await tester.pumpAndSettle();
+    if (find.byType(type).evaluate().isNotEmpty) return;
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+  }
+  expect(find.byType(type), findsOneWidget);
+}
 
 void main() {
   testWidgets('uncertain upload shows safe recovery copy and explicit retry', (
@@ -136,11 +148,11 @@ void main() {
           ),
         );
         await tester.runAsync(() async {
-          await tester.tap(find.text('Choose photo'));
+          await tester.tap(find.byKey(const Key('hub-send-to-partner')));
           await Future<void>.delayed(const Duration(milliseconds: 100));
         });
         await tester.pumpAndSettle();
-        expect(find.byType(WidgetEditorScreen), findsOneWidget);
+        await waitForRoute(tester, WidgetEditorScreen);
         expect(
           tester
               .widget<WidgetEditorScreen>(find.byType(WidgetEditorScreen))
@@ -156,6 +168,7 @@ void main() {
           await Future<void>.delayed(const Duration(milliseconds: 100));
         });
         await tester.pumpAndSettle();
+        await waitForRoute(tester, WidgetPreviewScreen);
         expect(find.text('Send to partner'), findsOneWidget);
         expect(find.text('Save privately'), findsOneWidget);
         expect(repository.requestIds, isEmpty);
@@ -216,10 +229,19 @@ void main() {
           home: Scaffold(body: WidgetTabScreen(media: media, liveMode: true)),
         ),
       );
+      await tester.ensureVisible(find.byKey(const Key('hub-my-photos')));
+      await tester.tap(find.byKey(const Key('hub-my-photos')));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Refresh private photos'));
       await tester.tap(find.text('Refresh private photos'));
       await tester.pumpAndSettle();
-      expect(find.byType(Image), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(Image),
+        ),
+        findsOneWidget,
+      );
       expect(applied, 0);
       await tester.ensureVisible(
         find.text('Apply downloaded photo to this device'),
@@ -232,14 +254,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.text('Your private photo storage quota has been reached.'),
-        findsOneWidget,
+        findsWidgets,
       );
       repository.uploadFailure = null;
-      await tester.ensureVisible(find.text('Retry photo operation'));
-      await tester.tap(find.text('Retry photo operation'));
+      final sheetRetry = find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Retry photo operation'),
+      );
+      await tester.ensureVisible(sheetRetry);
+      await tester.tap(sheetRetry);
       await tester.pumpAndSettle();
       expect(repository.requestIds.toSet(), hasLength(1));
-      expect(find.textContaining('Uploaded privately'), findsOneWidget);
+      expect(find.textContaining('Uploaded privately'), findsWidgets);
       auth.change(null);
       await tester.pumpAndSettle();
       expect(find.byType(Image), findsNothing);

@@ -229,9 +229,26 @@ complete merely because Firebase config files exist.
   migration/backend is deployed on Cloud Starter; no Firebase server credential
   or dispatch secret was added.
 
+### Widget hub redesign — 6 October 2026
+
+The paired Widget tab now presents a compact preview, setup summary and action
+cards instead of a permanently expanded feature stack. Send to partner opens the
+existing editor/confirmation flow. My widget, Partner updates, Schedule a photo
+and My photos open lazily built scrollable bottom sheets. Permission actions,
+explicit consent, local editing, save-only upload, existing-photo sending,
+download/apply and schedule retry remain available there. Pending operations and
+errors remain visible on the hub. Unpaired onboarding is preserved.
+
+Verification: full Flutter analysis clean; **350 tests passed**, including lazy
+sheet navigation, real controller actions, stale identity guards and
+320/360/390-pixel layouts with 2× text. Media route tests now wait for actual
+editor/preview presentation instead of relying on a fixed decoding delay. The
+Cloud-connected debug APK built successfully. No device was attached for install;
+visual phone acceptance remains pending. Backend/push behaviour was not changed.
+
 ### Remaining acceptance and external blocker
 
-Update **both** phones, preserving accounts. Recipient: Widget → Allow partner
+Update **both** phones, preserving accounts. Recipient: Widget → Partner updates → Allow partner
 updates. Sender: send a test photo. Keep recipient CloseCall foregrounded and
 verify widget changes without Download/Apply. Verify restart persistence, local
 pause, resume and schedule priority separately.

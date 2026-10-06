@@ -394,7 +394,7 @@ void main() {
       f.couples.couple = Couple(id: 'couple', memberIds: ['me', 'partner']);
       await f.pairing.refresh();
       await tester.pumpAndSettle();
-      expect(find.text('Send a little something'), findsOneWidget);
+      expect(find.byKey(const Key('hub-send-to-partner')), findsOneWidget);
       expect(f.repository.lists, 1);
       expect(f.repository.downloads, ['asset']);
       f.couples.couple = null;

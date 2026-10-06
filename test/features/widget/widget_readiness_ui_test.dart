@@ -60,6 +60,7 @@ class _ConsentSchedules extends FakeSchedules
     autoUpdateEnabled: own.autoUpdateEnabled,
     version: writes.length,
   );
+
   @override
   Future<WidgetDeliveryState> getDeliveryState() async => state;
   @override
@@ -71,6 +72,29 @@ class _ConsentSchedules extends FakeSchedules
 }
 
 void main() {
+  Future<void> openSetup(WidgetTester tester) async {
+    await tester.ensureVisible(find.byKey(const Key('widget-setup-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('widget-setup-summary')));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> scrollSheet(
+    WidgetTester tester,
+    Finder target,
+    double delta,
+  ) async {
+    await tester.scrollUntilVisible(
+      target,
+      delta,
+      scrollable: find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
   late FakeAuth auth;
   late FakeCouples couples;
   late PairingController pairing;
@@ -149,15 +173,22 @@ void main() {
       await show(tester, media: media, schedules: schedules);
       await tester.pumpAndSettle();
       expect(find.text('Widget setup'), findsOneWidget);
-      expect(find.text('Notifications: off'), findsOneWidget);
+      expect(find.text('Notifications: off'), findsNothing);
+      expect(
+        find.byKey(const Key('widget-notifications-action')),
+        findsNothing,
+      );
       expect(service.requests, 0);
       expect(repository.writes, isEmpty);
       expect(schedules.partnerUpdatesEnabled, isFalse);
 
       await tester.scrollUntilVisible(
-        find.byKey(const Key('allow-partner-updates')),
+        find.byKey(const Key('hub-partner-updates')),
         200,
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('hub-partner-updates')));
+      await tester.pumpAndSettle();
       final allow = tester.widget<FilledButton>(
         find.byKey(const Key('allow-partner-updates')),
       );
@@ -170,16 +201,21 @@ void main() {
       expect(repository.writes, [true]);
       expect(schedules.partnerUpdatesEnabled, isTrue);
       expect(service.access, NotificationAccess.denied);
-      await tester.scrollUntilVisible(find.text('Choose photo'), 150);
+      await tester.tap(find.byTooltip('Close Partner updates'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('hub-send-to-partner')),
+        -150,
+      );
       expect(
         tester
-            .widget<FilledButton>(
-              find.ancestor(
-                of: find.text('Choose photo'),
-                matching: find.byType(FilledButton),
+            .widget<InkWell>(
+              find.descendant(
+                of: find.byKey(const Key('hub-send-to-partner')),
+                matching: find.byType(InkWell),
               ),
             )
-            .onPressed,
+            .onTap,
         isNotNull,
       );
       expect(service.requests, 0);
@@ -198,7 +234,9 @@ void main() {
       await tester.runAsync(readiness.refresh);
       await show(tester);
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
+      await openSetup(tester);
+      await scrollSheet(
+        tester,
         find.byKey(const Key('widget-notifications-action')),
         100,
       );
@@ -222,7 +260,8 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(readiness.widgetInstalled, isTrue);
-      await tester.scrollUntilVisible(
+      await scrollSheet(
+        tester,
         find.byKey(const Key('widget-setup-ready')),
         -200,
       );
@@ -240,10 +279,8 @@ void main() {
     await tester.runAsync(readiness.refresh);
     await show(tester);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('widget-add-action')),
-      100,
-    );
+    await openSetup(tester);
+    await scrollSheet(tester, find.byKey(const Key('widget-add-action')), 100);
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('widget-add-action')));
       await readiness.refresh();
@@ -256,7 +293,8 @@ void main() {
     await tester.runAsync(readiness.refresh);
     await tester.pumpAndSettle();
     expect(readiness.widgetInstalled, isTrue);
-    await tester.scrollUntilVisible(
+    await scrollSheet(
+      tester,
       find.byKey(const Key('widget-setup-ready')),
       -200,
     );
@@ -271,7 +309,9 @@ void main() {
     await tester.runAsync(readiness.refresh);
     await show(tester);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
+    await openSetup(tester);
+    await scrollSheet(
+      tester,
       find.byKey(const Key('widget-manual-instructions')),
       100,
     );
@@ -295,7 +335,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  for (final width in [320.0, 360.0]) {
+  for (final width in [320.0, 360.0, 390.0]) {
     testWidgets('setup fits width $width and text scale 2', (tester) async {
       tester.view.physicalSize = Size(width, 1000);
       tester.view.devicePixelRatio = 1;
@@ -303,7 +343,9 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await show(tester, scale: 2);
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
+      await openSetup(tester);
+      await scrollSheet(
+        tester,
         find.byKey(const Key('widget-check-setup')),
         180,
       );
@@ -312,7 +354,8 @@ void main() {
       service.access = NotificationAccess.granted;
       await tester.runAsync(readiness.refresh);
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
+      await scrollSheet(
+        tester,
         find.byKey(const Key('widget-setup-ready')),
         -180,
       );
@@ -328,16 +371,15 @@ void main() {
     await tester.runAsync(readiness.refresh);
     await show(tester);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
+    await openSetup(tester);
+    await scrollSheet(
+      tester,
       find.byKey(const Key('widget-readiness-error')),
       100,
     );
     expect(find.textContaining('private native failure'), findsNothing);
     service.failReads = false;
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('widget-check-setup')),
-      100,
-    );
+    await scrollSheet(tester, find.byKey(const Key('widget-check-setup')), 100);
     await tester.ensureVisible(find.byKey(const Key('widget-check-setup')));
     await tester.pumpAndSettle();
     final previousReads = service.reads;
