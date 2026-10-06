@@ -17,6 +17,7 @@ import '../data/schedule_repository.dart';
 import 'editor/widget_editor_screen.dart';
 import 'widget_preview_screen.dart';
 import 'schedule_controller.dart';
+import 'photo_sync_settings_screen.dart';
 import 'schedule_photo_screen.dart';
 import 'default_photo_picker.dart';
 import 'hub_photo_picker.dart';
@@ -445,15 +446,22 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
             label: 'Photos from your partner',
             subtitle: schedules == null
                 ? 'Photo updates are unavailable right now.'
-                : schedules.partnerUpdatesEnabled
-                ? 'On · their photos can update your widget.'
-                : 'Choose whether partner photos can update this device.',
+                : schedules.needsPartnerPhotoSetup
+                ? 'Finish setup in Profile → Settings.'
+                : schedules.effectivePartnerUpdatesEnabled
+                ? 'On · manage automatic syncing in Profile → Settings.'
+                : 'Off · manage automatic syncing in Profile → Settings.',
             icon: Icons.sync_rounded,
             accent: AppColors.plum,
             enabled: schedules != null,
             onTap: schedules == null
                 ? null
-                : () => _showPartnerUpdatesSheet(context, schedules),
+                : () => openPhotoSyncSettings(
+                    context,
+                    schedules: schedules,
+                    readiness: widget.readiness,
+                    setup: schedules.needsPartnerPhotoSetup,
+                  ),
           ),
           const SizedBox(height: AppSpacing.sm),
           _HubActionCard(
@@ -509,7 +517,7 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
         const WidgetStatusCard(
           key: Key('hub-partner-updates-error'),
           message:
-              'Could not change photo updates. Open Photos from your partner to try again.',
+              'Could not change photo updates. Open Profile → Settings to try again.',
           color: AppColors.error,
         ),
       );
@@ -794,28 +802,6 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
             WidgetStatusCard(message: _status!, color: AppColors.success),
           ],
         ],
-      ),
-    );
-  }
-
-  Future<void> _showPartnerUpdatesSheet(
-    BuildContext context,
-    ScheduleController schedules,
-  ) {
-    final actionScope = _accountScope;
-    return _showSheet(
-      context,
-      'Photos from your partner',
-      () => _PartnerUpdatesCard(
-        key: const Key('partner-updates-sheet-card'),
-        controller: schedules,
-        onChanged: (enabled) {
-          if (mounted &&
-              actionScope == _accountScope &&
-              identical(widget.schedules, schedules)) {
-            schedules.setPartnerUpdates(enabled);
-          }
-        },
       ),
     );
   }
@@ -1429,68 +1415,6 @@ class _WidgetReadinessCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _PartnerUpdatesCard extends StatelessWidget {
-  const _PartnerUpdatesCard({
-    super.key,
-    required this.controller,
-    required this.onChanged,
-  });
-  final ScheduleController controller;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: controller,
-    builder: (context, _) {
-      final c = controller;
-      final disabled = !c.canSchedule || c.partnerUpdatesBusy;
-      return WidgetCard(
-        title: c.partnerUpdatesEnabled ? 'On' : 'Paused',
-        icon: Icons.favorite_outline_rounded,
-        accent: AppColors.plum,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Material(
-              color: Colors.transparent,
-              child: SwitchListTile(
-                key: const Key('partner-updates-toggle'),
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Automatically show their photos on my widget',
-                ),
-                subtitle: Text(
-                  c.partnerUpdatesEnabled
-                      ? 'On for this device. Pause whenever you want.'
-                      : 'Paused on this device. Your widget keeps your chosen photo.',
-                ),
-                value: c.partnerUpdatesEnabled,
-                onChanged: disabled ? null : onChanged,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            const Text(
-              'New photos arrive while CloseCall is open. Receiving new photos with the app closed is not available yet.',
-              style: TextStyle(color: AppColors.inkMuted, height: 1.35),
-            ),
-            if (c.partnerUpdatesBusy) const LinearProgressIndicator(),
-            if (c.partnerUpdatesError != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              WidgetStatusCard(
-                key: const Key('partner-updates-error'),
-                message:
-                    'Could not change partner updates. Check your connection and try again.',
-                icon: Icons.error_outline_rounded,
-                color: AppColors.error,
-              ),
-            ],
-          ],
-        ),
-      );
-    },
-  );
 }
 
 class _WidgetHeader extends StatelessWidget {

@@ -11,6 +11,7 @@ import 'package:closecall/features/widget/presentation/schedule_photo_screen.dar
 import 'package:closecall/features/widget/presentation/default_photo_picker.dart';
 import 'package:closecall/features/widget/presentation/hub_photo_picker.dart';
 import 'package:closecall/features/widget/presentation/widget_preview_screen.dart';
+import 'package:closecall/features/widget/presentation/photo_sync_settings_screen.dart';
 import 'package:closecall_client/closecall_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -162,31 +163,34 @@ void main() {
   }
 
   testWidgets(
-    'partner updates sheet explicitly allows, pauses and resumes via API',
+    'partner photo settings explicitly allows, pauses and resumes via API',
     (tester) async {
       await showTab(tester);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('allow-partner-updates')), findsNothing);
       await open(tester, 'hub-partner-updates');
-      final allow = find.byKey(const Key('partner-updates-toggle'));
+      final allow = find.byKey(const Key('automatic-photo-sync-toggle'));
       expect(allow, findsOneWidget);
       expect(tester.getTopLeft(allow).dy, lessThan(600));
       expect(find.byType(Switch), findsOneWidget);
       expect(repository.consents, isEmpty);
       expect(
-        find.textContaining(
-          'Receiving new photos with the app closed is not available yet.',
-        ),
+        find.textContaining('Closed-app photo delivery is not available yet.'),
         findsOneWidget,
       );
       await tester.runAsync(() async {
-        await tester.tap(allow);
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('photo-sync-finish')),
+          -160,
+        );
+        await tester.tap(find.byKey(const Key('photo-sync-finish')));
         await Future<void>.delayed(const Duration(milliseconds: 10));
       });
       await tester.pumpAndSettle();
       expect(repository.consents, [true]);
       expect(schedules.partnerUpdatesEnabled, isTrue);
-      expect(find.byType(Switch), findsOneWidget); // No second schedule toggle.
+      await open(tester, 'hub-partner-updates');
+      expect(find.byType(Switch), findsOneWidget);
       await tester.runAsync(() async {
         await tester.tap(find.byType(Switch));
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -194,7 +198,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.consents, [true, false]);
       expect(schedules.partnerUpdatesEnabled, isFalse);
-      expect(find.textContaining('Paused on this device'), findsOneWidget);
+      expect(find.textContaining('Off on this device'), findsOneWidget);
       await tester.runAsync(() async {
         await tester.tap(find.byType(Switch));
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -217,12 +221,16 @@ void main() {
     await tester.pumpAndSettle();
     await open(tester, 'hub-partner-updates');
     await tester.runAsync(() async {
-      await tester.tap(find.byKey(const Key('partner-updates-toggle')));
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('photo-sync-finish')),
+        -160,
+      );
+      await tester.tap(find.byKey(const Key('photo-sync-finish')));
       await Future<void>.delayed(const Duration(milliseconds: 10));
     });
     await tester.pump();
     final button = tester.widget<SwitchListTile>(
-      find.byKey(const Key('partner-updates-toggle')),
+      find.byKey(const Key('automatic-photo-sync-toggle')),
     );
     expect(button.onChanged, isNull);
     expect(repository.consents, [true]);
@@ -231,7 +239,10 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     });
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('partner-updates-error')), findsOneWidget);
+    expect(
+      find.textContaining('Could not confirm your photo syncing preference'),
+      findsOneWidget,
+    );
     expect(find.textContaining('secret'), findsNothing);
     expect(find.textContaining('private.invalid'), findsNothing);
     expect(schedules.partnerUpdatesEnabled, isFalse);
@@ -245,7 +256,7 @@ void main() {
     await tester.pumpAndSettle();
     await open(tester, 'hub-partner-updates');
     final previous = tester.widget<SwitchListTile>(
-      find.byKey(const Key('partner-updates-toggle')),
+      find.byKey(const Key('automatic-photo-sync-toggle')),
     );
     auth.change(null);
     auth.change('me');
@@ -695,6 +706,14 @@ void main() {
       }.entries) {
         await open(tester, entry.key);
         expect(tester.takeException(), isNull);
+        if (entry.key == 'hub-partner-updates') {
+          expect(find.byType(PhotoSyncSettingsScreen), findsOneWidget);
+          await tester.drag(find.byType(ListView).last, const Offset(0, -450));
+          await tester.pumpAndSettle();
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+          continue;
+        }
         final scrollable = find
             .descendant(
               of: find.byType(BottomSheet),

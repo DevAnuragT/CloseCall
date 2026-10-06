@@ -248,6 +248,25 @@ visual phone acceptance remains pending. Backend/push behaviour was not changed.
 
 ### Widget usability fixes — 6 October 2026
 
+### Profile identity and default photo syncing — 6 October 2026
+
+- Profile now includes private **Your nickname** and **Partner nickname** fields.
+  Each member's labels are stored on that member's Serverpod row, so one person
+  cannot overwrite the other person's preferences. Nicknames are normalized,
+  limited to 40 Unicode characters, and can be cleared.
+- After a complete pairing, CloseCall presents a one-time photo-sync setup with
+  the switch preselected on. Completing setup explicitly enables the existing
+  Serverpod account consent and device-local consent. Existing on/off choices
+  are restored and are never silently changed.
+- Profile → Settings now controls **Automatic photo syncing**, notification
+  access, and adding the home-screen widget. The Widget tab links to the same
+  settings instead of owning a second receiving-consent switch.
+- Notification access is requested at most once per installation. The app does
+  not request blanket photo-library access; photos use the system picker. The
+  current implementation remains foreground-only: closed-app authenticated
+  dispatch is still awaiting server push credentials/outbox and background
+  authorization work.
+
 - Exactly four paired actions: Send a photo, My widget, Photos from your partner,
   and Send later. The confusing standalone My photos destination is removed.
 - Send a photo offers New photo and a private thumbnail grid of saved own

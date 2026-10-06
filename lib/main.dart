@@ -14,6 +14,7 @@ import 'core/serverpod/serverpod_bootstrap.dart';
 import 'core/push/push_registration_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/auth_gate.dart';
+import 'features/widget/presentation/photo_sync_settings_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -176,17 +177,23 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
           }
         },
       ),
-      signedInBuilder: (_) => AppShell(
-        pairing: backend.pairing,
-        account: backend.account,
-        media: backend.media,
-        schedules: backend.schedules,
-        readiness: _readiness,
-      ),
+      signedInBuilder: (_) {
+        final child = PartnerPhotoSetupCoordinator(
+          schedules: backend.schedules,
+          readiness: _readiness,
+          child: AppShell(
+            pairing: backend.pairing,
+            account: backend.account,
+            media: backend.media,
+            schedules: backend.schedules,
+            readiness: _readiness,
+          ),
+        );
+        return _readiness == null
+            ? child
+            : PermissionOnboarding(controller: _readiness!, child: child);
+      },
     );
-    final readiness = _readiness;
-    return readiness == null
-        ? gate
-        : PermissionOnboarding(controller: readiness, child: gate);
+    return gate;
   }
 }

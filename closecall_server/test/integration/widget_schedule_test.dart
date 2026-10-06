@@ -973,7 +973,8 @@ void main() {
            expect(await manager.migrateToLatest(session), [
              repair,
              '20261005132731105',
-             '20261005201637360-push-registration',
+            '20261005201637360-push-registration',
+            '20261006081030595-nicknames',
            ]);
           expect(
             await database.MigrationManager.verifyDatabaseIntegrity(session),

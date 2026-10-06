@@ -68,7 +68,12 @@ class _AppShellState extends State<AppShell> {
         onConnectPartner: _openProfile,
       ),
       if (pairing != null)
-        PairingScreen(controller: pairing, account: widget.account)
+        PairingScreen(
+          controller: pairing,
+          account: widget.account,
+          schedules: widget.schedules,
+          readiness: widget.readiness,
+        )
       else
         const _DemoProfileScreen(),
     ];

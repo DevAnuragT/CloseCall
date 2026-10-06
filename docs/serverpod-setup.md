@@ -62,7 +62,7 @@ app deletion or device loss.** Anonymous creation fails closed in staging and
 production. Email accounts are recoverable; they do not automatically acquire
 an existing guest's couple/media data. Actual deployed email delivery still
 requires Serverpod Cloud email access or a configured alternative provider.
-Pairing and private photo sharing are live. Widget application is explicit and
+Pairing, per-member nicknames and private photo sharing are live. Widget application is explicit and
 local. Foreground streams and opt-in Android cache sync are live. Already
 cached transitions can run without Flutter, subject to OS delay; receiving
 new/changed/cancelled server schedules still requires reconnect.

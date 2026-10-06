@@ -93,6 +93,15 @@ class DelayedStore extends MemoryWidgetConsentStore {
   }
 }
 
+class FailingReadStore implements WidgetConsentStore {
+  @override
+  Future<WidgetDeviceConsent?> read() =>
+      Future<WidgetDeviceConsent?>.error(StateError('storage unavailable'));
+
+  @override
+  Future<void> write(WidgetDeviceConsent? consent) async {}
+}
+
 class RestoreAuth extends FakeAuth {
   final restoration = Completer<void>();
 
@@ -230,6 +239,32 @@ void main() {
     expect(h.repository.stateReads, 0);
   });
 
+  test('unset consent exposes one-time setup without hidden enable', () async {
+    final h = DeliveryHarness();
+    addTearDown(h.dispose);
+    await h.start();
+    expect(h.controller.partnerPhotoConsentRestored, isTrue);
+    expect(h.controller.partnerPhotoSetupComplete, isFalse);
+    expect(h.controller.needsPartnerPhotoSetup, isTrue);
+    expect(h.controller.partnerUpdatesEnabled, isFalse);
+    expect(h.repository.consentCalls, isEmpty);
+  });
+
+  test(
+    'consent read failure is distinct and only retries explicitly',
+    () async {
+      final h = DeliveryHarness(store: FailingReadStore());
+      addTearDown(h.dispose);
+      await h.start();
+      expect(h.controller.partnerPhotoConsentRestored, isFalse);
+      expect(h.controller.restoringPartnerPhotoConsent, isFalse);
+      expect(h.controller.needsPartnerPhotoSetup, isFalse);
+      expect(h.controller.partnerUpdatesError, isNotNull);
+      await h.controller.retryPartnerPhotoConsent();
+      expect(h.controller.partnerUpdatesError, isNotNull);
+    },
+  );
+
   test(
     'explicit enable persists and partner notice downloads/applies automatically',
     () async {
@@ -328,7 +363,10 @@ void main() {
         h.repository.own = deliveryTimeline(latest: 'sent', version: 1);
         await h.start();
         expect(h.controller.partnerUpdatesEnabled, isFalse);
-        expect(store.value!.enabled, isFalse);
+        // A different identity is not an explicit pause for this pair. Keep
+        // it untouched so the new pair can complete its own setup.
+        expect(store.value, same(consent));
+        expect(h.controller.needsPartnerPhotoSetup, isTrue);
         expect(h.photos.downloads, isEmpty);
         expect(h.repository.stateReads, 0);
         await h.dispose();
@@ -616,7 +654,11 @@ void main() {
       await h.settle();
       h.auth.change(null);
       h.auth.change('me');
+      // Settings mutations stay disabled until the new identity's consent
+      // restore has completed; finish the old serialized write first.
+      store.pendingWrite!.complete();
       await h.settle();
+      store.pendingWrite = Completer<void>();
       final current = h.controller.setPartnerUpdates(true);
       await h.settle();
       expect(h.controller.partnerUpdatesBusy, isTrue);

@@ -43,6 +43,12 @@ class WidgetReadinessController extends ChangeNotifier {
   bool get busy => _pending != 0;
   bool get initialised => _initialised;
   Object? get error => _error;
+  bool get notificationPromptHandled => _handled;
+
+  /// Explicit Settings action may retry a denial; automatic onboarding may
+  /// not, because it is gated separately by [shouldPrompt].
+  bool get canRequestNotifications =>
+      _notificationAccess == NotificationAccess.denied;
 
   bool get shouldPrompt =>
       !_disposed &&

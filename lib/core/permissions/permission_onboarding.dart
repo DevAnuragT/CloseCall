@@ -81,8 +81,8 @@ class _PermissionOnboardingState extends State<PermissionOnboarding> {
             ),
             title: const Text('Allow CloseCall notifications?'),
             content: const Text(
-              'Allow notifications for CloseCall updates. You can change this '
-              'later in Widget setup.\n\n'
+              'Allow notifications for syncing updates. You can change this '
+              'later in Profile → Settings.\n\n'
               'Notifications aren’t required for live updates while the app is '
               'open. Closed-app photo delivery is not available yet.',
             ),

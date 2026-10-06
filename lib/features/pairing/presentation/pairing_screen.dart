@@ -5,15 +5,27 @@ import '../../../core/theme/app_spacing.dart';
 import '../../auth/presentation/account_controller.dart';
 import '../../couple/data/couple_repository.dart';
 import '../../couple/domain/couple.dart';
+import '../../widget/presentation/schedule_controller.dart';
+import '../../../core/permissions/widget_readiness_controller.dart';
+import '../../widget/presentation/photo_sync_settings_screen.dart';
+import 'nickname_editor.dart';
 import 'pairing_controller.dart';
 
 /// Profile and the live pairing controls. Server identifiers intentionally do
 /// not appear here; this is a people-facing surface, not a debug console.
 class PairingScreen extends StatefulWidget {
-  const PairingScreen({super.key, required this.controller, this.account});
+  const PairingScreen({
+    super.key,
+    required this.controller,
+    this.account,
+    this.schedules,
+    this.readiness,
+  });
 
   final PairingController controller;
   final AccountController? account;
+  final ScheduleController? schedules;
+  final WidgetReadinessController? readiness;
 
   @override
   State<PairingScreen> createState() => _PairingScreenState();
@@ -88,6 +100,23 @@ class _PairingScreenState extends State<PairingScreen> {
                   busy: c.busy,
                   onPressed: () => _confirmSignOut(context),
                 ),
+                const SizedBox(height: AppSpacing.lg),
+                NicknameEditor(controller: c),
+                if (widget.schedules != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  OutlinedButton.icon(
+                    key: const Key('profile-settings'),
+                    onPressed: identical(widget.schedules!.pairing, c)
+                        ? () => openPhotoSyncSettings(
+                            context,
+                            schedules: widget.schedules!,
+                            readiness: widget.readiness,
+                          )
+                        : null,
+                    icon: const Icon(Icons.settings_outlined),
+                    label: const Text('Settings'),
+                  ),
+                ],
               ],
             ],
           ),

@@ -189,20 +189,21 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('hub-partner-updates')));
       await tester.pumpAndSettle();
+      expect(find.text('Set up photo syncing'), findsOneWidget);
       final allow = tester.widget<SwitchListTile>(
-        find.byKey(const Key('partner-updates-toggle')),
+        find.byKey(const Key('automatic-photo-sync-toggle')),
       );
       expect(allow.onChanged, isNotNull);
+      await tester.drag(find.byType(ListView).last, const Offset(0, -600));
+      await tester.pumpAndSettle();
       await tester.runAsync(() async {
-        await tester.tap(find.byKey(const Key('partner-updates-toggle')));
+        await tester.tap(find.byKey(const Key('photo-sync-finish')));
         await Future<void>.delayed(const Duration(milliseconds: 10));
       });
       await tester.pumpAndSettle();
       expect(repository.writes, [true]);
       expect(schedules.partnerUpdatesEnabled, isTrue);
       expect(service.access, NotificationAccess.denied);
-      await tester.tap(find.byTooltip('Close Photos from your partner'));
-      await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.byKey(const Key('hub-send-to-partner')),
         -150,

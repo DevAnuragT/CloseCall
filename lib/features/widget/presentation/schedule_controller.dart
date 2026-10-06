@@ -81,6 +81,27 @@ class ScheduleController extends ChangeNotifier {
   bool partnerUpdatesBusy = false;
   Object? partnerUpdatesError;
   bool _deviceConsentManaged = false;
+  bool _consentRestoring = false;
+  bool _consentRestored = false;
+  bool _photoSetupComplete = false;
+  bool? _requestedPartnerUpdates;
+  bool get restoringPartnerPhotoConsent => _consentRestoring;
+  bool get partnerPhotoConsentRestored => _consentRestored;
+  bool get partnerPhotoSetupComplete => _photoSetupComplete;
+  bool get needsPartnerPhotoSetup =>
+      canConfigurePartnerPhotos && !_photoSetupComplete;
+  bool get canConfigurePartnerPhotos =>
+      canSchedule &&
+      pairing.error == null &&
+      foreground &&
+      _consentRestored &&
+      !_consentRestoring &&
+      !partnerUpdatesBusy;
+  bool get effectivePartnerUpdatesEnabled =>
+      canSchedule &&
+      pairing.error == null &&
+      partnerUpdatesEnabled &&
+      ownTimeline?.autoUpdateEnabled == true;
   int _consentVersion = 0;
   int _restoreScope = -1;
   String? _observedUser;
@@ -186,6 +207,10 @@ class ScheduleController extends ChangeNotifier {
     partnerUpdatesBusy = false;
     partnerUpdatesError = null;
     _deviceConsentManaged = false;
+    _consentRestoring = false;
+    _consentRestored = false;
+    _photoSetupComplete = false;
+    _requestedPartnerUpdates = null;
     _streamBlocked = false;
     _reconnectFailures = 0;
     _stopListening();
@@ -376,6 +401,10 @@ class ScheduleController extends ChangeNotifier {
         return;
       }
       await consentStore.write(consent);
+      if (_consentCurrent(scope, version) && consent != null) {
+        _consentRestored = true;
+        _photoSetupComplete = true;
+      }
     });
   }
 
@@ -400,8 +429,23 @@ class ScheduleController extends ChangeNotifier {
   void _maybeRestoreConsent() {
     if (!canSchedule || _restoreScope == _scopeVersion) return;
     _restoreScope = _scopeVersion;
+    _consentRestoring = true;
+    _notify();
     unawaited(_restoreConsent(_scopeVersion, _consentVersion));
   }
+
+  /// A failed read is not an unset preference. Retry only on user action.
+  Future<void> retryPartnerPhotoConsent() async {
+    if (!canSchedule || _consentRestoring || partnerUpdatesBusy) return;
+    partnerUpdatesError = null;
+    _consentRestoring = true;
+    _notify();
+    await _restoreConsent(_scopeVersion, _consentVersion);
+  }
+
+  Future<void> retryPartnerUpdates() => _requestedPartnerUpdates == null
+      ? retryPartnerPhotoConsent()
+      : setPartnerUpdates(_requestedPartnerUpdates!);
 
   Future<void> _restoreConsent(int scope, int version) async {
     try {
@@ -414,13 +458,16 @@ class ScheduleController extends ChangeNotifier {
         allowPartnerPhoto: matches,
         scope: scope,
       );
-      if (!_consentCurrent(scope, version) || saved == null) return;
-      if (!saved.matches(pairing.userId!, pairing.couple!.id)) {
-        await _persistConsent(false, scope, version);
+      if (!_consentCurrent(scope, version)) return;
+      _consentRestored = true;
+      if (!matches) {
+        // Another account's preference is neither consent nor an explicit pause
+        // for this pair. Do not write false and suppress its first setup.
         return;
       }
+      _photoSetupComplete = true;
       _deviceConsentManaged = true;
-      if (!saved.enabled) return;
+      if (!saved!.enabled) return;
       final remote = await _deliveryRepository.getDeliveryState();
       if (!_consentCurrent(scope, version)) return;
       _validateDelivery(remote);
@@ -444,6 +491,11 @@ class ScheduleController extends ChangeNotifier {
         partnerUpdatesError = failure;
         _notify();
       }
+    } finally {
+      if (_consentCurrent(scope, version)) {
+        _consentRestoring = false;
+        _notify();
+      }
     }
   }
 
@@ -462,9 +514,18 @@ class ScheduleController extends ChangeNotifier {
   /// Explicit opt-in affects this account on the server and this device locally.
   /// Off always pauses the device immediately, even if server opt-out fails.
   Future<void> setPartnerUpdates(bool enabled) async {
-    if (_disposed) return;
+    if (_disposed ||
+        !canSchedule ||
+        pairing.error != null ||
+        !foreground ||
+        !_consentRestored ||
+        _consentRestoring) {
+      return;
+    }
     final scope = _scopeVersion;
     final version = ++_consentVersion;
+    _consentRestoring = false;
+    _requestedPartnerUpdates = enabled;
     partnerUpdatesBusy = true;
     partnerUpdatesError = null;
     _deviceConsentManaged = true;
@@ -479,6 +540,8 @@ class ScheduleController extends ChangeNotifier {
         // no delayed error escapes, and leave local pause in effect.
         final results = await Future.wait<Object?>([pause, persist, optOut]);
         if (!_current(scope) || version != _consentVersion) return;
+        _consentRestored = true;
+        _photoSetupComplete = true;
         final state = results.last as WidgetDeliveryState?;
         if (state != null) _validateDelivery(state);
         if (syncError != null) throw syncError!;
@@ -497,6 +560,8 @@ class ScheduleController extends ChangeNotifier {
       }
       await _persistConsent(true, scope, version);
       if (!_consentCurrent(scope, version)) return;
+      _consentRestored = true;
+      _photoSetupComplete = true;
       final timeline = await repository.currentTimeline();
       if (!_consentCurrent(scope, version)) return;
       _accept(timeline, own: true);
@@ -944,6 +1009,9 @@ class ScheduleController extends ChangeNotifier {
         autoSyncEnabled) {
       return;
     }
+    _consentRestoring = false;
+    _consentRestored = true;
+    _photoSetupComplete = canSchedule;
     if (syncError != null) throw syncError!;
     final sync = _syncVersion;
     await localWriter.write(
