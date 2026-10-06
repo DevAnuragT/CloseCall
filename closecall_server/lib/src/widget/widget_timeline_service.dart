@@ -9,6 +9,7 @@ import 'package:serverpod/protocol.dart' show FutureCallEntry;
 import '../generated/future_calls.dart';
 import '../generated/future_calls_generated_models/widget_timeline_future_call_wake_model.dart';
 import '../generated/protocol.dart';
+import '../push/push_outbox_dispatcher.dart';
 import 'widget_schedule_policy.dart';
 
 UuidValue? parseScheduleUuid(String value) {
@@ -194,6 +195,21 @@ class WidgetTimelineService {
         ),
         transaction: transaction,
       );
+      if (state.autoUpdateEnabled) {
+        // The invalidation is part of the same transaction as the committed
+        // display pointer and send record. A dispatcher crash cannot lose the
+        // durable event, and retries remain unique by send/version.
+        await PushOutbox.db.insertRow(
+          session,
+          PushOutbox(
+            coupleId: pair.coupleId,
+            sendId: row.id!,
+            recipientMemberId: pair.partner.id!,
+            version: state.version,
+          ),
+          transaction: transaction,
+        );
+      }
       return (
         receipt: _sendReceipt(row, pair.current, pair.partner),
         notify: state.autoUpdateEnabled,
@@ -206,6 +222,11 @@ class WidgetTimelineService {
         result.receipt.recipientId,
         deliveryVersion: result.receipt.version,
       );
+    }
+    if (result.notify) {
+      // This is a bounded, authenticated-request-owned wake-up only. The
+      // persisted outbox and lease runner provide recovery when FCM is down.
+      await PushOutboxRuntime.kick(session.serverpod);
     }
     return result.receipt;
   }

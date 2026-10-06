@@ -114,4 +114,48 @@ void main() {
       }
     },
   );
+  test(
+    'FCM outbox migration preserves its composite integrity and retry schema',
+    () {
+      const version = '20261006120000000-fcm-outbox';
+      final migration = db.DatabaseMigration.fromJson(
+        jsonDecode(
+          File('migrations/$version/migration.json').readAsStringSync(),
+        ),
+      );
+      expect(
+        migration.actions.map((action) => action.alterTable?.name),
+        containsAll(<String>['closecall_widget_send', 'closecall_push_outbox']),
+      );
+      final definition = db.DatabaseDefinition.fromJson(
+        jsonDecode(
+          File('migrations/$version/definition.json').readAsStringSync(),
+        ),
+      );
+      final outbox = definition.tables.singleWhere(
+        (table) => table.name == 'closecall_push_outbox',
+      );
+      expect(
+        outbox.foreignKeys.map((key) => key.constraintName),
+        containsAll(<String>[
+          'closecall_push_outbox_same_couple_send',
+          'closecall_push_outbox_same_couple_recipient',
+        ]),
+      );
+      final sql = File('migrations/$version/migration.sql').readAsStringSync();
+      expect(sql, contains('closecall_push_outbox_valid'));
+      expect(sql, contains('closecall_push_outbox_send_version_unique'));
+      expect(sql, contains(version));
+      final runtime = Protocol().getTargetTableDefinitions().singleWhere(
+        (table) => table.name == 'closecall_push_outbox',
+      );
+      expect(
+        runtime.foreignKeys.map((key) => key.constraintName),
+        containsAll(<String>[
+          'closecall_push_outbox_same_couple_send',
+          'closecall_push_outbox_same_couple_recipient',
+        ]),
+      );
+    },
+  );
 }

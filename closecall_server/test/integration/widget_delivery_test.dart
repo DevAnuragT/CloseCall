@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:clock/clock.dart';
 import 'package:closecall_server/src/generated/protocol.dart';
+import 'package:closecall_server/src/push/fcm_sender.dart';
+import 'package:closecall_server/src/push/push_outbox_dispatcher.dart';
 import 'package:closecall_server/src/widget/widget_schedule_endpoint.dart';
 import 'package:closecall_server/src/widget/widget_timeline_service.dart';
 import 'package:image/image.dart' as image;
@@ -14,6 +16,24 @@ import 'test_tools/serverpod_test_tools.dart';
 Matcher failure(String code) =>
     isA<ScheduleFailure>().having((e) => e.code, 'code', code);
 String uuid() => Uuid().v4();
+
+class _FakeFcmSender implements FcmSender {
+  _FakeFcmSender([Iterable<FcmSendStatus> statuses = const []])
+    : statuses = [...statuses];
+
+  final List<FcmSendStatus> statuses;
+  final calls = <({String token, int version})>[];
+
+  @override
+  Future<FcmSendResult> send({
+    required String token,
+    required int version,
+  }) async {
+    calls.add((token: token, version: version));
+    final status = statuses.isEmpty ? FcmSendStatus.sent : statuses.removeAt(0);
+    return FcmSendResult(status);
+  }
+}
 
 void main() {
   withServerpod(
@@ -278,6 +298,7 @@ void main() {
             await send('alice', asset.assetId);
             await Future<void>.delayed(const Duration(milliseconds: 100));
             expect(notices, isEmpty);
+            expect(await PushOutbox.db.count(builder.build()), 0);
             await endpoints.widgetSchedule.setDeliveryConsent(
               asUser('bob'),
               true,
@@ -294,6 +315,7 @@ void main() {
               'recipientId',
               'deliveryVersion',
             });
+            expect(await PushOutbox.db.count(builder.build()), 1);
             await send('alice', asset.assetId, request);
             await Future<void>.delayed(const Duration(milliseconds: 100));
             expect(notices, hasLength(1));
@@ -301,6 +323,109 @@ void main() {
             await subscription.cancel();
             await session.close();
           }
+        },
+      );
+
+      test(
+        'outbox leases, retries, revokes invalid tokens, and is idempotent',
+        () async {
+          await pair('alice', 'bob');
+          final asset = await photo('alice');
+          await endpoints.widgetSchedule.setDeliveryConsent(
+            asUser('bob'),
+            true,
+          );
+          await endpoints.push.registerDevice(
+            asUser('bob'),
+            token: 'opaque-token-for-outbox-1234567890',
+            deviceId: 'device',
+          );
+          final receipt = await send('alice', asset.assetId);
+          final session = builder.build();
+          final outbox = (await PushOutbox.db.find(session)).single;
+          expect(outbox.version, receipt.version);
+          expect(outbox.sendId.toString(), receipt.sendId);
+
+          final sender = _FakeFcmSender();
+          final dispatcher = PushOutboxDispatcher(
+            sender: sender,
+            owner: 'test-owner',
+            baseBackoff: Duration.zero,
+            maxBackoff: Duration.zero,
+          );
+          outbox.leasedUntil = DateTime.now().toUtc().add(
+            const Duration(minutes: 1),
+          );
+          outbox.leaseOwner = 'another-pod';
+          await PushOutbox.db.updateRow(session, outbox);
+          await dispatcher.reconcile(session.serverpod);
+          expect(sender.calls, isEmpty);
+          outbox.leasedUntil = DateTime.now().toUtc().subtract(
+            const Duration(seconds: 1),
+          );
+          outbox.leaseOwner = null;
+          await PushOutbox.db.updateRow(session, outbox);
+          await dispatcher.reconcile(session.serverpod);
+          expect(sender.calls, [
+            (token: 'opaque-token-for-outbox-1234567890', version: 1),
+          ]);
+          expect(
+            (await PushOutbox.db.find(session)).single.completedAt,
+            isNotNull,
+          );
+          await dispatcher.reconcile(session.serverpod);
+          expect(sender.calls, hasLength(1));
+
+          // A transient response clears the lease and is available again with
+          // the configured zero backoff; the second attempt completes it.
+          final second = await photo('alice', 11);
+          final secondReceipt = await send('alice', second.assetId);
+          final secondRow = (await PushOutbox.db.find(
+            session,
+            where: (t) => t.version.equals(secondReceipt.version),
+          )).single;
+          final retrySender = _FakeFcmSender([
+            FcmSendStatus.transientFailure,
+            FcmSendStatus.sent,
+          ]);
+          final retryDispatcher = PushOutboxDispatcher(
+            sender: retrySender,
+            owner: 'retry-owner',
+            baseBackoff: Duration.zero,
+            maxBackoff: Duration.zero,
+          );
+          await retryDispatcher.reconcile(session.serverpod, maxRows: 1);
+          expect(
+            (await PushOutbox.db.findById(session, secondRow.id!))!.completedAt,
+            isNull,
+          );
+          await retryDispatcher.reconcile(session.serverpod, maxRows: 1);
+          expect(retrySender.calls, hasLength(2));
+          expect(
+            (await PushOutbox.db.findById(session, secondRow.id!))!.completedAt,
+            isNotNull,
+          );
+
+          // FCM UNREGISTERED is terminal for the device, not the committed
+          // send. The event still completes after revoking that registration.
+          final third = await photo('alice', 12);
+          await send('alice', third.assetId);
+          final invalidSender = _FakeFcmSender([FcmSendStatus.invalidToken]);
+          await PushOutboxDispatcher(
+            sender: invalidSender,
+            owner: 'invalid-owner',
+          ).reconcile(session.serverpod);
+          final registration = await PushDeviceRegistration.db.findFirstRow(
+            session,
+          );
+          expect(registration?.revokedAt, isNotNull);
+          expect(
+            (await PushOutbox.db.find(
+              session,
+            )).where((row) => row.version == 3).single.completedAt,
+            isNotNull,
+          );
+          await session.close();
         },
       );
 
@@ -331,6 +456,7 @@ void main() {
               throwsA(isA<DatabaseException>()),
             );
             expect(await WidgetSendRecord.db.count(session), 0);
+            expect(await PushOutbox.db.count(session), 0);
             expect(
               (await endpoints.widgetSchedule.getDeliveryState(
                 asUser('bob'),

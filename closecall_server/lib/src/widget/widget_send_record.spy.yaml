@@ -17,3 +17,8 @@ indexes:
   closecall_widget_send_request_unique:
     fields: coupleId, requestId
     unique: true
+  # Supports the outbox same-couple composite FK. The UUID id is already
+  # globally unique, but PostgreSQL requires a matching unique constraint.
+  closecall_widget_send_couple_id_unique:
+    fields: coupleId, id
+    unique: true

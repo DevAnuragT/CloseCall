@@ -1,0 +1,24 @@
+class: PushOutbox
+table: closecall_push_outbox
+serverOnly: true
+# Same-couple send/member integrity and terminal-state checks are preserved in
+# the migration and runtime schema wrapper. Do not remove them from artifacts.
+fields:
+  id: UuidValue?, defaultPersist=random
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  sendId: UuidValue, relation(parent=closecall_widget_send, onDelete=Cascade)
+  recipientMemberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  version: int
+  createdAt: DateTime, default=now
+  attempts: int, default=0
+  availableAt: DateTime, default=now
+  leasedUntil: DateTime?
+  leaseOwner: String?
+  completedAt: DateTime?
+  lastError: String?
+indexes:
+  closecall_push_outbox_send_version_unique:
+    fields: sendId, version
+    unique: true
+  closecall_push_outbox_ready_idx:
+    fields: completedAt, availableAt

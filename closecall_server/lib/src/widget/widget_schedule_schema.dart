@@ -34,37 +34,66 @@ List<ForeignKeyDefinition> pushRegistrationForeignKeys() => [
   ),
 ];
 
+List<ForeignKeyDefinition> pushOutboxForeignKeys() => [
+  ForeignKeyDefinition(
+    constraintName: 'closecall_push_outbox_same_couple_send',
+    columns: ['coupleId', 'sendId'],
+    referenceTable: 'closecall_widget_send',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+  ForeignKeyDefinition(
+    constraintName: 'closecall_push_outbox_same_couple_recipient',
+    columns: ['coupleId', 'recipientMemberId'],
+    referenceTable: 'closecall_couple_member',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+];
+
 List<TableDefinition> withScheduleConstraints(
   List<TableDefinition> tables,
 ) => tables.map((table) {
-  final isScheduleTable = table.name == 'closecall_widget_schedule' ||
+  final isScheduleTable =
+      table.name == 'closecall_widget_schedule' ||
       table.name == 'closecall_widget_fallback' ||
       table.name == 'closecall_widget_delivery' ||
       table.name == 'closecall_widget_send';
   final isPushTable = table.name == 'closecall_push_device_registration';
-  if (!isScheduleTable && !isPushTable) {
+  final isPushOutboxTable = table.name == 'closecall_push_outbox';
+  if (!isScheduleTable && !isPushTable && !isPushOutboxTable) {
     return table;
   }
   // Serverpod 4.0.3's PostgresAnalyzer resolves conkey/confkey without WITH
   // ORDINALITY/ORDER BY and reports each side in physical column order. This
   // view is ONLY for runtime verification, not SQL/artifact generation. The
   // canonical definitions above retain correct paired FK column ordering.
-  final additional = (isPushTable
-          ? pushRegistrationForeignKeys()
-          : scheduleForeignKeys(table.name))
-      .map((key) {
-    final parent = tables.singleWhere((t) => t.name == key.referenceTable);
-    return key.copyWith(
-      columns: table.columns
-          .map((c) => c.name)
-          .where(key.columns.contains)
-          .toList(),
-      referenceColumns: parent.columns
-          .map((c) => c.name)
-          .where(key.referenceColumns.contains)
-          .toList(),
-    );
-  }).toList();
+  final additional =
+      (isPushTable
+              ? pushRegistrationForeignKeys()
+              : isPushOutboxTable
+              ? pushOutboxForeignKeys()
+              : scheduleForeignKeys(table.name))
+          .map((key) {
+            final parent = tables.singleWhere(
+              (t) => t.name == key.referenceTable,
+            );
+            return key.copyWith(
+              columns: table.columns
+                  .map((c) => c.name)
+                  .where(key.columns.contains)
+                  .toList(),
+              referenceColumns: parent.columns
+                  .map((c) => c.name)
+                  .where(key.referenceColumns.contains)
+                  .toList(),
+            );
+          })
+          .toList();
   return table.copyWith(
     foreignKeys: [
       ...table.foreignKeys.where(

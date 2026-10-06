@@ -947,8 +947,10 @@ void main() {
           // Inside an ephemeral database only: reproduce the prior scheduling
           // actions on a real pre-scheduling schema, not the happy fresh-install SQL.
           await session.db.unsafeSimpleExecute(
-             'DROP TABLE closecall_push_device_registration; '
-             'DROP TABLE closecall_widget_schedule, closecall_widget_fallback, closecall_widget_delivery, closecall_widget_send; '
+            'DROP TABLE closecall_push_outbox; '
+            'DROP TABLE closecall_push_device_registration; '
+            'DROP TABLE closecall_widget_schedule, closecall_widget_fallback, closecall_widget_delivery, closecall_widget_send; '
+            'DROP INDEX IF EXISTS closecall_widget_send_couple_id_unique; '
             'DROP INDEX closecall_member_couple_id_unique; DROP INDEX closecall_media_couple_asset_unique;',
           );
           final generator = PostgresSqlGenerator();
@@ -970,12 +972,13 @@ void main() {
             Directory.current,
             runMode: 'test',
           );
-           expect(await manager.migrateToLatest(session), [
-             repair,
-             '20261005132731105',
+          expect(await manager.migrateToLatest(session), [
+            repair,
+            '20261005132731105',
             '20261005201637360-push-registration',
             '20261006081030595-nicknames',
-           ]);
+            '20261006120000000-fcm-outbox',
+          ]);
           expect(
             await database.MigrationManager.verifyDatabaseIntegrity(session),
             isTrue,
