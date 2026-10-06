@@ -110,6 +110,25 @@ Deploy with the existing isolated Cloud CLI, specifying
 and project `closecall`. Always review `deploy --wet-run --show-files --output
 <ignored-zip-path>` first. Root/server `.scloudignore` intentionally deny direct
 repository uploads; only the generated deployment workspace is allowlisted.
+
+The Cloud CLI is kept workspace-local so it does not change the machine-wide
+Dart/Flutter toolchain:
+
+```sh
+export PATH="$PWD/.tooling/flutter/bin:$PWD/.tooling/pub-cache/bin:$PATH"
+export PUB_CACHE="$PWD/.tooling/pub-cache"
+dart pub global activate serverpod_cloud_cli 1.0.1
+scloud --no-analytics auth login
+python3 scripts/prepare_cloud_deploy.py --replace
+(cd .tooling/cloud-deploy && ../flutter/bin/dart pub get --offline)
+scloud --no-analytics --project-dir .tooling/cloud-deploy/closecall_server \
+  deploy --project closecall --wet-run --show-files \
+  --output .tooling/closecall-deploy.zip
+```
+
+After reviewing the wet run, repeat the final `scloud deploy` command without
+`--wet-run` to upload. Tagged migration directories are included by the staging
+allowlist; do not deploy the repository root directly.
 The stage bundles the shared resolver as a Dart workspace, strips dev
 dependencies, preserves pinned runtime versions, and excludes all private
 configs, inbox attachments, SDKs, logs and databases. No code-generation hooks
