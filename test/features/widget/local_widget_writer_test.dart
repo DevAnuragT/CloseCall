@@ -17,6 +17,78 @@ Map<String, Object?> payload(Uint8List photo) => {
 
 void main() {
   test(
+    'optional validated restoration keeps owned display and writes stable ownership',
+    () async {
+      final events = <String>[];
+      final native = FakeRestoringTimeline(events)
+        ..ownerScope = 'me/couple'
+        ..ownerAsset = 'fallback'
+        ..displayed = testPng;
+      final writer = LocalWidgetWriter(
+        timeline: native,
+        applyPhoto: (photo) async {
+          native.displayed = photo;
+          events.add('apply');
+        },
+        clearPhoto: () async => events.add('clear-photo'),
+      );
+      await writer.suspendForStartup();
+      final restored = await writer.restoreValidatedScope(
+        'me/couple',
+        allowPartnerPhoto: true,
+      );
+      expect(restored!.bytes, testPng);
+      expect(events, ['suspend', 'restore']);
+      await writer.write(testPng, assetId: 'new', isCurrent: () => true);
+      expect(native.ownerScope, 'me/couple');
+      expect(native.ownerAsset, 'new');
+      writer.dispose();
+    },
+  );
+
+  test(
+    'identity switch after a started restored-scope write clears its original ownership last',
+    () async {
+      final events = <String>[];
+      final native = FakeRestoringTimeline(events)
+        ..ownerScope = 'old/couple'
+        ..displayed = testPng;
+      final pending = Completer<void>();
+      final writer = LocalWidgetWriter(
+        timeline: native,
+        applyPhoto: (photo) async {
+          events.add('apply-start');
+          await pending.future;
+          native.displayed = photo;
+          events.add('apply-done');
+        },
+        clearPhoto: () async => events.add('clear-photo'),
+      );
+      await writer.restoreValidatedScope(
+        'old/couple',
+        allowPartnerPhoto: false,
+      );
+      events.clear();
+      final write = writer.write(testPng, isCurrent: () => true);
+      await Future<void>.delayed(Duration.zero);
+      final clearing = writer.setScope('new/couple');
+      pending.complete();
+      expect(await write, isFalse);
+      await clearing;
+      expect(events, [
+        'apply-start',
+        'apply-done',
+        'record-owner',
+        'clear-timeline',
+        'clear-photo',
+      ]);
+      expect(native.ownerScope, isNull);
+      expect(native.displayed, isNull);
+      writer.dispose();
+    },
+  );
+
+  test(
     'writer shared queue skips queued stale cache and clears after started manual write',
     () async {
       final events = <String>[];

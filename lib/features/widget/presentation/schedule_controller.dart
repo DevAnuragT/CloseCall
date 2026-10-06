@@ -90,6 +90,7 @@ class ScheduleController extends ChangeNotifier {
   Future<void> _deliveryTail = Future.value();
   bool busy = false;
   bool syncing = false;
+  bool downloadingNewPhoto = false;
   Object? error;
   Object? streamError;
   Object? syncError;
@@ -120,6 +121,8 @@ class ScheduleController extends ChangeNotifier {
   static const maxCachedSchedules = 100;
   static const nativeCacheTtl = Duration(hours: 24);
   bool _scopeInitialized = false;
+  String? _nativeValidatedScope;
+  String? _nativeValidatedUser;
   bool get backgroundCacheSupported => localWriter.timeline.supported;
   int get cachedAssetCount => _cache.length;
   Uint8List? get currentPhoto => _cache[ownCurrentAssetId];
@@ -158,6 +161,19 @@ class ScheduleController extends ChangeNotifier {
     if (_disposed) return;
     _observeConsentIdentity();
     if (_scopeInitialized && _scope == _currentScope) {
+      // Secure signed-out completion and loaded-unpaired completion can keep
+      // the same logical scope string. They still decide native privacy.
+      if (localWriter.supportsRestoration) {
+        final scope = _scopeVersion;
+        unawaited(
+          _prepareNativeScope().catchError((Object failure) {
+            if (_current(scope)) {
+              syncError = failure;
+              _notify();
+            }
+          }),
+        );
+      }
       _maybeRestoreConsent();
       return;
     }
@@ -176,6 +192,7 @@ class ScheduleController extends ChangeNotifier {
     autoSyncEnabled = false;
     busy = false;
     syncing = false;
+    downloadingNewPhoto = false;
     error = streamError = syncError = null;
     status = null;
     ownTimeline = partnerTimeline = null;
@@ -190,7 +207,7 @@ class ScheduleController extends ChangeNotifier {
     pendingCreate = null;
     _retry = null;
     unawaited(
-      localWriter.setScope(_scope).catchError((Object failure) {
+      _prepareNativeScope().catchError((Object failure) {
         if (_current(scope)) {
           syncError = failure;
           _notify();
@@ -207,6 +224,92 @@ class ScheduleController extends ChangeNotifier {
 
   String? get _stableConsentScope =>
       canSchedule ? '${pairing.userId}/${pairing.couple!.id}' : null;
+
+  Future<void> _prepareNativeScope() async {
+    final scope = _scopeVersion;
+    if (!localWriter.supportsRestoration) {
+      await localWriter.setScope(_scope);
+      return;
+    }
+    final stable = _stableConsentScope;
+    final resolved = pairing.initialized && pairing.hasLoadedPairing;
+    final localScope =
+        stable ??
+        (resolved && pairing.userId != null
+            ? '${pairing.userId}/unpaired'
+            : null);
+    if (_nativeValidatedScope != null &&
+        (_nativeValidatedUser != pairing.userId ||
+            (resolved && _nativeValidatedScope != localScope))) {
+      _nativeValidatedScope = null;
+      _nativeValidatedUser = null;
+      await localWriter.setScope(null);
+      if (!_current(scope)) return;
+    }
+    if (pairing.initialized && pairing.userId == null) {
+      await localWriter.setScope(null);
+      return;
+    }
+    if (!canSchedule && pairing.error != null) {
+      // Holding an owned image during in-flight startup validation is not an
+      // offline authorization fallback. Failed auth/membership validation
+      // cannot keep another process's private partner photo.
+      await localWriter.setScope(null);
+      return;
+    }
+    await localWriter.suspendForStartup();
+    if (!_current(scope)) return;
+    // An intermediate authenticated-but-not-loaded phase is not an unpaired
+    // owner. Paired restoration waits for device consent below.
+    if (resolved && !canSchedule && localScope != null) {
+      await _restoreNativePhoto(
+        localScope,
+        allowPartnerPhoto: false,
+        scope: scope,
+      );
+    }
+  }
+
+  Future<void> _restoreNativePhoto(
+    String stable, {
+    required bool allowPartnerPhoto,
+    required int scope,
+  }) async {
+    if (!localWriter.supportsRestoration || !_current(scope)) return;
+    _nativeValidatedScope = stable;
+    _nativeValidatedUser = pairing.userId;
+    final restored = await localWriter.restoreValidatedScope(
+      stable,
+      allowPartnerPhoto: allowPartnerPhoto,
+    );
+    if (!_current(scope) || restored == null) return;
+    final id = restored.assetId;
+    if (id != null) {
+      validateUploadPng(restored.bytes);
+      _cache[id] = Uint8List.fromList(restored.bytes);
+      _appliedAsset = id;
+    }
+    _notify();
+  }
+
+  void _revokePrivatePhoto(int scope) {
+    if (!_current(scope)) return;
+    _syncVersion++;
+    autoSyncEnabled = false;
+    syncing = downloadingNewPhoto = false;
+    _cache.clear();
+    _appliedAsset = null;
+    // A denied private read is not an offline transport error. Never preserve
+    // the old partner image just to avoid a startup redraw.
+    unawaited(
+      localWriter.setScope(null).catchError((Object failure) {
+        if (_current(scope)) {
+          syncError = failure;
+          _notify();
+        }
+      }),
+    );
+  }
 
   // Do not erase persisted consent while secure startup is still signed out.
   // Once an identity was observed, sign-out/switch/re-pair invalidates it.
@@ -303,6 +406,14 @@ class ScheduleController extends ChangeNotifier {
   Future<void> _restoreConsent(int scope, int version) async {
     try {
       final saved = await _enqueueConsent(consentStore.read);
+      if (!_consentCurrent(scope, version)) return;
+      final matches =
+          saved?.matches(pairing.userId!, pairing.couple!.id) == true;
+      await _restoreNativePhoto(
+        _stableConsentScope!,
+        allowPartnerPhoto: matches,
+        scope: scope,
+      );
       if (!_consentCurrent(scope, version) || saved == null) return;
       if (!saved.matches(pairing.userId!, pairing.couple!.id)) {
         await _persistConsent(false, scope, version);
@@ -317,7 +428,8 @@ class ScheduleController extends ChangeNotifier {
         await _persistConsent(false, scope, version);
         return;
       }
-      // Fetch fresh truth after validated restoration; never apply startup cache.
+      // The owned display may survive validation, but old alarms stay paused.
+      // Only fresh recipient truth can republish a running native timeline.
       final timeline = await repository.currentTimeline();
       if (!_consentCurrent(scope, version)) return;
       _accept(timeline, own: true);
@@ -328,6 +440,7 @@ class ScheduleController extends ChangeNotifier {
       await setAutoSync(true);
     } catch (failure) {
       if (_consentCurrent(scope, version)) {
+        if (_privateFailure(failure)) _revokePrivatePhoto(scope);
         partnerUpdatesError = failure;
         _notify();
       }
@@ -370,7 +483,7 @@ class ScheduleController extends ChangeNotifier {
         if (state != null) _validateDelivery(state);
         if (syncError != null) throw syncError!;
         status =
-            'Partner updates paused on this device; account delivery consent is off. The current photo is unchanged.';
+            'Photos from your partner are paused. Your current photo stays.';
         return;
       }
       if (!canSchedule) {
@@ -474,6 +587,7 @@ class ScheduleController extends ChangeNotifier {
     if (old != null) unawaited(old.cancel().catchError((Object _) {}));
     streamError = failure;
     _streamBlocked = _privateFailure(failure);
+    if (_streamBlocked) _revokePrivatePhoto(scope);
     _scheduleReconnect();
     _notify();
   }
@@ -510,6 +624,7 @@ class ScheduleController extends ChangeNotifier {
     foreground = value;
     _syncVersion++;
     syncing = false;
+    downloadingNewPhoto = false;
     if (!value) {
       _stopListening();
     } else if (canSchedule) {
@@ -540,7 +655,10 @@ class ScheduleController extends ChangeNotifier {
       await action(scope, operation);
       if (_current(scope) && operation == _operationVersion) _retry = null;
     } catch (failure) {
-      if (_current(scope) && operation == _operationVersion) error = failure;
+      if (_current(scope) && operation == _operationVersion) {
+        error = failure;
+        if (_privateFailure(failure)) _revokePrivatePhoto(scope);
+      }
     } finally {
       if (_current(scope) && operation == _operationVersion) {
         busy = false;
@@ -640,7 +758,7 @@ class ScheduleController extends ChangeNotifier {
           }),
         );
         status =
-            'Account delivery consent is off. Partner updates are paused on this device.';
+            'Photos from your partner are paused. Your current photo stays.';
       }
       if (!unchanged && autoSyncEnabled) {
         final scope = _scopeVersion;
@@ -752,14 +870,13 @@ class ScheduleController extends ChangeNotifier {
     autoSyncEnabled = enabled;
     _syncVersion++;
     syncing = false;
+    downloadingNewPhoto = false;
     syncError = null;
-    _appliedAsset = null;
+    // Retain a verified restored/current asset marker across pause/resume.
     _appliedEmpty = false;
     status = enabled
-        ? (backgroundCacheSupported
-              ? 'Auto-sync enabled for this account and couple: foreground sync and cached Android transitions.'
-              : 'Foreground auto-sync enabled. Background cache is unavailable on this platform.')
-        : 'Auto-sync off. The current local photo is left unchanged.';
+        ? 'Ready'
+        : 'Photos from your partner are paused. Your current photo stays.';
     _notify();
     if (!enabled) {
       _reconnectTimer?.cancel();
@@ -779,6 +896,19 @@ class ScheduleController extends ChangeNotifier {
       }
     }
     if (enabled && foreground) {
+      final scope = _scopeVersion;
+      final sync = _syncVersion;
+      if (localWriter.supportsRestoration && _nativeValidatedScope == null) {
+        await _restoreNativePhoto(
+          _stableConsentScope!,
+          allowPartnerPhoto: false,
+          scope: scope,
+        );
+      }
+      if (localWriter.supportsRestoration && _nativeValidatedScope != null) {
+        await localWriter.setScope(_nativeValidatedScope);
+      }
+      if (!_current(scope) || sync != _syncVersion || !autoSyncEnabled) return;
       _subscribe();
       if (streamError != null) _scheduleReconnect();
       if (ownTimeline == null) await refresh();
@@ -792,6 +922,18 @@ class ScheduleController extends ChangeNotifier {
     final consentVersion = ++_consentVersion;
     partnerUpdatesBusy = false;
     partnerUpdatesError = null;
+    if (localWriter.supportsRestoration) {
+      if (!pairing.initialized ||
+          !pairing.hasLoadedPairing ||
+          pairing.userId == null) {
+        throw StateError(
+          'Wait for your account to finish loading before changing the widget.',
+        );
+      }
+      final stable = _stableConsentScope ?? '${pairing.userId}/unpaired';
+      await _restoreNativePhoto(stable, allowPartnerPhoto: false, scope: scope);
+      if (!_current(scope) || consentVersion != _consentVersion) return;
+    }
     // Manual choice explicitly pauses auto-sync, preventing a later stream
     // event or already queued automatic write from overwriting that choice.
     final pause = setAutoSync(false);
@@ -812,6 +954,10 @@ class ScheduleController extends ChangeNotifier {
           sync == _syncVersion &&
           !autoSyncEnabled,
     );
+    if (_current(scope) && consentVersion == _consentVersion) {
+      _appliedAsset = null;
+      _appliedEmpty = false;
+    }
   }
 
   Future<void> syncNow() {
@@ -874,6 +1020,7 @@ class ScheduleController extends ChangeNotifier {
         if (_appliedAsset != currentAsset) {
           final applied = await localWriter.write(
             photo,
+            assetId: currentAsset,
             isCurrent: () =>
                 _syncCurrent(scope, sync) &&
                 _asset(_resolve(ownTimeline!, serverNow)) == currentAsset,
@@ -981,13 +1128,11 @@ class ScheduleController extends ChangeNotifier {
             if (!_syncCurrent(scope, sync)) return;
             if (applied) {
               _nativeCachedTimeline = ownTimeline;
-              status =
-                  'Own Android timeline cached for up to 24h. OS may delay transitions; reconnect for new, changed or cancelled schedules.';
+              status = 'Ready';
             }
           }
         } else {
-          status =
-              'Own timeline applied locally while the app is open. Background cache is unavailable on this platform.';
+          status = 'Ready';
         }
         if (_syncCurrent(scope, sync)) {
           _lastSyncedTimeline = ownTimeline;
@@ -995,10 +1140,14 @@ class ScheduleController extends ChangeNotifier {
         }
       }
     } catch (failure) {
-      if (_syncCurrent(scope, sync)) syncError = failure;
+      if (_syncCurrent(scope, sync)) {
+        syncError = failure;
+        if (_privateFailure(failure)) _revokePrivatePhoto(scope);
+      }
     } finally {
       if (_syncCurrent(scope, sync)) {
         syncing = false;
+        downloadingNewPhoto = false;
         _notify();
       }
     }
@@ -1007,7 +1156,21 @@ class ScheduleController extends ChangeNotifier {
   Future<Uint8List?> _download(String assetId, int scope, int sync) async {
     final cached = _cache[assetId];
     if (cached != null) return cached;
-    final photo = await mediaRepository.downloadPhoto(assetId);
+    final showProgress =
+        assetId == ownCurrentAssetId && assetId != _appliedAsset;
+    if (showProgress && _syncCurrent(scope, sync)) {
+      downloadingNewPhoto = true;
+      _notify();
+    }
+    late final Uint8List photo;
+    try {
+      photo = await mediaRepository.downloadPhoto(assetId);
+    } finally {
+      if (showProgress && _syncCurrent(scope, sync)) {
+        downloadingNewPhoto = false;
+        _notify();
+      }
+    }
     if (!_syncCurrent(scope, sync)) return null;
     validateUploadPng(photo);
     if (_cache.length >= maxCachedAssets) _cache.remove(_cache.keys.first);
@@ -1060,8 +1223,7 @@ class ScheduleController extends ChangeNotifier {
       );
     }
     pendingCreate = null;
-    status =
-        'Scheduled for your partner. Their device needs its own auto-sync opt-in and reconnect to receive changes.';
+    status = 'Scheduled for your partner.';
     final timeline = await repository.partnerTimeline();
     if (_operationCurrent(scope, operation)) _accept(timeline, own: false);
   }, () => pendingCreate == null ? refresh() : retryCreate());
@@ -1070,8 +1232,7 @@ class ScheduleController extends ChangeNotifier {
     final timeline = await repository.setFallback(assetId);
     if (!_operationCurrent(scope, operation)) return;
     _accept(timeline, own: true);
-    status =
-        'Saved your own fallback. Local changes require auto-sync and reconnect.';
+    status = 'Your default photo is saved.';
   }, () => setOwnFallback(assetId));
 
   bool canCancel(WidgetScheduleEntry entry) =>
@@ -1096,7 +1257,7 @@ class ScheduleController extends ChangeNotifier {
         if (!_operationCurrent(scope, operation)) return;
         _accept(timelines[0], own: true);
         _accept(timelines[1], own: false);
-        status = 'Schedule cancelled. Foreground timelines refreshed.';
+        status = 'Schedule cancelled.';
       }, () => cancelSchedule(entry));
 
   Future<void> retry() async {

@@ -19,6 +19,49 @@ class LocalWidgetWriter {
   bool _disposed = false;
   bool _scopeInitialized = false;
   bool _needsCleanup = true;
+  bool _startupSuspended = false;
+  bool get supportsRestoration =>
+      timeline is ScopedWidgetRestoration && timeline.supported;
+
+  /// Pause old alarms while secure auth and membership are unresolved. This
+  /// does not authorize reuse or new writes; native code rejects unowned data.
+  Future<void> suspendForStartup() {
+    if (_disposed || _startupSuspended || !supportsRestoration) {
+      return Future.value();
+    }
+    _startupSuspended = true;
+    final result = _tail.then(
+      (_) => (timeline as ScopedWidgetRestoration).suspendForStartup(),
+    );
+    _tail = result.catchError((Object _) {});
+    return result;
+  }
+
+  Future<RestoredWidgetPhoto?> restoreValidatedScope(
+    String scope, {
+    required bool allowPartnerPhoto,
+  }) {
+    if (_disposed) return Future.value();
+    if (_scopeInitialized || !supportsRestoration) {
+      return setScope(scope).then((_) => null);
+    }
+    _scopeInitialized = true;
+    _scope = scope;
+    final revision = ++_revision;
+    final result = _tail.then((_) async {
+      if (_disposed || revision != _revision) return null;
+      final restored = await (timeline as ScopedWidgetRestoration).restoreScope(
+        scope,
+        allowPartnerPhoto: allowPartnerPhoto,
+      );
+      if (_disposed || revision != _revision) return null;
+      // The native operation has either verified ownership or cleared it.
+      _needsCleanup = false;
+      return restored;
+    });
+    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
+  }
 
   Future<void> setScope(String? scope) {
     if (_disposed || (_scopeInitialized && _scope == scope)) {
@@ -46,14 +89,27 @@ class LocalWidgetWriter {
     if (revision == _revision) _needsCleanup = false;
   }
 
-  Future<bool> write(Uint8List photo, {required bool Function() isCurrent}) {
+  Future<bool> write(
+    Uint8List photo, {
+    required bool Function() isCurrent,
+    String? assetId,
+  }) {
     final revision = _revision;
+    final ownerScope = _scope;
     final copy = Uint8List.fromList(photo);
     final result = _tail.then((_) async {
       if (_disposed || revision != _revision || !isCurrent()) return false;
       if (_needsCleanup) await _cleanup(revision);
       if (_disposed || revision != _revision || !isCurrent()) return false;
       await applyPhoto(copy);
+      if (supportsRestoration && ownerScope != null) {
+        // Queue ordering ensures an explicit identity change clears this write
+        // afterwards, even when the platform write had already started.
+        await (timeline as ScopedWidgetRestoration).recordPhotoOwner(
+          ownerScope,
+          assetId: assetId,
+        );
+      }
       return !_disposed && revision == _revision && isCurrent();
     });
     _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
@@ -83,6 +139,7 @@ class LocalWidgetWriter {
       if (serverNow != null) {
         snapshot['serverTimeMs'] = serverNow().millisecondsSinceEpoch;
       }
+      if (supportsRestoration) snapshot['scope'] = _scope;
       return timeline.cacheTimeline(snapshot);
     }, isCurrent: isCurrent);
   }

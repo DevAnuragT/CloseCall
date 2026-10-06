@@ -106,4 +106,65 @@ class WidgetTimelineDeviceTest {
         assertNull(path())
         assertFalse(pointer.exists())
     }
+
+    private fun restore(scope: String = "me/couple", allowPartner: Boolean = true) =
+        WidgetTimelineStore.restoreScope(context, mapOf("scope" to scope, "allowPartnerPhoto" to allowPartner))
+
+    @Test fun validatedRelaunchRetainsOwnedDisplayButPausesOldAlarmsAndDoesNotRenewTtl() {
+        val now = System.currentTimeMillis()
+        cache(payload(now, now + 100).toMutableMap().apply { put("scope", "me/couple") })
+        val original = path()
+        val owner = File(context.noBackupFilesDir, "widget_timeline/owner.json")
+        val originalAnchor = JSONObject(owner.readText()).getLong("receivedServerTimeMs")
+        WidgetTimelineStore.suspendForStartup(context)
+        assertEquals(original, path())
+        assertArrayEquals(surpriseBytes, restore()!!["bytes"] as ByteArray)
+        Thread.sleep(150)
+        WidgetTimelineStore.refresh(context)
+        assertEquals(original, path()) // expired schedule cannot run while identity validation is pending
+        assertEquals(originalAnchor, JSONObject(owner.readText()).getLong("receivedServerTimeMs"))
+    }
+
+    @Test fun mismatchedOwnerOrMissingDeviceConsentClearsPartnerDisplay() {
+        cache(payload(System.currentTimeMillis()).toMutableMap().apply { put("scope", "me/couple") })
+        WidgetTimelineStore.suspendForStartup(context)
+        assertNull(restore("me/new-couple"))
+        assertNull(path())
+        cache(payload(System.currentTimeMillis()).toMutableMap().apply { put("scope", "me/couple") })
+        assertNull(restore(allowPartner = false))
+        assertNull(path())
+    }
+
+    @Test fun unknownLegacyOwnerAndInvalidOrExpiredCacheClearAtStartup() {
+        cache(payload(System.currentTimeMillis()))
+        File(context.noBackupFilesDir, "widget_timeline/owner.json").delete()
+        WidgetTimelineStore.suspendForStartup(context)
+        assertNull(path())
+        cache(payload(System.currentTimeMillis()))
+        File(context.noBackupFilesDir, "widget_timeline/active.json").writeText("invalid")
+        WidgetTimelineStore.suspendForStartup(context)
+        assertNull(path())
+        cache(payload(System.currentTimeMillis()))
+        val owner = File(context.noBackupFilesDir, "widget_timeline/owner.json")
+        val json = JSONObject(owner.readText())
+        json.put("receivedServerTimeMs", json.getLong("serverTimeMs") - WidgetTimelinePolicy.TTL_MS - 1)
+        owner.writeText(json.toString())
+        WidgetTimelineStore.suspendForStartup(context)
+        assertNull(path())
+    }
+
+    @Test fun scopedManualPhotoAndPauseSurviveSameIdentityRelaunch() {
+        val file = File(context.filesDir, "widget_123456789_1.png")
+        try {
+            file.writeBytes(fallbackBytes)
+            prefs().edit().putString(WidgetTimelineStore.IMAGE_PATH, file.absolutePath).commit()
+            WidgetTimelineStore.recordPhotoOwner(context, mapOf("scope" to "me/unpaired", "assetId" to null))
+            WidgetTimelineStore.suspendForStartup(context)
+            assertArrayEquals(fallbackBytes, restore("me/unpaired", false)!!["bytes"] as ByteArray)
+            assertEquals(file.absolutePath, path())
+            assertFalse(prefs().getBoolean("closecall_timeline_enabled", false))
+            assertNull(restore("other/unpaired", false))
+            assertNull(path())
+        } finally { file.delete() }
+    }
 }

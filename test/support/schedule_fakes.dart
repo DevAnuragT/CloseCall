@@ -160,6 +160,58 @@ class FakeNativeTimeline implements NativeWidgetTimeline {
   }
 }
 
+/// Only restoration-focused tests opt into the new Android capability.
+class FakeRestoringTimeline extends FakeNativeTimeline
+    implements ScopedWidgetRestoration {
+  FakeRestoringTimeline(super.events);
+  String? ownerScope;
+  String? ownerAsset;
+  Uint8List? displayed;
+  bool fresh = true;
+  bool suspended = false;
+  final restoredScopes = <String>[];
+
+  @override
+  Future<void> suspendForStartup() async {
+    events.add('suspend');
+    suspended = true;
+  }
+
+  @override
+  Future<RestoredWidgetPhoto?> restoreScope(
+    String scope, {
+    required bool allowPartnerPhoto,
+  }) async {
+    restoredScopes.add(scope);
+    events.add('restore');
+    if (!fresh ||
+        ownerScope != scope ||
+        displayed == null ||
+        (ownerAsset != null && !allowPartnerPhoto)) {
+      await clearTimeline();
+      return null;
+    }
+    return RestoredWidgetPhoto(
+      assetId: ownerAsset,
+      bytes: Uint8List.fromList(displayed!),
+    );
+  }
+
+  @override
+  Future<void> recordPhotoOwner(String scope, {String? assetId}) async {
+    events.add('record-owner');
+    ownerScope = scope;
+    ownerAsset = assetId;
+  }
+
+  @override
+  Future<void> clearTimeline() async {
+    await super.clearTimeline();
+    displayed = null;
+    ownerScope = ownerAsset = null;
+  }
+}
+
 class ScheduleHarness {
   final auth = FakeAuth();
   final couples = FakeCouples();

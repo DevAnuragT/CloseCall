@@ -8,9 +8,12 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Before Flutter restores auth, prevent a wake from applying an old
+        // couple's timeline. Fresh owned display may remain during validation.
+        WidgetTimelineStore.suspendForStartup(applicationContext)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "closecall/widget_timeline")
             .setMethodCallHandler { call, result ->
-                if (call.method !in setOf("cacheTimeline", "disableTimeline", "clearTimeline")) {
+                if (call.method !in setOf("cacheTimeline", "disableTimeline", "clearTimeline", "suspendForStartup", "restoreScope", "recordPhotoOwner")) {
                     result.notImplemented()
                     return@setMethodCallHandler
                 }
@@ -18,12 +21,16 @@ class MainActivity : FlutterActivity() {
                 val receivedElapsedMs = SystemClock.elapsedRealtime()
                 WidgetTimelineStore.executor.execute {
                     try {
-                        when (call.method) {
+                        val response = when (call.method) {
                             "cacheTimeline" -> WidgetTimelineStore.cache(applicationContext, call.arguments, receivedWallMs, receivedElapsedMs)
                             "disableTimeline" -> WidgetTimelineStore.disable(applicationContext)
                             "clearTimeline" -> WidgetTimelineStore.clear(applicationContext)
+                            "suspendForStartup" -> WidgetTimelineStore.suspendForStartup(applicationContext)
+                            "restoreScope" -> WidgetTimelineStore.restoreScope(applicationContext, call.arguments)
+                            "recordPhotoOwner" -> WidgetTimelineStore.recordPhotoOwner(applicationContext, call.arguments)
+                            else -> null
                         }
-                        runOnUiThread { result.success(null) }
+                        runOnUiThread { result.success(if (call.method == "restoreScope") response else null) }
                     } catch (failure: Exception) {
                         // Do not echo arguments, scope, or local file paths to logs/errors.
                         runOnUiThread { result.error("widget_timeline", "Native widget timeline operation failed (${failure.javaClass.simpleName})", null) }

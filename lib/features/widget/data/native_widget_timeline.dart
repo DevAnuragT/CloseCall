@@ -10,7 +10,25 @@ abstract interface class NativeWidgetTimeline {
   Future<void> clearTimeline();
 }
 
-class AndroidWidgetTimeline implements NativeWidgetTimeline {
+/// Optional, deliberately separate from timeline fakes and other platforms.
+/// Flutter validates secure identity/membership before calling restoreScope.
+abstract interface class ScopedWidgetRestoration {
+  Future<void> suspendForStartup();
+  Future<RestoredWidgetPhoto?> restoreScope(
+    String scope, {
+    required bool allowPartnerPhoto,
+  });
+  Future<void> recordPhotoOwner(String scope, {String? assetId});
+}
+
+class RestoredWidgetPhoto {
+  const RestoredWidgetPhoto({this.assetId, required this.bytes});
+  final String? assetId;
+  final Uint8List bytes;
+}
+
+class AndroidWidgetTimeline
+    implements NativeWidgetTimeline, ScopedWidgetRestoration {
   const AndroidWidgetTimeline();
   static const channel = MethodChannel('closecall/widget_timeline');
   @override
@@ -29,6 +47,39 @@ class AndroidWidgetTimeline implements NativeWidgetTimeline {
   @override
   Future<void> clearTimeline() async {
     if (supported) await channel.invokeMethod<void>('clearTimeline');
+  }
+
+  @override
+  Future<void> suspendForStartup() async {
+    if (supported) await channel.invokeMethod<void>('suspendForStartup');
+  }
+
+  @override
+  Future<RestoredWidgetPhoto?> restoreScope(
+    String scope, {
+    required bool allowPartnerPhoto,
+  }) async {
+    if (!supported) return null;
+    final result = await channel.invokeMapMethod<String, Object?>(
+      'restoreScope',
+      {'scope': scope, 'allowPartnerPhoto': allowPartnerPhoto},
+    );
+    final bytes = result?['bytes'];
+    if (bytes is! Uint8List) return null;
+    return RestoredWidgetPhoto(
+      assetId: result?['assetId'] as String?,
+      bytes: bytes,
+    );
+  }
+
+  @override
+  Future<void> recordPhotoOwner(String scope, {String? assetId}) async {
+    if (supported) {
+      await channel.invokeMethod<void>('recordPhotoOwner', {
+        'scope': scope,
+        'assetId': assetId,
+      });
+    }
   }
 }
 

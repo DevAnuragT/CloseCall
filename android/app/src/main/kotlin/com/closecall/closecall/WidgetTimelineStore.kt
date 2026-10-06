@@ -24,6 +24,7 @@ internal object WidgetTimelineStore {
     val lock = Any()
     val executor = Executors.newSingleThreadExecutor()
     private const val ENABLED = "closecall_timeline_enabled"
+    private const val SUSPENDED = "closecall_timeline_suspended"
     const val IMAGE_PATH = "widget_image_path"
     private const val ALARM_ACTION = "com.closecall.closecall.TIMELINE_WAKE"
 
@@ -39,9 +40,118 @@ internal object WidgetTimelineStore {
     // Offline photos and opt-in metadata must not participate in Android's cloud/device backup.
     private fun root(context: Context) = File(context.noBackupFilesDir, "widget_timeline")
     private fun pointer(context: Context) = AtomicFile(File(root(context), "active.json"))
+    private fun ownerFile(context: Context) = AtomicFile(File(root(context), "owner.json"))
     private fun prefs(context: Context) = context.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE)
     private fun boot(context: Context): Int = Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)
     private fun name() = UUID.randomUUID().toString()
+
+    private data class Owner(val scope: String, val path: String, val assetId: String?, val anchor: WidgetClockAnchor)
+
+    /** No tokens/authentication are persisted here. The Flutter caller must first
+     * validate secure auth + current membership. A held photo is not permission
+     * to run alarms: startup pauses them until fresh recipient truth is cached. */
+    fun suspendForStartup(context: Context) = synchronized(lock) {
+        cancel(context)
+        check(prefs(context).edit().putBoolean(SUSPENDED, true).commit())
+        val owner = validOwner(context)
+        if (owner == null) { clearLocked(context); renderLocked(context) }
+        else armExpiry(context, owner)
+    }
+
+    fun restoreScope(context: Context, arguments: Any?): Map<String, Any?>? = synchronized(lock) {
+        val input = arguments as? Map<*, *> ?: throw IllegalArgumentException("Expected map")
+        val scope = input["scope"] as? String ?: throw IllegalArgumentException("Missing scope")
+        WidgetTimelinePolicy.validate(scope, 0, emptyList(), emptyMap())
+        cancel(context)
+        check(prefs(context).edit().putBoolean(SUSPENDED, true).commit())
+        val owner = validOwner(context)
+        if (owner == null || owner.scope != scope ||
+            (owner.assetId != null && input["allowPartnerPhoto"] != true)) {
+            clearLocked(context); renderLocked(context)
+            return@synchronized null
+        }
+        // Reading never changes the original anchor/TTL or resumes old alarms.
+        armExpiry(context, owner)
+        mapOf("assetId" to owner.assetId, "bytes" to File(owner.path).readBytes())
+    }
+
+    fun recordPhotoOwner(context: Context, arguments: Any?) = synchronized(lock) {
+        val input = arguments as? Map<*, *> ?: throw IllegalArgumentException("Expected map")
+        val scope = input["scope"] as? String ?: throw IllegalArgumentException("Missing scope")
+        WidgetTimelinePolicy.validate(scope, 0, emptyList(), emptyMap())
+        val assetId = input["assetId"]?.let(WidgetTimelinePolicy::id)
+        val path = prefs(context).getString(IMAGE_PATH, null) ?: throw IllegalStateException("Missing photo")
+        require(safeDisplayedFile(context, path) != null)
+        // A newly written local photo is not permission to resume the previous
+        // timeline. Flutter must publish fresh recipient truth separately.
+        disable(context)
+        val retainedPath = prefs(context).getString(IMAGE_PATH, null) ?: throw IllegalStateException("Missing retained photo")
+        val wall = System.currentTimeMillis()
+        val owner = Owner(scope, retainedPath, assetId, WidgetClockAnchor(wall, wall, SystemClock.elapsedRealtime(), boot(context)))
+        writeOwner(context, owner)
+        armExpiry(context, owner)
+    }
+
+    private fun safeDisplayedFile(context: Context, path: String): File? {
+        val file = File(path)
+        if (!isInside(file, root(context)) &&
+            !(isInside(file, context.filesDir) && Regex("widget_[0-9]+(?:_[0-9]+)?\\.png").matches(file.name))) return null
+        if (!file.isFile || file.length() !in 1..WidgetTimelinePolicy.MAX_PHOTO_BYTES.toLong()) return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, bounds)
+        if (bounds.outWidth !in 1..2048 || bounds.outHeight !in 1..2048) return null
+        val decoded = BitmapFactory.decodeFile(file.absolutePath) ?: return null
+        decoded.recycle()
+        return file
+    }
+
+    private fun validOwner(context: Context): Owner? = try {
+        val atomic = ownerFile(context)
+        val json = atomic.openRead().use { stream ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(1024)
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                require(output.size() + count <= 8192)
+                output.write(buffer, 0, count)
+            }
+            JSONObject(String(output.toByteArray(), Charsets.UTF_8))
+        }
+        val scope = json.getString("scope")
+        WidgetTimelinePolicy.validate(scope, 0, emptyList(), emptyMap())
+        val server = WidgetTimelinePolicy.time(json.getLong("serverTimeMs"))
+        val received = WidgetTimelinePolicy.time(json.getLong("receivedServerTimeMs"))
+        require(received <= server)
+        val anchor = WidgetClockAnchor(server, WidgetTimelinePolicy.time(json.getLong("wallTimeMs")),
+            json.getLong("elapsedMs").also { require(it >= 0) }, json.getInt("bootCount"), received)
+        val path = json.getString("path")
+        require(path == prefs(context).getString(IMAGE_PATH, null))
+        require(!anchor.expired(anchor.now(System.currentTimeMillis(), SystemClock.elapsedRealtime(), boot(context))))
+        require(safeDisplayedFile(context, path) != null)
+        val assetId = if (json.isNull("assetId")) null else WidgetTimelinePolicy.id(json.getString("assetId"))
+        if (prefs(context).getBoolean(ENABLED, false)) {
+            val state = read(context) ?: error("Invalid timeline")
+            require(state.scope == scope && assetId != null)
+            require(!state.anchor.expired(state.anchor.now(System.currentTimeMillis(), SystemClock.elapsedRealtime(), boot(context))))
+            require(state.photos.keys.all { photo(context, state, it) != null })
+            require(photo(context, state, assetId)?.absolutePath == path)
+        }
+        Owner(scope, path, assetId, anchor)
+    } catch (_: Exception) { null }
+
+    private fun writeOwner(context: Context, owner: Owner) {
+        root(context).mkdirs()
+        val json = JSONObject().apply {
+            put("scope", owner.scope); put("path", owner.path); put("assetId", owner.assetId ?: JSONObject.NULL)
+            put("serverTimeMs", owner.anchor.serverTimeMs); put("receivedServerTimeMs", owner.anchor.receivedServerTimeMs)
+            put("wallTimeMs", owner.anchor.wallTimeMs); put("elapsedMs", owner.anchor.elapsedMs); put("bootCount", owner.anchor.bootCount)
+        }
+        val atomic = ownerFile(context)
+        val stream = atomic.startWrite()
+        try { stream.write(json.toString().toByteArray(Charsets.UTF_8)); atomic.finishWrite(stream) }
+        catch (failure: Throwable) { atomic.failWrite(stream); throw failure }
+    }
 
     fun cache(context: Context, arguments: Any?, receivedWallMs: Long, receivedElapsedMs: Long) = synchronized(lock) {
         val input = arguments as? Map<*, *> ?: throw IllegalArgumentException("Expected map")
@@ -106,7 +216,12 @@ internal object WidgetTimelineStore {
             FileOutputStream(File(stage, "timeline.json")).use { it.write(json); it.fd.sync() }
             writePointer(context, json)
             exposed = true
-            check(prefs(context).edit().putBoolean(ENABLED, true).commit())
+            val currentId = WidgetTimelineResolver.cachedAsset(schedules, fallback, serverTime, names.keys)
+            val current = photo(context, state, currentId)
+            check(prefs(context).edit().putString(IMAGE_PATH, current?.absolutePath)
+                .putBoolean(ENABLED, true).putBoolean(SUSPENDED, false).commit())
+            if (current != null) writeOwner(context, Owner(scope, current.absolutePath, currentId, anchor))
+            else ownerFile(context).delete()
             refreshLocked(context, null)
             cleanup(context, generation)
         } finally {
@@ -120,23 +235,26 @@ internal object WidgetTimelineStore {
         val data = prefs(context)
         val current = data.getString(IMAGE_PATH, null)?.let(::File)
         val directory = root(context)
+        val owner = validOwner(context)
         if (current != null && isInside(current, directory) && current.isFile) {
             val retained = File(directory, "${name()}.photo")
             // Rename is atomic and uses no extra photo quota.
             check(current.renameTo(retained)) { "Cannot retain displayed photo" }
             check(data.edit().putString(IMAGE_PATH, retained.absolutePath).putBoolean(ENABLED, false).commit())
+            if (owner != null) writeOwner(context, owner.copy(path = retained.absolutePath))
         } else {
             check(data.edit().putBoolean(ENABLED, false).commit())
         }
         pointer(context).delete()
         cleanup(context, null)
+        if (owner != null) armExpiry(context, owner)
     }
 
     fun clear(context: Context) = synchronized(lock) { clearLocked(context); renderLocked(context) }
 
     private fun clearLocked(context: Context) {
         cancel(context)
-        check(prefs(context).edit().remove(IMAGE_PATH).putBoolean(ENABLED, false).commit())
+        check(prefs(context).edit().remove(IMAGE_PATH).putBoolean(ENABLED, false).putBoolean(SUSPENDED, true).commit())
         pointer(context).delete()
         val directory = root(context)
         if (directory.exists() && !directory.deleteRecursively()) {
@@ -152,11 +270,21 @@ internal object WidgetTimelineStore {
     }
 
     private fun refreshLocked(context: Context, expectedGeneration: String?) {
+        if (prefs(context).getBoolean(SUSPENDED, false)) {
+            cancel(context)
+            val owner = validOwner(context)
+            if (owner == null) clearLocked(context) else armExpiry(context, owner)
+            renderLocked(context)
+            return
+        }
         if (!prefs(context).getBoolean(ENABLED, false)) {
             cancel(context)
             // A persisted tombstone wins even if the process died before deleting the pointer.
             pointer(context).delete()
             cleanup(context, null)
+            val owner = validOwner(context)
+            if (prefs(context).getString(IMAGE_PATH, null) != null && owner == null) clearLocked(context)
+            else if (owner != null) armExpiry(context, owner)
             renderLocked(context)
             return
         }
@@ -167,6 +295,10 @@ internal object WidgetTimelineStore {
             if (prefs(context).getBoolean(ENABLED, false) || pointer(context).baseFile.exists()) clearLocked(context)
             renderLocked(context)
             return
+        }
+        val owner = validOwner(context)
+        if (prefs(context).getString(IMAGE_PATH, null) != null && (owner == null || owner.scope != state.scope)) {
+            clearLocked(context); renderLocked(context); return
         }
         val wallNow = System.currentTimeMillis()
         val elapsedNow = SystemClock.elapsedRealtime()
@@ -186,6 +318,9 @@ internal object WidgetTimelineStore {
         // Never fall through to the previous/manual preference when an active cache misses.
         val image = photo(context, state, resolved) ?: photo(context, state, state.fallback)
         check(prefs(context).edit().putString(IMAGE_PATH, image?.absolutePath).putBoolean(ENABLED, true).commit())
+        if (image != null) writeOwner(context, Owner(state.scope, image.absolutePath,
+            if (photo(context, state, resolved) != null) resolved else state.fallback, state.anchor))
+        else ownerFile(context).delete()
         renderLocked(context)
         val next = WidgetTimelineResolver.nextBoundary(state.schedules, state.fallback, now, state.anchor.expiresAtMs)
         arm(context, state.generation, next - now)
@@ -291,6 +426,13 @@ internal object WidgetTimelineStore {
             SystemClock.elapsedRealtime() + delay.coerceAtLeast(1), alarmIntent(context, generation))
     }
 
+    private fun armExpiry(context: Context, owner: Owner) {
+        // While paused/identity-unknown this wake can only clear an expired
+        // display; refresh's suspended/disabled branches cannot apply schedules.
+        val now = owner.anchor.now(System.currentTimeMillis(), SystemClock.elapsedRealtime(), boot(context))
+        arm(context, "held-photo-expiry", owner.anchor.expiresAtMs - now)
+    }
+
     private fun cancel(context: Context) {
         (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(alarmIntent(context))
     }
@@ -301,7 +443,7 @@ internal object WidgetTimelineStore {
     private fun cleanup(context: Context, generation: String?) {
         val retained = prefs(context).getString(IMAGE_PATH, null)?.let(::File)
         root(context).listFiles()?.forEach { file ->
-            if (file.name != generation && file.name !in setOf("active.json", "active.json.bak", "active.json.new") &&
+            if (file.name != generation && file.name !in setOf("active.json", "active.json.bak", "active.json.new", "owner.json", "owner.json.bak", "owner.json.new") &&
                 (retained == null || (file.canonicalPath != retained.canonicalPath && !isInside(retained, file)))) {
                 file.deleteRecursively()
             }

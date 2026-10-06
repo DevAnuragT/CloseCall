@@ -433,7 +433,7 @@ void main() {
       expect(h.applied, hasLength(1));
       expect(h.native.payloads, isEmpty);
       expect(h.controller.backgroundCacheSupported, isFalse);
-      expect(h.controller.status, contains('unavailable on this platform'));
+      expect(h.controller.status, 'Ready');
     },
   );
 
