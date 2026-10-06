@@ -44,6 +44,19 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+        <!-- Observe FCM delivery without replacing FlutterFire's service. The
+             sender permission prevents arbitrary apps from injecting wakes. -->
+        <receiver
+            android:name=".CloseCallFcmReceiver"
+            android:exported="true"
+            android:permission="com.google.android.c2dm.permission.SEND">
+            <intent-filter>
+                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".PushWakeReceiver"
+            android:exported="false" />
         <receiver
             android:name=".CloseCallWidgetProvider"
             android:exported="true">

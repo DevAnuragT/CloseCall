@@ -14,6 +14,13 @@ class WidgetTimelineTest {
         try { action(); fail("Expected invalid input") } catch (_: IllegalArgumentException) { }
     }
 
+    @Test fun pushVersionsAreBoundedAndMonotonic() {
+        assertEquals(8L, PushWakeCoordinator.parseVersion("8"))
+        assertNull(PushWakeCoordinator.parseVersion("-1"))
+        assertNull(PushWakeCoordinator.parseVersion("9000000000000001"))
+        assertNull(PushWakeCoordinator.parseVersion("secret"))
+    }
+
     @Test fun emptyAndExpiredUseFallback() {
         assertEquals(fallback, WidgetTimelineResolver.resolve(emptyList(), fallback, 150))
         assertEquals(fallback, WidgetTimelineResolver.resolve(listOf(schedule()), fallback, 201))

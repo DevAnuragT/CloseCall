@@ -137,6 +137,9 @@ class PushRegistrationService {
   Future<void> stop({bool revoke = true, bool keepStarted = false}) async {
     if (!_started && !keepStarted) return;
     _generation++;
+    // An invalidation received for the old authenticated scope is not a
+    // credential and must not survive an explicit sign-out/re-pair boundary.
+    await PushPendingWakeMarker.clear();
     _tokenSubscription?.cancel();
     _tokenSubscription = null;
     final token = _registeredToken;
@@ -190,7 +193,8 @@ class PushRegistrationService {
     } catch (_) {
       return;
     }
-    if (!_isCurrent(generation, scope) || access != NotificationAccess.granted) {
+    if (!_isCurrent(generation, scope) ||
+        access != NotificationAccess.granted) {
       if (access != NotificationAccess.granted) await _clearRegistration();
       return;
     }
@@ -256,7 +260,9 @@ class PushRegistrationService {
   String? get _scope {
     final user = pairing.userId;
     final couple = pairing.couple;
-    if (!pairing.hasLoadedPairing || user == null || couple?.isComplete != true) {
+    if (!pairing.hasLoadedPairing ||
+        user == null ||
+        couple?.isComplete != true) {
       return null;
     }
     return '$user:${couple!.id}';
@@ -295,17 +301,56 @@ Future<void> closeCallFirebaseMessagingBackgroundHandler(
   RemoteMessage message,
 ) async {
   if (!await FirebasePushBootstrap.ensureInitialized()) return;
-  final type = message.data['type'];
-  final version = int.tryParse('${message.data['version'] ?? ''}');
-  if (type != 'invalidation' || version == null || version < 0) return;
   final preferences = await SharedPreferences.getInstance();
-  final current = preferences.getInt(PushPendingWakeMarker.key) ?? 0;
-  await preferences.setInt(
-    PushPendingWakeMarker.key,
-    version > current ? version : current,
+  await PushPendingWakeMarker.record(
+    preferences,
+    type: message.data['type'],
+    version: message.data['version'],
   );
 }
 
 class PushPendingWakeMarker {
   static const key = 'closecall.push.pending_wake_version.v1';
+  static const _highWaterKey = 'closecall.push.high_water_version.v1';
+  // Delivery versions are database values, not timestamps. Keep malformed or
+  // adversarial FCM data from becoming an unbounded SharedPreferences value.
+  static const maxVersion = 9000000000000000;
+
+  @visibleForTesting
+  static int? parseVersion(Object? value) {
+    final parsed = value is int ? value : int.tryParse('$value');
+    if (parsed == null || parsed < 0 || parsed > maxVersion) return null;
+    return parsed;
+  }
+
+  @visibleForTesting
+  static int? merge(int? current, Object? incoming) {
+    final version = parseVersion(incoming);
+    if (version == null) return current;
+    if (current == null || version > current) return version;
+    return current;
+  }
+
+  static Future<bool> record(
+    SharedPreferences preferences, {
+    required Object? type,
+    required Object? version,
+  }) async {
+    if (type != 'invalidation') return false;
+    final current = preferences.getInt(key);
+    final highWater = preferences.getInt(_highWaterKey);
+    final merged = merge(highWater ?? current, version);
+    if (merged == null || merged == highWater) return false;
+    await preferences.setInt(_highWaterKey, merged);
+    return preferences.setInt(key, merge(current, merged)!);
+  }
+
+  static Future<void> clear() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove(key);
+    } catch (_) {
+      // Push is a hint and local cleanup must never block sign-out.
+    }
+  }
 }

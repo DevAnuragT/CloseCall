@@ -51,6 +51,7 @@ internal object WidgetTimelineStore {
      * validate secure auth + current membership. A held photo is not permission
      * to run alarms: startup pauses them until fresh recipient truth is cached. */
     fun suspendForStartup(context: Context) = synchronized(lock) {
+        PushWakeCoordinator.clear(context)
         cancel(context)
         check(prefs(context).edit().putBoolean(SUSPENDED, true).commit())
         val owner = validOwner(context)
@@ -253,6 +254,7 @@ internal object WidgetTimelineStore {
     fun clear(context: Context) = synchronized(lock) { clearLocked(context); renderLocked(context) }
 
     private fun clearLocked(context: Context) {
+        PushWakeCoordinator.clear(context)
         cancel(context)
         check(prefs(context).edit().remove(IMAGE_PATH).putBoolean(ENABLED, false).putBoolean(SUSPENDED, true).commit())
         pointer(context).delete()

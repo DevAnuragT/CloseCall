@@ -141,9 +141,33 @@ credentials through Cloud secret management, never chat, app assets or git.
 Check that both Android package IDs and signing configurations match. No paid
 Serverpod upgrade or Firebase resource change is authorized by this plan.
 
-Foreground delivery can be built first without external credentials. Closed-app
-production acceptance requires authorized push provisioning; do not mark it
-complete merely because Firebase config files exist.
+### FCM server secret shape
+
+The server reads the deployed secret named `FCM_SERVICE_ACCOUNT_JSON`. Its
+value must be one JSON object containing the exact fields below; `project_id`
+must be the Firebase/Google Cloud project that owns the recipient app and is
+never inferred from a package ID or client config:
+
+```json
+{
+  "project_id": "the-authorized-google-project-id",
+  "client_email": "service-account@the-authorized-google-project-id.iam.gserviceaccount.com",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+}
+```
+
+For secret managers that expose individual values instead, set all three
+variables: `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, and `FCM_PRIVATE_KEY`.
+Partial configuration is rejected. The backend creates OAuth2 JWT bearer
+tokens and sends only to `https://fcm.googleapis.com/v1/projects/{project_id}/messages:send`.
+It never logs the service account, OAuth token, FCM token, request bytes or
+photo data. Missing credentials leave durable outbox rows pending, allowing a
+later deployment/reconciliation after the secret is provisioned.
+
+The backend dispatcher is now implemented, but production acceptance still
+requires deploying after the secret is provisioned and testing the client path.
+Firebase config files or a successful FCM send alone do not prove a fresh private
+photo was authorized, downloaded and applied while the app was closed.
 
 ## Acceptance matrix
 
@@ -229,6 +253,29 @@ complete merely because Firebase config files exist.
   migration/backend is deployed on Cloud Starter; no Firebase server credential
   or dispatch secret was added.
 
+### Durable FCM dispatch — 6 October 2026
+
+- `sendAsset` now creates `closecall_push_outbox` in the same transaction as
+  the committed delivery pointer and `WidgetSendRecord`, only when the
+  recipient's current consent is enabled. `sendId + version` is unique, so
+  request retries cannot create duplicate events.
+- A bounded PostgreSQL `FOR UPDATE SKIP LOCKED` lease reconciler dispatches
+  version-only invalidation data (`type=invalidation`, `version`) through FCM
+  HTTP v1. It retries transient failures with bounded backoff, revokes
+  `UNREGISTERED` registrations, expires obsolete/withdrawn-consent events,
+  and keeps committed sends independent of FCM success.
+- Cloud Starter uses an in-process bounded runner plus a committed-send kick;
+  rows and leases survive pod restarts and do not depend on Serverpod future
+  calls. There is no public unauthenticated dispatch trigger.
+- Backend tests cover consent-gated atomic creation, lease ownership,
+  idempotent completion, transient retry, and invalid-token revocation. No real
+  network or credential is used in tests.
+- This slice does **not** complete fresh-photo closed-app delivery. Android now
+  accepts bounded invalidation wakes and refreshes already-cached native timeline
+  transitions without network or credentials. It still needs a revocable
+  device-scoped authorization for background current-state fetch, fresh photo
+  download/apply, and per-device acknowledgement.
+
 ### Widget hub redesign — 6 October 2026
 
 The paired Widget tab now presents a compact preview, setup summary and action
@@ -305,11 +352,11 @@ partner → enable automatic photos. Sender: send a test photo. Keep recipient C
 verify widget changes without Download/Apply. Verify restart persistence, local
 pause, resume and schedule priority separately.
 
-Closed-app reception remains unimplemented: secure server FCM credentials,
-durable dispatch/outbox, background authorization/execution and per-device
-applied acknowledgements remain the next slice. No credentials or paid settings
-were changed. Do not describe foreground delivery as closed-app instant
-delivery.
+Backend FCM credentials, durable outbox dispatch and cached-transition wake are
+now implemented. Fresh-photo closed-app reception remains blocked on secure
+background authorization/fetch and per-device applied acknowledgements. Deploy
+the backend and updated APK before physical acceptance; do not describe
+foreground delivery or cached transitions as closed-app fresh-photo delivery.
 
 ### Push registration foundation — 6 October 2026
 

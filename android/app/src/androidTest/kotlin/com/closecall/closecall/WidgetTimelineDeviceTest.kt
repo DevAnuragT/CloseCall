@@ -50,7 +50,10 @@ class WidgetTimelineDeviceTest {
     private fun cache(value: Map<String, Any>) {
         WidgetTimelineStore.cache(context, value, System.currentTimeMillis(), SystemClock.elapsedRealtime())
     }
-    @Before fun setup() = WidgetTimelineStore.clear(context)
+    @Before fun setup() {
+        PushWakeCoordinator.resetForTesting(context)
+        WidgetTimelineStore.clear(context)
+    }
     @After fun cleanup() = WidgetTimelineStore.clear(context)
 
     @Test fun persistedTimelineRevertsThroughReceiverWithoutFlutter() {
@@ -67,6 +70,38 @@ class WidgetTimelineDeviceTest {
             Thread.sleep(25)
         }
         fail("Native receiver did not apply cached fallback")
+    }
+
+    @Test fun duplicateAndReorderedInvalidationsCoalesceToGreatestVersion() {
+        assertTrue(PushWakeCoordinator.accept(context, "invalidation", "8"))
+        assertFalse(PushWakeCoordinator.accept(context, "invalidation", "7"))
+        assertFalse(PushWakeCoordinator.accept(context, "invalidation", "8"))
+        assertTrue(PushWakeCoordinator.accept(context, "invalidation", "9"))
+        assertEquals(9L, PushWakeCoordinator.pendingVersion(context))
+
+        PushWakeCoordinator.process(context)
+        assertNull(PushWakeCoordinator.pendingVersion(context))
+        assertEquals(9L, PushWakeCoordinator.appliedVersion(context))
+    }
+
+    @Test fun invalidationPayloadDoesNotPersistArbitraryData() {
+        val intent = Intent("com.google.android.c2dm.intent.RECEIVE")
+            .putExtra("type", "invalidation")
+            .putExtra("version", "10")
+            .putExtra("token", "secret-must-not-be-stored")
+        CloseCallFcmReceiver().onReceive(context, intent)
+        assertEquals(10L, PushWakeCoordinator.pendingVersion(context))
+        assertFalse(File(context.noBackupFilesDir, "widget_timeline").walkTopDown()
+            .filter { it.isFile }
+            .any { it.readBytes().toString(Charsets.UTF_8).contains("secret-must-not-be-stored") })
+    }
+
+    @Test fun identityClearRejectsQueuedOldInvalidation() {
+        assertTrue(PushWakeCoordinator.accept(context, "invalidation", "11"))
+        WidgetTimelineStore.clear(context)
+        assertNull(PushWakeCoordinator.pendingVersion(context))
+        assertEquals(11L, PushWakeCoordinator.appliedVersion(context))
+        assertFalse(PushWakeCoordinator.accept(context, "invalidation", "10"))
     }
 
     @Test fun disableRetainsManualPhotoAndClearDeletesPrivateCache() {

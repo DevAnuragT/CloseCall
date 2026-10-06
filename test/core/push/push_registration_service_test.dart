@@ -5,6 +5,7 @@ import 'package:closecall/core/push/push_registration_api.dart';
 import 'package:closecall/core/push/push_registration_service.dart';
 import 'package:closecall/features/pairing/presentation/pairing_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/live_fakes.dart';
 
@@ -19,6 +20,7 @@ class _Permissions implements WidgetPermissionService {
     requests++;
     return access;
   }
+
   @override
   Future<bool> hasInstalledWidget() async => false;
   @override
@@ -60,8 +62,10 @@ class _Api implements PushRegistrationApi {
   }) async => registrations.add('$deviceId:$token');
 
   @override
-  Future<void> revokeDevice({required String deviceId, required String token}) async =>
-      revocations.add(deviceId);
+  Future<void> revokeDevice({
+    required String deviceId,
+    required String token,
+  }) async => revocations.add(deviceId);
 }
 
 class _Identity implements PushDeviceIdentityStore {
@@ -71,10 +75,7 @@ class _Identity implements PushDeviceIdentityStore {
 
 Future<PairingController> _pairing({String? identity = 'me'}) async {
   final auth = FakeAuth()..change(identity);
-  final pairing = PairingController(
-    session: auth,
-    repository: FakeCouples(),
-  );
+  final pairing = PairingController(session: auth, repository: FakeCouples());
   await pairing.initialize();
   return pairing;
 }
@@ -95,84 +96,145 @@ PushRegistrationService _service(
 );
 
 void main() {
-  test('denied notifications and unavailable Firebase never block pairing', () async {
-    final pairing = await _pairing();
-    final permissions = _Permissions()..access = NotificationAccess.denied;
-    final api = _Api();
-    final messaging = _Messaging();
-    final service = _service(pairing, permissions, api, messaging);
-    service.start();
-    await service.reconcile();
-    expect(api.registrations, isEmpty);
-    expect(permissions.requests, 0);
-    expect(messaging.gets, 0);
-    service.dispose();
-    await messaging.dispose();
-    pairing.dispose();
-  });
+  test('pending wake marker keeps greatest valid version only', () async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
 
-  test('Firebase unavailable and incomplete pairing are non-blocking', () async {
-    final pairing = await _pairing();
-    final permissions = _Permissions();
-    final api = _Api();
-    final messaging = _Messaging();
-    final unavailable = _service(
-      pairing,
-      permissions,
-      api,
-      messaging,
-      bootstrap: () async => false,
+    expect(PushPendingWakeMarker.merge(null, '8'), 8);
+    expect(PushPendingWakeMarker.merge(8, '7'), 8);
+    expect(PushPendingWakeMarker.merge(8, '8'), 8);
+    expect(PushPendingWakeMarker.merge(8, '9'), 9);
+    expect(
+      PushPendingWakeMarker.merge(9, PushPendingWakeMarker.maxVersion + 1),
+      9,
     );
-    unavailable.start();
-    await unavailable.reconcile();
-    expect(api.registrations, isEmpty);
-    expect(messaging.gets, 0);
-    unavailable.dispose();
-    await messaging.dispose();
-    pairing.dispose();
-
-    final auth = FakeAuth()..change('me');
-    final repository = FakeCouples()..couple = null;
-    final unpaired = PairingController(session: auth, repository: repository);
-    await unpaired.initialize();
-    final secondApi = _Api();
-    final secondMessaging = _Messaging();
-    final blocked = _service(
-      unpaired,
-      permissions,
-      secondApi,
-      secondMessaging,
+    expect(
+      await PushPendingWakeMarker.record(
+        preferences,
+        type: 'heartbeat',
+        version: 10,
+      ),
+      isFalse,
     );
-    blocked.start();
-    await blocked.reconcile();
-    expect(secondApi.registrations, isEmpty);
-    blocked.dispose();
-    await secondMessaging.dispose();
-    unpaired.dispose();
-    auth.dispose();
+    expect(
+      await PushPendingWakeMarker.record(
+        preferences,
+        type: 'invalidation',
+        version: '8',
+      ),
+      isTrue,
+    );
+    expect(
+      await PushPendingWakeMarker.record(
+        preferences,
+        type: 'invalidation',
+        version: '7',
+      ),
+      isFalse,
+    );
+    expect(preferences.getInt(PushPendingWakeMarker.key), 8);
   });
 
-  test('registers only for a complete paired granted scope and is idempotent', () async {
-    final pairing = await _pairing();
-    final permissions = _Permissions();
-    final api = _Api();
-    final messaging = _Messaging();
-    final service = _service(pairing, permissions, api, messaging);
-    service.start();
-    await service.reconcile();
-    expect(api.registrations, ['device:opaque-token-12345678901234567890']);
-    await service.reconcile();
-    expect(api.registrations, ['device:opaque-token-12345678901234567890']);
-    messaging.refresh.add('rotated-token-12345678901234567890');
-    await Future<void>.delayed(Duration.zero);
-    expect(api.registrations, [
-      'device:opaque-token-12345678901234567890',
-      'device:rotated-token-12345678901234567890',
-    ]);
-    service.dispose();
-    await messaging.dispose();
-    pairing.dispose();
+  test('pending wake marker can be cleared at an identity boundary', () async {
+    SharedPreferences.setMockInitialValues({PushPendingWakeMarker.key: 42});
+    expect(
+      (await SharedPreferences.getInstance()).getInt(PushPendingWakeMarker.key),
+      42,
+    );
+    await PushPendingWakeMarker.clear();
+    expect(
+      (await SharedPreferences.getInstance()).getInt(PushPendingWakeMarker.key),
+      isNull,
+    );
   });
+
+  test(
+    'denied notifications and unavailable Firebase never block pairing',
+    () async {
+      final pairing = await _pairing();
+      final permissions = _Permissions()..access = NotificationAccess.denied;
+      final api = _Api();
+      final messaging = _Messaging();
+      final service = _service(pairing, permissions, api, messaging);
+      service.start();
+      await service.reconcile();
+      expect(api.registrations, isEmpty);
+      expect(permissions.requests, 0);
+      expect(messaging.gets, 0);
+      service.dispose();
+      await messaging.dispose();
+      pairing.dispose();
+    },
+  );
+
+  test(
+    'Firebase unavailable and incomplete pairing are non-blocking',
+    () async {
+      final pairing = await _pairing();
+      final permissions = _Permissions();
+      final api = _Api();
+      final messaging = _Messaging();
+      final unavailable = _service(
+        pairing,
+        permissions,
+        api,
+        messaging,
+        bootstrap: () async => false,
+      );
+      unavailable.start();
+      await unavailable.reconcile();
+      expect(api.registrations, isEmpty);
+      expect(messaging.gets, 0);
+      unavailable.dispose();
+      await messaging.dispose();
+      pairing.dispose();
+
+      final auth = FakeAuth()..change('me');
+      final repository = FakeCouples()..couple = null;
+      final unpaired = PairingController(session: auth, repository: repository);
+      await unpaired.initialize();
+      final secondApi = _Api();
+      final secondMessaging = _Messaging();
+      final blocked = _service(
+        unpaired,
+        permissions,
+        secondApi,
+        secondMessaging,
+      );
+      blocked.start();
+      await blocked.reconcile();
+      expect(secondApi.registrations, isEmpty);
+      blocked.dispose();
+      await secondMessaging.dispose();
+      unpaired.dispose();
+      auth.dispose();
+    },
+  );
+
+  test(
+    'registers only for a complete paired granted scope and is idempotent',
+    () async {
+      final pairing = await _pairing();
+      final permissions = _Permissions();
+      final api = _Api();
+      final messaging = _Messaging();
+      final service = _service(pairing, permissions, api, messaging);
+      service.start();
+      await service.reconcile();
+      expect(api.registrations, ['device:opaque-token-12345678901234567890']);
+      await service.reconcile();
+      expect(api.registrations, ['device:opaque-token-12345678901234567890']);
+      messaging.refresh.add('rotated-token-12345678901234567890');
+      await Future<void>.delayed(Duration.zero);
+      expect(api.registrations, [
+        'device:opaque-token-12345678901234567890',
+        'device:rotated-token-12345678901234567890',
+      ]);
+      service.dispose();
+      await messaging.dispose();
+      pairing.dispose();
+    },
+  );
 
   test('scope change revokes and late token result is discarded', () async {
     final pairing = await _pairing();
