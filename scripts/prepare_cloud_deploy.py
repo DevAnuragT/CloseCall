@@ -140,7 +140,7 @@ def allowed_runtime_path(value):
             ("closecall_server", "lib"), ("closecall_shared", "lib")):
         return path.suffix == ".dart"
     return (len(parts) == 4 and parts[:2] == ("closecall_server", "migrations")
-            and re.fullmatch(r"[0-9]{17}", parts[2]) is not None
+            and re.fullmatch(r"[0-9]{17}(?:-[A-Za-z0-9][A-Za-z0-9-]*)?", parts[2]) is not None
             and parts[3] in MIGRATION_FILES)
 
 

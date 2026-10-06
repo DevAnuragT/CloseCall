@@ -80,6 +80,7 @@ sdks:
         self.write("closecall_server/scloud.yaml", deploy.SCLOUD_CONFIG)
         self.write("closecall_server/lib/src/model.spy.yaml", "class: Model\n")
         self.write("closecall_server/migrations/20261004000100000/migration.sql", "SELECT 1;\n")
+        self.write("closecall_server/migrations/20261006081030595-nicknames/migration.sql", "SELECT 2;\n")
         subprocess.run(["git", "add", "closecall_server", "closecall_shared"],
                        cwd=self.root, check=True)
 
@@ -119,6 +120,10 @@ sdks:
         self.assertNotIn("closecall_server/lib/src/model.spy.yaml", staged)
         self.assertIn("closecall_server/lib/src/generated/protocol.yaml", staged)
         self.assertIn("closecall_server/migrations/20261004000100000/migration.sql", staged)
+        self.assertIn(
+            "closecall_server/migrations/20261006081030595-nicknames/migration.sql",
+            staged,
+        )
         self.assertIn("closecall_shared/lib/schedule.dart", staged)
         self.assertNotIn("closecall_server/pubspec.lock", staged)
         self.assertIn("pubspec.lock", staged)
