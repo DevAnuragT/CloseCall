@@ -246,10 +246,43 @@ editor/preview presentation instead of relying on a fixed decoding delay. The
 Cloud-connected debug APK built successfully. No device was attached for install;
 visual phone acceptance remains pending. Backend/push behaviour was not changed.
 
+### Widget usability fixes — 6 October 2026
+
+- Exactly four paired actions: Send a photo, My widget, Photos from your partner,
+  and Send later. The confusing standalone My photos destination is removed.
+- Send a photo offers New photo and a private thumbnail grid of saved own
+  photos. Selecting opens a large preview; Send to partner is explicit. Viewing
+  never resends. No misleading Sent/Not sent badges: the existing metadata does
+  not provide authoritative historical send status.
+- My widget offers received/saved photos with large previews and Use on my
+  widget, plus local editing and a collapsed Default photo setting. Private image
+  reads are scoped, deduplicated and bounded to two concurrent downloads and
+  twelve cached PNGs / 24 MiB. Errors have explicit loading retries.
+- Send later is a focused full-screen form: image-based selection, Starts/Ends
+  date then time pickers, local readable dates and a review summary. The server
+  still receives UTC timestamps. End-after-start, seven-day duration and
+  thirty-day start bounds are validated. Cancelling a picker changes nothing.
+- Upcoming schedules use photo previews and For you / For your partner, readable
+  times and Cancel. No recipient IDs, asset hashes, server clock or ISO input.
+  Default photo and receiving-consent controls are absent from the sending form.
+- Quiet startup no longer presents routine sync/status banners. Android records
+  stable photo ownership in backup-excluded storage. Startup pauses transitions;
+  only validated matching identity/couple and a fresh bounded owned image can be
+  restored. Legacy unowned, mismatched, invalid or expired data clears rather
+  than being reused. Restoration does not renew the original TTL. Authorization
+  rejection clears private content; manual pause still prevents late writes.
+- Verified: **389 Flutter tests passed**, full analysis clean, **27 Android app
+  JVM tests passed**. Android instrumentation APK compiles; its new restoration
+  tests were not executed on the personal phone. Scheduling's 15 scoped tests
+  also passed with `TZ=America/New_York` to exercise non-UTC conversion.
+- Debug APK builds at `build/app/outputs/flutter-apk/app-debug.apk`. The phone
+  disconnected before installation; `adb install` returned device not found.
+  These usability changes are **not yet installed or physically accepted**.
+
 ### Remaining acceptance and external blocker
 
-Update **both** phones, preserving accounts. Recipient: Widget → Partner updates → Allow partner
-updates. Sender: send a test photo. Keep recipient CloseCall foregrounded and
+Update **both** phones, preserving accounts. Recipient: Widget → Photos from your
+partner → enable automatic photos. Sender: send a test photo. Keep recipient CloseCall foregrounded and
 verify widget changes without Download/Apply. Verify restart persistence, local
 pause, resume and schedule priority separately.
 

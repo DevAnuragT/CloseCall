@@ -147,8 +147,10 @@ void main() {
             ),
           ),
         );
+        await tester.tap(find.byKey(const Key('hub-send-to-partner')));
+        await tester.pumpAndSettle();
         await tester.runAsync(() async {
-          await tester.tap(find.byKey(const Key('hub-send-to-partner')));
+          await tester.tap(find.byKey(const Key('hub-send-new-photo')));
           await Future<void>.delayed(const Duration(milliseconds: 100));
         });
         await tester.pumpAndSettle();
@@ -229,26 +231,26 @@ void main() {
           home: Scaffold(body: WidgetTabScreen(media: media, liveMode: true)),
         ),
       );
-      await tester.ensureVisible(find.byKey(const Key('hub-my-photos')));
-      await tester.tap(find.byKey(const Key('hub-my-photos')));
+      await media.refresh();
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Refresh private photos'));
-      await tester.tap(find.text('Refresh private photos'));
+      await tester.ensureVisible(find.byKey(const Key('hub-my-widget')));
+      await tester.tap(find.byKey(const Key('hub-my-widget')));
       await tester.pumpAndSettle();
-      expect(
-        find.descendant(
-          of: find.byType(BottomSheet),
-          matching: find.byType(Image),
-        ),
-        findsOneWidget,
-      );
-      expect(applied, 0);
       await tester.ensureVisible(
-        find.text('Apply downloaded photo to this device'),
+        find.byKey(const ValueKey(('hub-photo', 'asset'))),
       );
-      await tester.tap(find.text('Apply downloaded photo to this device'));
+      await tester.tap(find.byKey(const ValueKey(('hub-photo', 'asset'))));
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Large photo preview'), findsOneWidget);
+      expect(applied, 0);
+      await tester.ensureVisible(find.text('Use on my widget'));
+      await tester.tap(find.text('Use on my widget'));
       await tester.pumpAndSettle();
       expect(applied, 1);
+      await tester.tap(find.byTooltip('Close Use this photo?'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Close My widget'));
+      await tester.pumpAndSettle();
       repository.uploadFailure = MediaFailure(code: 'quota_exceeded');
       await media.uploadConfirmed(testPng);
       await tester.pumpAndSettle();
@@ -257,15 +259,11 @@ void main() {
         findsWidgets,
       );
       repository.uploadFailure = null;
-      final sheetRetry = find.descendant(
-        of: find.byType(BottomSheet),
-        matching: find.text('Retry photo operation'),
-      );
-      await tester.ensureVisible(sheetRetry);
-      await tester.tap(sheetRetry);
+      await tester.ensureVisible(find.text('Retry photo operation'));
+      await tester.tap(find.text('Retry photo operation'));
       await tester.pumpAndSettle();
       expect(repository.requestIds.toSet(), hasLength(1));
-      expect(find.textContaining('Uploaded privately'), findsWidgets);
+      expect(media.status, contains('Uploaded privately'));
       auth.change(null);
       await tester.pumpAndSettle();
       expect(find.byType(Image), findsNothing);

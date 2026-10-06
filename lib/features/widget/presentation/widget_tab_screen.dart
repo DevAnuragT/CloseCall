@@ -17,7 +17,9 @@ import '../data/schedule_repository.dart';
 import 'editor/widget_editor_screen.dart';
 import 'widget_preview_screen.dart';
 import 'schedule_controller.dart';
-import 'schedule_panel.dart';
+import 'schedule_photo_screen.dart';
+import 'default_photo_picker.dart';
+import 'hub_photo_picker.dart';
 import 'widget_ui_components.dart';
 import 'unpaired_widget_screen.dart';
 
@@ -54,6 +56,25 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
   Object? _localPhotoScope;
   final _surfaceChanges = ValueNotifier<int>(0);
 
+  Object get _accountScope {
+    final pairing = widget.pairing ?? widget.media?.pairing;
+    return (
+      pairing,
+      pairing?.userId,
+      pairing?.authRevision,
+      pairing?.couple?.id,
+      pairing?.couple?.partnerOf(pairing.userId ?? ''),
+    );
+  }
+
+  @override
+  void didUpdateWidget(WidgetTabScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _surfaceChanges.value++;
+    });
+  }
+
   @override
   void dispose() {
     _surfaceChanges.dispose();
@@ -64,8 +85,11 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
     bool blank = false,
     bool upload = false,
     bool send = false,
+    Object? expectedScope,
   }) async {
-    if (_editing) return;
+    if (_editing || (expectedScope != null && expectedScope != _accountScope)) {
+      return;
+    }
     setState(() {
       _editing = true;
       _error = null;
@@ -135,10 +159,9 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                 : 'Set widget photo',
             allowPrivateSave: send,
             actionDescription: send
-                ? 'Send this photo to your partner. They must allow updates and open CloseCall to receive new photos. Active schedules take priority. Save privately instead to keep it in your library without sending.'
+                ? 'Send this photo to your partner, or save it privately for later.'
                 : upload
-                ? 'Upload to your couple’s private server storage only. '
-                      'Scheduling is a separate action; no background delivery.'
+                ? 'Save this photo privately without sending it.'
                 : 'Update this device only. This photo will not be uploaded.',
           ),
         ),
@@ -163,7 +186,13 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
         if (current()) {
           setState(() {
             _localPhoto = prepared;
-            _localPhotoScope = (pairing, identity, authRevision, coupleId);
+            _localPhotoScope = (
+              pairing,
+              identity,
+              authRevision,
+              coupleId,
+              partnerId,
+            );
             _status = 'Updated this device only — not uploaded.';
           });
         }
@@ -371,6 +400,7 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                       pairing.userId,
                       pairing.authRevision,
                       pairing.couple?.id,
+                      pairing.couple?.partnerOf(pairing.userId ?? ''),
                     )
                 ? _localPhoto
                 : null,
@@ -391,14 +421,14 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
           const SizedBox(height: AppSpacing.md),
           _HubActionCard(
             key: const Key('hub-send-to-partner'),
-            label: 'Send to partner',
+            label: 'Send a photo',
             subtitle: sharingAllowed
                 ? 'Choose a photo, decorate it, and send it privately.'
                 : 'Complete pairing before sharing private photos.',
             icon: Icons.favorite_outline_rounded,
             accent: AppColors.plum,
             enabled: !busy && !pending && sharingAllowed,
-            onTap: () => _openEditor(send: true),
+            onTap: () => _showSendSheet(context, media!, pairing),
           ),
           const SizedBox(height: AppSpacing.sm),
           _HubActionCard(
@@ -412,11 +442,11 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
           const SizedBox(height: AppSpacing.sm),
           _HubActionCard(
             key: const Key('hub-partner-updates'),
-            label: 'Partner updates',
+            label: 'Photos from your partner',
             subtitle: schedules == null
-                ? 'Partner updates are unavailable right now.'
+                ? 'Photo updates are unavailable right now.'
                 : schedules.partnerUpdatesEnabled
-                ? 'On while CloseCall is open. Pause whenever you want.'
+                ? 'On · their photos can update your widget.'
                 : 'Choose whether partner photos can update this device.',
             icon: Icons.sync_rounded,
             accent: AppColors.plum,
@@ -428,29 +458,17 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
           const SizedBox(height: AppSpacing.sm),
           _HubActionCard(
             key: const Key('hub-schedule-photo'),
-            label: 'Schedule a photo',
+            label: 'Send later',
             subtitle: schedules == null || media == null
                 ? 'Photo schedules are unavailable right now.'
-                : 'Choose one of your private photos for a time window.',
+                : 'Choose a photo and when to show it.',
             icon: Icons.schedule_rounded,
             accent: AppColors.clay,
-            enabled: schedules != null && media != null,
-            onTap: schedules == null || media == null
+            enabled: schedules != null && media != null && sharingAllowed,
+            onTap: schedules == null || media == null || !sharingAllowed
                 ? null
                 : () => _showScheduleSheet(context, schedules, media),
           ),
-          if (media != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _HubActionCard(
-              key: const Key('hub-my-photos'),
-              label: 'My photos',
-              subtitle:
-                  'Open your private library to send, download, or apply.',
-              icon: Icons.photo_library_outlined,
-              accent: AppColors.clay,
-              onTap: () => _showLibrarySheet(context, media, pairing),
-            ),
-          ],
         ],
       ),
     );
@@ -469,10 +487,7 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
         ..add(child);
     }
 
-    if (_editing ||
-        schedules?.busy == true ||
-        schedules?.syncing == true ||
-        schedules?.partnerUpdatesBusy == true) {
+    if (_editing) {
       add(
         const WidgetStatusCard(
           key: Key('hub-action-busy'),
@@ -481,15 +496,20 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
         ),
       );
     }
-    if (_status != null) {
-      add(WidgetStatusCard(message: _status!, color: AppColors.success));
+    if (schedules?.downloadingNewPhoto == true) {
+      add(
+        const LinearProgressIndicator(
+          key: Key('hub-new-photo-loading'),
+          minHeight: 2,
+        ),
+      );
     }
     if (schedules?.partnerUpdatesError != null) {
       add(
         const WidgetStatusCard(
           key: Key('hub-partner-updates-error'),
           message:
-              'Partner updates could not be changed. Open Partner updates to try again.',
+              'Could not change photo updates. Open Photos from your partner to try again.',
           color: AppColors.error,
         ),
       );
@@ -530,7 +550,7 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
           ),
         ),
       );
-    } else if (pending || media?.busy == true) {
+    } else if (pending) {
       add(
         WidgetStatusCard(
           key: const Key('hub-media-pending'),
@@ -556,14 +576,6 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                     ),
                   ],
                 ),
-        ),
-      );
-    } else if (media?.status != null) {
-      add(
-        WidgetStatusCard(
-          message: media!.status!,
-          icon: Icons.check_circle_outline_rounded,
-          color: AppColors.success,
         ),
       );
     }
@@ -607,23 +619,15 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
         WidgetStatusCard(
           key: const Key('hub-timeline-error'),
           message:
-              'Timeline needs attention. Reconnect to check the latest photo.',
+              'Could not check for new photos. Try again when you’re online.',
           icon: Icons.wifi_off_rounded,
           color: AppColors.warning,
           action: TextButton(
             onPressed: schedules!.canSchedule && !schedules.busy
                 ? schedules.refresh
                 : null,
-            child: const Text('Reconnect timeline'),
+            child: const Text('Try again'),
           ),
-        ),
-      );
-    } else if (schedules?.status != null) {
-      add(
-        WidgetStatusCard(
-          message: schedules!.status!,
-          icon: Icons.check_circle_outline_rounded,
-          color: AppColors.success,
         ),
       );
     }
@@ -647,6 +651,16 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
   }
 
   Future<void> _showMyWidgetSheet(BuildContext context) {
+    final actionScope = _accountScope;
+    final pairing = widget.pairing ?? widget.media?.pairing;
+    final media =
+        widget.media?.canShare == true &&
+            identical(pairing, widget.media?.pairing)
+        ? widget.media
+        : null;
+    final schedules = identical(widget.schedules?.pairing, pairing)
+        ? widget.schedules
+        : null;
     return _showSheet(
       context,
       'My widget',
@@ -668,6 +682,11 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                       (widget.pairing ?? widget.media?.pairing)?.userId,
                       (widget.pairing ?? widget.media?.pairing)?.authRevision,
                       (widget.pairing ?? widget.media?.pairing)?.couple?.id,
+                      (widget.pairing ?? widget.media?.pairing)?.couple
+                          ?.partnerOf(
+                            (widget.pairing ?? widget.media?.pairing)?.userId ??
+                                '',
+                          ),
                     )
                 ? _localPhoto
                 : null,
@@ -679,14 +698,14 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
           ],
           WidgetCard(
             eyebrow: 'This device only',
-            title: 'Choose your local photo',
+            title: 'Choose your photo',
             icon: Icons.auto_awesome_rounded,
             accent: AppColors.blush,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Local widget choices are not uploaded or sent to your partner.',
+                  'Only changes your widget. Your partner’s widget stays as it is.',
                   style: TextStyle(color: AppColors.inkMuted, height: 1.35),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -700,9 +719,9 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                             widget.media?.hasPendingSend == true ||
                             widget.media?.hasPendingUpload == true
                         ? null
-                        : () => _openEditor(),
+                        : () => _openEditor(expectedScope: actionScope),
                     icon: const Icon(Icons.add_photo_alternate_outlined),
-                    label: const Text('Choose a photo'),
+                    label: const Text('Choose photo'),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -716,7 +735,10 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
                             widget.media?.hasPendingSend == true ||
                             widget.media?.hasPendingUpload == true
                         ? null
-                        : () => _openEditor(blank: true),
+                        : () => _openEditor(
+                            blank: true,
+                            expectedScope: actionScope,
+                          ),
                     icon: const Icon(Icons.crop_square_rounded),
                     label: const Text('Blank canvas'),
                   ),
@@ -724,6 +746,41 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
               ],
             ),
           ),
+          if (media != null && pairing != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            HubPhotoPicker(
+              media: media,
+              assets: media.assets
+                  .where(
+                    (a) =>
+                        a.coupleId == pairing.couple?.id &&
+                        pairing.couple!.memberIds.contains(a.uploaderId),
+                  )
+                  .toList(),
+              title: 'Saved and received photos',
+              onSelect: (asset) => _showAssetPreview(
+                context,
+                media,
+                pairing,
+                asset,
+                send: false,
+              ),
+            ),
+          ],
+          if (media != null && schedules != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Material(
+              color: Colors.transparent,
+              child: ExpansionTile(
+                key: const Key('hub-default-photo-setting'),
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Default photo'),
+                children: [
+                  DefaultPhotoPicker(controller: schedules, media: media),
+                ],
+              ),
+            ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.md),
             WidgetStatusCard(
@@ -745,12 +802,20 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
     BuildContext context,
     ScheduleController schedules,
   ) {
+    final actionScope = _accountScope;
     return _showSheet(
       context,
-      'Partner updates',
+      'Photos from your partner',
       () => _PartnerUpdatesCard(
         key: const Key('partner-updates-sheet-card'),
         controller: schedules,
+        onChanged: (enabled) {
+          if (mounted &&
+              actionScope == _accountScope &&
+              identical(widget.schedules, schedules)) {
+            schedules.setPartnerUpdates(enabled);
+          }
+        },
       ),
     );
   }
@@ -760,32 +825,135 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
     ScheduleController schedules,
     MediaController media,
   ) {
-    return _showSheet(
-      context,
-      'Schedule a photo',
-      () => SchedulePanel(
-        controller: schedules,
-        media: media,
-        showPartnerUpdatesControl: false,
+    if (!mounted ||
+        !identical(widget.schedules, schedules) ||
+        !identical(widget.media, media) ||
+        !media.canShare ||
+        !identical(schedules.pairing, media.pairing)) {
+      return Future.value();
+    }
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            SchedulePhotoScreen(controller: schedules, media: media),
       ),
     );
   }
 
-  Future<void> _showLibrarySheet(
+  Future<void> _showSendSheet(
     BuildContext context,
     MediaController media,
     PairingController pairing,
   ) {
+    if (!mounted ||
+        !media.canShare ||
+        !identical(media, widget.media) ||
+        !identical(pairing, widget.pairing ?? widget.media?.pairing) ||
+        !identical(pairing, media.pairing)) {
+      return Future.value();
+    }
+    final actionScope = _accountScope;
     return _showSheet(
       context,
-      'My photos',
-      () => _PrivatePhotosContent(
+      'Send a photo',
+      () => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton.icon(
+            key: const Key('hub-send-new-photo'),
+            onPressed:
+                _editing ||
+                    media.busy ||
+                    media.hasPendingSend ||
+                    media.hasPendingUpload
+                ? null
+                : () => _openEditor(send: true, expectedScope: actionScope),
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: const Text('New photo'),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          HubPhotoPicker(
+            media: media,
+            assets: media.assets
+                .where(
+                  (a) =>
+                      a.coupleId == pairing.couple?.id &&
+                      a.uploaderId == pairing.userId,
+                )
+                .toList(),
+            title: 'Saved photos',
+            onSelect: (asset) =>
+                _showAssetPreview(context, media, pairing, asset, send: true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAssetPreview(
+    BuildContext context,
+    MediaController media,
+    PairingController pairing,
+    MediaAsset asset, {
+    required bool send,
+  }) {
+    final identity = pairing.userId;
+    final authRevision = pairing.authRevision;
+    final couple = pairing.couple?.id;
+    final partner = pairing.couple?.partnerOf(identity ?? '');
+    bool current() =>
+        mounted &&
+        identical(widget.media, media) &&
+        identical(widget.pairing ?? widget.media?.pairing, pairing) &&
+        pairing.error == null &&
+        pairing.hasLoadedPairing &&
+        pairing.userId == identity &&
+        pairing.authRevision == authRevision &&
+        pairing.couple?.id == couple &&
+        pairing.couple?.partnerOf(pairing.userId ?? '') == partner &&
+        asset.coupleId == couple &&
+        (!send || asset.uploaderId == identity);
+    return _showSheet(
+      context,
+      send ? 'Send this photo?' : 'Use this photo?',
+      () => HubPhotoPreview(
         media: media,
-        pairing: pairing,
-        busy: _editing || media.busy,
-        pending: media.hasPendingUpload || media.hasPendingSend,
-        sharingAllowed: media.canShare && identical(pairing, media.pairing),
-        onSavePhoto: () => _openEditor(upload: true),
+        asset: asset,
+        label: send ? 'Send to partner' : 'Use on my widget',
+        onConfirm: () async {
+          if (!current() ||
+              _editing ||
+              media.busy ||
+              media.hasPendingSend ||
+              media.hasPendingUpload) {
+            return;
+          }
+          if (send) {
+            await media.sendUploaded(asset);
+          } else {
+            await media.download(asset);
+            if (!current() ||
+                media.error != null ||
+                media.selectedAsset?.assetId != asset.assetId ||
+                media.downloadedPhoto == null) {
+              return;
+            }
+            final photo = media.downloadedPhoto!;
+            await media.applyDownloadedLocally();
+            if (current() && media.error == null) {
+              setState(() {
+                _localPhoto = photo;
+                _localPhotoScope = (
+                  pairing,
+                  identity,
+                  authRevision,
+                  couple,
+                  partner,
+                );
+              });
+            }
+          }
+        },
       ),
     );
   }
@@ -796,11 +964,14 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
     Widget Function() content,
   ) {
     final pairing = widget.pairing ?? widget.media?.pairing;
+    final media = widget.media;
+    final schedules = widget.schedules;
     final scope = (
       pairing,
       pairing?.userId,
       pairing?.authRevision,
       pairing?.couple?.id,
+      pairing?.couple?.partnerOf(pairing.userId ?? ''),
     );
     return showModalBottomSheet<void>(
       context: context,
@@ -811,6 +982,7 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
         listenable: Listenable.merge([
           _surfaceChanges,
           pairing,
+          pairing?.session,
           widget.media,
           widget.schedules,
           widget.readiness,
@@ -819,16 +991,22 @@ class _WidgetTabScreenState extends State<WidgetTabScreen> {
           final currentPairing = widget.pairing ?? widget.media?.pairing;
           final current =
               mounted &&
+              identical(media, widget.media) &&
+              identical(schedules, widget.schedules) &&
               scope ==
                   (
                     currentPairing,
                     currentPairing?.userId,
                     currentPairing?.authRevision,
                     currentPairing?.couple?.id,
+                    currentPairing?.couple?.partnerOf(
+                      currentPairing.userId ?? '',
+                    ),
                   ) &&
               currentPairing?.hasLoadedPairing == true &&
               currentPairing?.error == null &&
-              currentPairing?.couple?.isComplete == true;
+              currentPairing?.couple?.isComplete == true &&
+              currentPairing!.couple!.memberIds.contains(currentPairing.userId);
           return _WidgetBottomSheet(
             title: title,
             child: current
@@ -1128,158 +1306,6 @@ class _WidgetBottomSheet extends StatelessWidget {
   }
 }
 
-class _PrivatePhotosContent extends StatelessWidget {
-  const _PrivatePhotosContent({
-    required this.media,
-    required this.pairing,
-    required this.busy,
-    required this.pending,
-    required this.sharingAllowed,
-    required this.onSavePhoto,
-  });
-
-  final MediaController media;
-  final PairingController pairing;
-  final bool busy;
-  final bool pending;
-  final bool sharingAllowed;
-  final VoidCallback onSavePhoto;
-
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: media,
-    builder: (context, _) {
-      final coupleId = pairing.couple?.id;
-      final assets = media.assets.where((a) => a.coupleId == coupleId).toList();
-      final selected = media.selectedAsset;
-      final hasDownloaded =
-          media.downloadedPhoto != null && selected?.coupleId == coupleId;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          WidgetCard(
-            eyebrow: 'Private library',
-            title: 'Photos from your couple',
-            icon: Icons.photo_library_outlined,
-            accent: AppColors.clay,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Your private photos stay in your couple’s storage until you choose what to do next.',
-                  style: TextStyle(color: AppColors.inkMuted, height: 1.35),
-                ),
-                if (!sharingAllowed) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  const WidgetStatusCard(
-                    message: 'Complete pairing before loading private photos.',
-                    icon: Icons.people_outline_rounded,
-                    color: AppColors.warning,
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.tonalIcon(
-                    onPressed: busy || pending || !sharingAllowed
-                        ? null
-                        : onSavePhoto,
-                    icon: const Icon(Icons.cloud_upload_outlined),
-                    label: const Text('Save privately'),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: busy || pending || !sharingAllowed
-                        ? null
-                        : media.refresh,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Refresh private photos'),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                if (assets.isEmpty)
-                  const WidgetEmptyState(
-                    title: 'Nothing here yet',
-                    message:
-                        'Uploaded photos will appear here. Tap one to download it before applying it locally.',
-                  )
-                else
-                  Column(
-                    children: [
-                      for (final asset in assets)
-                        _PrivateAssetTile(
-                          asset: asset,
-                          currentUserId: media.pairing.userId,
-                          enabled: !busy && !pending && sharingAllowed,
-                          onTap: () => media.download(asset),
-                          onSend: asset.uploaderId == media.pairing.userId
-                              ? () => media.sendUploaded(asset)
-                              : null,
-                        ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-          if (hasDownloaded) ...[
-            const SizedBox(height: AppSpacing.md),
-            WidgetCard(
-              eyebrow: 'Ready on this device',
-              title: 'Downloaded private photo',
-              icon: Icons.download_done_rounded,
-              accent: AppColors.success,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DownloadedPhoto(photo: media.downloadedPhoto!),
-                  const SizedBox(height: AppSpacing.md),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: busy || pending
-                          ? null
-                          : media.applyDownloadedLocally,
-                      icon: const Icon(Icons.phone_android_rounded),
-                      label: const Text(
-                        'Apply downloaded photo to this device',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (media.error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.md),
-              child: WidgetStatusCard(
-                message: mediaErrorMessage(media.error!),
-                icon: Icons.error_outline_rounded,
-                color: AppColors.error,
-                action: TextButton(
-                  onPressed: busy ? null : media.retry,
-                  child: const Text('Retry photo operation'),
-                ),
-              ),
-            ),
-          if (media.status != null)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.md),
-              child: WidgetStatusCard(
-                message: media.status!,
-                icon: Icons.check_circle_outline_rounded,
-                color: AppColors.success,
-              ),
-            ),
-        ],
-      );
-    },
-  );
-}
-
 /// OS readiness is not partner-photo consent. None of these actions writes the
 /// user's partner-update preference or gates foreground sharing.
 class _WidgetReadinessCard extends StatelessWidget {
@@ -1405,60 +1431,50 @@ class _WidgetReadinessCard extends StatelessWidget {
   }
 }
 
-class _PartnerUpdatesCard extends StatefulWidget {
-  const _PartnerUpdatesCard({super.key, required this.controller});
+class _PartnerUpdatesCard extends StatelessWidget {
+  const _PartnerUpdatesCard({
+    super.key,
+    required this.controller,
+    required this.onChanged,
+  });
   final ScheduleController controller;
-
-  @override
-  State<_PartnerUpdatesCard> createState() => _PartnerUpdatesCardState();
-}
-
-class _PartnerUpdatesCardState extends State<_PartnerUpdatesCard> {
-  bool _hasAllowed = false;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.controller,
+    listenable: controller,
     builder: (context, _) {
-      final c = widget.controller;
-      _hasAllowed |= c.partnerUpdatesEnabled;
+      final c = controller;
       final disabled = !c.canSchedule || c.partnerUpdatesBusy;
       return WidgetCard(
-        eyebrow: 'Photos from your partner',
-        title: 'Let their moments find you',
+        title: c.partnerUpdatesEnabled ? 'On' : 'Paused',
         icon: Icons.favorite_outline_rounded,
         accent: AppColors.plum,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Material(
+              color: Colors.transparent,
+              child: SwitchListTile(
+                key: const Key('partner-updates-toggle'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Automatically show their photos on my widget',
+                ),
+                subtitle: Text(
+                  c.partnerUpdatesEnabled
+                      ? 'On for this device. Pause whenever you want.'
+                      : 'Paused on this device. Your widget keeps your chosen photo.',
+                ),
+                value: c.partnerUpdatesEnabled,
+                onChanged: disabled ? null : onChanged,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             const Text(
-              'Updates automatically while CloseCall is open. Cached schedules can run later; receiving new photos with the app closed is not available yet.',
+              'New photos arrive while CloseCall is open. Receiving new photos with the app closed is not available yet.',
               style: TextStyle(color: AppColors.inkMuted, height: 1.35),
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (!_hasAllowed)
-              FilledButton.icon(
-                key: const Key('allow-partner-updates'),
-                onPressed: disabled ? null : () => c.setPartnerUpdates(true),
-                icon: const Icon(Icons.favorite_outline_rounded),
-                label: const Text('Allow partner updates'),
-              )
-            else
-              Material(
-                color: Colors.transparent,
-                child: SwitchListTile(
-                  key: const Key('partner-updates-toggle'),
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Allow partner updates'),
-                  subtitle: Text(
-                    c.partnerUpdatesEnabled
-                        ? 'On — pause whenever you want. Local-only photo choices pause updates.'
-                        : 'Paused — resume when you’re ready.',
-                  ),
-                  value: c.partnerUpdatesEnabled,
-                  onChanged: disabled ? null : c.setPartnerUpdates,
-                ),
-              ),
             if (c.partnerUpdatesBusy) const LinearProgressIndicator(),
             if (c.partnerUpdatesError != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -1580,125 +1596,6 @@ class _DemoModeCard extends StatelessWidget {
       message: 'Demo mode: local-only editing. Nothing is uploaded.',
       icon: Icons.visibility_outlined,
       color: AppColors.clay,
-    );
-  }
-}
-
-class _DownloadedPhoto extends StatelessWidget {
-  const _DownloadedPhoto({required this.photo});
-
-  final Uint8List photo;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 190,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.cream,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      ),
-      child: Image.memory(
-        photo,
-        fit: BoxFit.cover,
-        errorBuilder: (_, error, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Text(
-              'Could not display photo: $error',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.inkMuted),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PrivateAssetTile extends StatelessWidget {
-  const _PrivateAssetTile({
-    required this.asset,
-    required this.currentUserId,
-    required this.enabled,
-    required this.onTap,
-    this.onSend,
-  });
-
-  final MediaAsset asset;
-  final String? currentUserId;
-  final bool enabled;
-  final VoidCallback onTap;
-  final VoidCallback? onSend;
-
-  @override
-  Widget build(BuildContext context) {
-    final isMine = asset.uploaderId == currentUserId;
-    return Material(
-      color: AppColors.card,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        onTap: enabled ? onTap : null,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: (isMine ? AppColors.blush : AppColors.plum)
-                        .withValues(alpha: 0.14),
-                    child: Icon(
-                      isMine
-                          ? Icons.person_outline_rounded
-                          : Icons.favorite_outline_rounded,
-                      color: isMine ? AppColors.clay : AppColors.plum,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isMine
-                              ? 'Your private photo'
-                              : 'Partner’s private photo',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          asset.createdAt.toLocal().toString(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: AppColors.inkMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (onSend == null)
-                    const Padding(
-                      padding: EdgeInsets.only(left: AppSpacing.sm),
-                      child: Icon(Icons.download_outlined),
-                    ),
-                ],
-              ),
-              if (onSend != null)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: enabled ? onSend : null,
-                    icon: const Icon(Icons.send_outlined),
-                    label: const Text('Send to partner'),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

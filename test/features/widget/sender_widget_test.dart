@@ -7,7 +7,9 @@ import 'package:closecall/features/widget/data/schedule_repository.dart';
 import 'package:closecall/features/widget/presentation/schedule_controller.dart';
 import 'package:closecall/features/widget/presentation/widget_tab_screen.dart';
 import 'package:closecall/features/widget/presentation/editor/widget_editor_screen.dart';
-import 'package:closecall/features/widget/presentation/schedule_panel.dart';
+import 'package:closecall/features/widget/presentation/schedule_photo_screen.dart';
+import 'package:closecall/features/widget/presentation/default_photo_picker.dart';
+import 'package:closecall/features/widget/presentation/hub_photo_picker.dart';
 import 'package:closecall/features/widget/presentation/widget_preview_screen.dart';
 import 'package:closecall_client/closecall_client.dart';
 import 'package:flutter/material.dart';
@@ -50,6 +52,7 @@ void main() {
   late MediaController media;
   late ScheduleController schedules;
   final sends = <String>[];
+  final sendRequests = <String>[];
   Object? sendFailure;
 
   setUp(() async {
@@ -59,6 +62,7 @@ void main() {
     repository = _ConsentSchedules();
     photos = FakeMedia();
     sends.clear();
+    sendRequests.clear();
     sendFailure = null;
     schedules = ScheduleController(
       pairing: pairing,
@@ -76,6 +80,7 @@ void main() {
       repository: photos,
       sendAsset: (asset, request) async {
         sends.add(asset);
+        sendRequests.add(request);
         if (sendFailure != null) throw sendFailure!;
         return WidgetSendReceipt(
           sendId: 'send',
@@ -127,6 +132,12 @@ void main() {
       );
 
   Future<void> open(WidgetTester tester, String key) async {
+    final hubScroll = find.descendant(
+      of: find.byKey(const Key('paired-widget-hub')),
+      matching: find.byType(Scrollable),
+    );
+    tester.state<ScrollableState>(hubScroll).position.jumpTo(0);
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byKey(Key(key)),
       160,
@@ -157,14 +168,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('allow-partner-updates')), findsNothing);
       await open(tester, 'hub-partner-updates');
-      final allow = find.byKey(const Key('allow-partner-updates'));
+      final allow = find.byKey(const Key('partner-updates-toggle'));
       expect(allow, findsOneWidget);
       expect(tester.getTopLeft(allow).dy, lessThan(600));
-      expect(find.byType(Switch), findsNothing);
+      expect(find.byType(Switch), findsOneWidget);
       expect(repository.consents, isEmpty);
       expect(
         find.textContaining(
-          'receiving new photos with the app closed is not available yet.',
+          'Receiving new photos with the app closed is not available yet.',
         ),
         findsOneWidget,
       );
@@ -183,7 +194,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.consents, [true, false]);
       expect(schedules.partnerUpdatesEnabled, isFalse);
-      expect(find.textContaining('Paused — resume'), findsOneWidget);
+      expect(find.textContaining('Paused on this device'), findsOneWidget);
       await tester.runAsync(() async {
         await tester.tap(find.byType(Switch));
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -206,14 +217,14 @@ void main() {
     await tester.pumpAndSettle();
     await open(tester, 'hub-partner-updates');
     await tester.runAsync(() async {
-      await tester.tap(find.byKey(const Key('allow-partner-updates')));
+      await tester.tap(find.byKey(const Key('partner-updates-toggle')));
       await Future<void>.delayed(const Duration(milliseconds: 10));
     });
     await tester.pump();
-    final button = tester.widget<FilledButton>(
-      find.byKey(const Key('allow-partner-updates')),
+    final button = tester.widget<SwitchListTile>(
+      find.byKey(const Key('partner-updates-toggle')),
     );
-    expect(button.onPressed, isNull);
+    expect(button.onChanged, isNull);
     expect(repository.consents, [true]);
     await tester.runAsync(() async {
       repository.pendingConsent!.complete();
@@ -227,6 +238,26 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('stale partner switch cannot opt in a reauthenticated account', (
+    tester,
+  ) async {
+    await showTab(tester);
+    await tester.pumpAndSettle();
+    await open(tester, 'hub-partner-updates');
+    final previous = tester.widget<SwitchListTile>(
+      find.byKey(const Key('partner-updates-toggle')),
+    );
+    auth.change(null);
+    auth.change('me');
+    await tester.pumpAndSettle();
+    previous.onChanged!(true);
+    await tester.pumpAndSettle();
+    expect(find.byType(Switch), findsNothing);
+    expect(repository.consents, isEmpty);
+    expect(sends, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('library sends only own photos without another upload', (
     tester,
   ) async {
@@ -236,11 +267,30 @@ void main() {
     ];
     await showTab(tester);
     await tester.pumpAndSettle();
-    await open(tester, 'hub-my-photos');
-    final librarySend = find.widgetWithText(TextButton, 'Send to partner');
-    expect(librarySend, findsOneWidget);
-    expect(find.text('Partner’s private photo'), findsOneWidget);
-    await tester.tap(librarySend);
+    await open(tester, 'hub-send-to-partner');
+    expect(find.byKey(const ValueKey(('hub-photo', 'received'))), findsNothing);
+    expect(find.text('Saved photos'), findsOneWidget);
+    expect(find.text('Previously sent'), findsNothing);
+    expect(find.text('Not sent'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey(('hub-photo', 'my-saved-photo'))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(HubPhotoPreview), findsOneWidget);
+    expect(find.bySemanticsLabel('Large photo preview'), findsOneWidget);
+    expect(sends, isEmpty);
+    expect(photos.requestIds, isEmpty);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('hub-photo-confirm')),
+      150,
+      scrollable: find
+          .descendant(
+            of: find.byType(BottomSheet).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.byKey(const Key('hub-photo-confirm')));
     await tester.pumpAndSettle();
     expect(sends, ['my-saved-photo']);
     expect(photos.requestIds, isEmpty);
@@ -279,8 +329,45 @@ void main() {
       await tester.tap(find.text('Retry photo operation'));
       await tester.pumpAndSettle();
       expect(sends, ['saved-photo', 'saved-photo']);
+      expect(sendRequests[0], sendRequests[1]);
       expect(photos.requestIds, isEmpty);
       expect(media.hasPendingSend, isFalse);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'saved photo preview retries the same send UUID without another upload',
+    (tester) async {
+      media.assets = [testAsset(id: 'saved', uploader: 'me')];
+      sendFailure = TimeoutException('private.invalid raw-id');
+      await showTab(tester);
+      await tester.pumpAndSettle();
+      await open(tester, 'hub-send-to-partner');
+      await tester.tap(find.byKey(const ValueKey(('hub-photo', 'saved'))));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('hub-photo-confirm')));
+      await tester.pumpAndSettle();
+      expect(media.hasPendingSend, isTrue);
+      expect(sends, ['saved']);
+      expect(find.textContaining('private.invalid'), findsNothing);
+      sendFailure = null;
+      await tester.scrollUntilVisible(
+        find.text('Retry'),
+        100,
+        scrollable: find
+            .descendant(
+              of: find.byType(BottomSheet).last,
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(sends, ['saved', 'saved']);
+      expect(sendRequests[0], sendRequests[1]);
+      expect(photos.requestIds, isEmpty);
+      expect(find.text('Sent to your partner.'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );
@@ -290,22 +377,108 @@ void main() {
   ) async {
     await showTab(tester);
     await tester.pumpAndSettle();
-    expect(find.byType(SchedulePanel), findsNothing);
+    expect(find.byType(SchedulePhotoScreen), findsNothing);
     expect(find.byKey(const Key('schedule-asset')), findsNothing);
-    expect(find.text('Photos from your couple'), findsNothing);
+    expect(find.byType(HubPhotoPicker), findsNothing);
+    expect(find.byType(DefaultPhotoPicker), findsNothing);
+    expect(find.byKey(const Key('hub-my-photos')), findsNothing);
+    for (final label in [
+      'Send a photo',
+      'My widget',
+      'Photos from your partner',
+      'Send later',
+    ]) {
+      await tester.scrollUntilVisible(find.text(label), 100);
+      expect(find.text(label), findsOneWidget);
+    }
+    expect(find.text('asset'), findsNothing);
     expect(find.text('Refresh private photos'), findsNothing);
     expect(find.byKey(const Key('allow-partner-updates')), findsNothing);
     await open(tester, 'hub-schedule-photo');
-    expect(find.byType(SchedulePanel), findsOneWidget);
-    expect(find.byKey(const Key('schedule-start')), findsOneWidget);
+    expect(find.byType(SchedulePhotoScreen), findsOneWidget);
+    expect(find.byType(DefaultPhotoPicker), findsNothing);
     expect(find.byType(Switch), findsNothing);
-    await tester.tap(find.byTooltip('Close Schedule a photo'));
+    Navigator.of(tester.element(find.byType(SchedulePhotoScreen))).pop();
     await tester.pumpAndSettle();
-    expect(find.byType(SchedulePanel), findsNothing);
-    await open(tester, 'hub-my-photos');
-    expect(find.text('Refresh private photos'), findsOneWidget);
+    expect(find.byType(SchedulePhotoScreen), findsNothing);
+    await open(tester, 'hub-my-widget');
+    expect(find.byKey(const Key('hub-default-photo-setting')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets(
+    'saved photo preview cancellation never sends uploads or applies',
+    (tester) async {
+      media.assets = [testAsset(id: 'private-id', uploader: 'me')];
+      await showTab(tester);
+      await tester.pumpAndSettle();
+      expect(photos.downloads, isEmpty);
+      await open(tester, 'hub-send-to-partner');
+      await tester.tap(find.byKey(const ValueKey(('hub-photo', 'private-id'))));
+      await tester.pumpAndSettle();
+      expect(sends, isEmpty);
+      expect(photos.requestIds, isEmpty);
+      expect(media.selectedAsset, isNull);
+      expect(find.text('private-id'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('hub-photo-cancel')),
+        150,
+        scrollable: find
+            .descendant(
+              of: find.byType(BottomSheet).last,
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.byKey(const Key('hub-photo-cancel')));
+      await tester.pumpAndSettle();
+      expect(sends, isEmpty);
+      expect(photos.requestIds, isEmpty);
+      expect(media.selectedAsset, isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'quiet startup checks and successful statuses do not flash photo progress',
+    (tester) async {
+      media.busy = true;
+      media.status = 'Technical private download status';
+      schedules.busy = true;
+      schedules.syncing = true;
+      schedules.status = 'Cached native timeline details';
+      await showTab(tester);
+      await tester.pump();
+      expect(find.byKey(const Key('hub-action-busy')), findsNothing);
+      expect(find.byKey(const Key('hub-media-pending')), findsNothing);
+      expect(find.textContaining('Technical private'), findsNothing);
+      expect(find.textContaining('Cached native'), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'open large photo preview removes actions after auth revision changes',
+    (tester) async {
+      media.assets = [testAsset(id: 'private-id', uploader: 'me')];
+      await showTab(tester);
+      await tester.pumpAndSettle();
+      await open(tester, 'hub-send-to-partner');
+      await tester.tap(find.byKey(const ValueKey(('hub-photo', 'private-id'))));
+      await tester.pumpAndSettle();
+      expect(find.byType(HubPhotoPreview), findsOneWidget);
+      auth.change(null);
+      auth.change('me');
+      await tester.pumpAndSettle();
+      expect(find.byType(HubPhotoPreview), findsNothing);
+      expect(find.byKey(const Key('hub-photo-confirm')), findsNothing);
+      expect(find.textContaining('Pairing changed'), findsWidgets);
+      expect(sends, isEmpty);
+      expect(photos.requestIds, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets(
     'send card opens existing editor and preview without local apply',
@@ -313,8 +486,9 @@ void main() {
       applied = 0;
       await showTab(tester);
       await tester.pumpAndSettle();
+      await open(tester, 'hub-send-to-partner');
       await tester.runAsync(() async {
-        await tester.tap(find.byKey(const Key('hub-send-to-partner')));
+        await tester.tap(find.byKey(const Key('hub-send-new-photo')));
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
       await tester.pumpAndSettle();
@@ -336,58 +510,36 @@ void main() {
     },
   );
 
-  testWidgets(
-    'schedule sheet keeps the real create and explicit pending retry actions',
-    (tester) async {
-      media.assets = [testAsset(id: 'mine', uploader: 'me')];
-      repository.createFailure = TimeoutException('private.invalid secret');
-      await showTab(tester);
-      await tester.pumpAndSettle();
-      final watches = repository.watches;
-      await open(tester, 'hub-schedule-photo');
-      final scrollable = find
-          .descendant(
-            of: find.byType(BottomSheet),
-            matching: find.byType(Scrollable),
-          )
-          .first;
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('schedule-asset')),
-        150,
-        scrollable: scrollable,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('schedule-asset')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('mine').last);
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('Schedule for partner'),
-        150,
-        scrollable: scrollable,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Schedule for partner'));
-      await tester.pumpAndSettle();
-      expect(repository.creates, hasLength(1));
-      expect(repository.creates.single.$1, 'mine');
-      expect(repository.watches, watches);
-      expect(repository.consents, isEmpty);
-      expect(find.textContaining('private.invalid'), findsNothing);
-      await tester.tap(find.byTooltip('Close Schedule a photo'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('hub-schedule-pending')), findsOneWidget);
-      repository.createFailure = null;
-      await tester.ensureVisible(find.text('Retry schedule'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Retry schedule'));
-      await tester.pumpAndSettle();
-      expect(repository.creates, hasLength(2));
-      expect(repository.creates[0], repository.creates[1]);
-      expect(schedules.pendingCreate, isNull);
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
+  testWidgets('hub keeps explicit pending schedule retry actions and UUID', (
+    tester,
+  ) async {
+    media.assets = [testAsset(id: 'mine', uploader: 'me')];
+    repository.createFailure = TimeoutException('private.invalid secret');
+    await showTab(tester);
+    await tester.pumpAndSettle();
+    final watches = repository.watches;
+    await schedules.createPartnerSchedule(
+      'mine',
+      scheduleEpoch,
+      scheduleEpoch.add(const Duration(hours: 1)),
+    );
+    await tester.pumpAndSettle();
+    expect(repository.creates, hasLength(1));
+    expect(repository.creates.single.$1, 'mine');
+    expect(repository.watches, watches);
+    expect(repository.consents, isEmpty);
+    expect(find.textContaining('private.invalid'), findsNothing);
+    expect(find.byKey(const Key('hub-schedule-pending')), findsOneWidget);
+    repository.createFailure = null;
+    await tester.ensureVisible(find.text('Retry schedule'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Retry schedule'));
+    await tester.pumpAndSettle();
+    expect(repository.creates, hasLength(2));
+    expect(repository.creates[0], repository.creates[1]);
+    expect(schedules.pendingCreate, isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets(
     'open library immediately hides private controls after sign-out',
@@ -395,11 +547,11 @@ void main() {
       media.assets = [testAsset(id: 'mine', uploader: 'me')];
       await showTab(tester);
       await tester.pumpAndSettle();
-      await open(tester, 'hub-my-photos');
-      expect(find.text('Your private photo'), findsOneWidget);
+      await open(tester, 'hub-send-to-partner');
+      expect(find.byKey(const ValueKey(('hub-photo', 'mine'))), findsOneWidget);
       auth.change(null);
       await tester.pumpAndSettle();
-      expect(find.text('Your private photo'), findsNothing);
+      expect(find.byType(HubPhotoPicker), findsNothing);
       expect(find.text('Refresh private photos'), findsNothing);
       expect(find.textContaining('Pairing changed'), findsOneWidget);
       expect(repository.consents, isEmpty);
@@ -455,23 +607,35 @@ void main() {
     media.assets = [testAsset(id: 'received')];
     await showTab(tester);
     await tester.pumpAndSettle();
-    await open(tester, 'hub-my-photos');
-    await tester.tap(find.text('Partner’s private photo'));
+    await open(tester, 'hub-my-widget');
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey(('hub-photo', 'received'))),
+      150,
+      scrollable: find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.byKey(const ValueKey(('hub-photo', 'received'))));
     await tester.pumpAndSettle();
-    expect(media.downloadedPhoto, isNotNull);
+    expect(media.photoFor('received'), isNotNull);
+    expect(media.downloadedPhoto, isNull);
     expect(local, 0);
     await tester.scrollUntilVisible(
-      find.text('Apply downloaded photo to this device'),
+      find.text('Use on my widget'),
       150,
       scrollable: find.descendant(
-        of: find.byType(BottomSheet),
+        of: find.byType(BottomSheet).last,
         matching: find.byType(Scrollable),
       ),
     );
-    await tester.tap(find.text('Apply downloaded photo to this device'));
+    await tester.tap(find.text('Use on my widget'));
     await tester.pumpAndSettle();
     expect(local, 1);
     expect(sends, isEmpty);
+    expect(photos.downloads.where((id) => id == 'received'), hasLength(1));
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -526,9 +690,8 @@ void main() {
       expect(tester.takeException(), isNull);
       for (final entry in {
         'hub-my-widget': 'My widget',
-        'hub-partner-updates': 'Partner updates',
-        'hub-schedule-photo': 'Schedule a photo',
-        'hub-my-photos': 'My photos',
+        'hub-partner-updates': 'Photos from your partner',
+        'hub-send-to-partner': 'Send a photo',
       }.entries) {
         await open(tester, entry.key);
         expect(tester.takeException(), isNull);
@@ -550,6 +713,23 @@ void main() {
           greaterThanOrEqualTo(48),
         );
       }
+      await open(tester, 'hub-schedule-photo');
+      expect(find.byType(SchedulePhotoScreen), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byKey(const Key('hub-default-photo-setting')), findsNothing);
+      final scheduleScroll = find
+          .descendant(
+            of: find.byType(SchedulePhotoScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      for (var i = 0; i < 5; i++) {
+        await tester.drag(scheduleScroll, const Offset(0, -450));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+      Navigator.of(tester.element(find.byType(SchedulePhotoScreen))).pop();
+      await tester.pumpAndSettle();
       await tester.pumpWidget(const SizedBox());
     });
   }

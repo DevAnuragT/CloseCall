@@ -113,6 +113,11 @@ void _noPrivate(_Fixture f) {
     'Refresh private photos',
     'Photos from your couple',
     'Auto-sync',
+    'Send a photo',
+    'Photos from your partner',
+    'Send later',
+    'Saved photos',
+    'Default photo',
   ]) {
     expect(find.text(text), findsNothing);
   }
