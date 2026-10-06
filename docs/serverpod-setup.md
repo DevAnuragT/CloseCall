@@ -118,7 +118,7 @@ Dart/Flutter toolchain:
 export PATH="$PWD/.tooling/flutter/bin:$PWD/.tooling/pub-cache/bin:$PATH"
 export PUB_CACHE="$PWD/.tooling/pub-cache"
 dart pub global activate serverpod_cloud_cli 1.0.1
-scloud --no-analytics auth login
+scloud --no-analytics --project-dir "$PWD/closecall_server" auth login
 python3 scripts/prepare_cloud_deploy.py --replace
 (cd .tooling/cloud-deploy && ../flutter/bin/dart pub get --offline)
 scloud --no-analytics --project-dir .tooling/cloud-deploy/closecall_server \
