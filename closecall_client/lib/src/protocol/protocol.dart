@@ -21,22 +21,28 @@ import 'package:serverpod_client/serverpod_client.dart' as _isc;
 import 'auth/account_state.dart' as _ib26upii;
 import 'media/media_asset.dart' as _ijjfwapm;
 import 'media/media_failure.dart' as _iuzipihh;
+import 'mood/mood_failure.dart' as _ievswv9n;
+import 'mood/mood_state.dart' as _i3uwx2a4;
 import 'pairing/pairing_failure.dart' as _ium95mnn;
 import 'pairing/pairing_state.dart' as _iyyqlhox;
 import 'push/push_failure.dart' as _i9648dgo;
 import 'widget/schedule_failure.dart' as _ipjphtkx;
 import 'widget/widget_delivery_state.dart' as _icmbt5hs;
+import 'widget/widget_device_credential.dart' as _iv63qsae;
 import 'widget/widget_schedule_entry.dart' as _iro0jbgj;
 import 'widget/widget_send_receipt.dart' as _iezshfmm;
 import 'widget/widget_timeline.dart' as _i8hd5s9w;
 export 'auth/account_state.dart';
 export 'media/media_asset.dart';
 export 'media/media_failure.dart';
+export 'mood/mood_failure.dart';
+export 'mood/mood_state.dart';
 export 'pairing/pairing_failure.dart';
 export 'pairing/pairing_state.dart';
 export 'push/push_failure.dart';
 export 'widget/schedule_failure.dart';
 export 'widget/widget_delivery_state.dart';
+export 'widget/widget_device_credential.dart';
 export 'widget/widget_schedule_entry.dart';
 export 'widget/widget_send_receipt.dart';
 export 'widget/widget_timeline.dart';
@@ -82,6 +88,12 @@ class Protocol extends _isc.SerializationManager {
     if (t == _iuzipihh.MediaFailure) {
       return _iuzipihh.MediaFailure.fromJson(data) as T;
     }
+    if (t == _ievswv9n.MoodFailure) {
+      return _ievswv9n.MoodFailure.fromJson(data) as T;
+    }
+    if (t == _i3uwx2a4.MoodState) {
+      return _i3uwx2a4.MoodState.fromJson(data) as T;
+    }
     if (t == _ium95mnn.PairingFailure) {
       return _ium95mnn.PairingFailure.fromJson(data) as T;
     }
@@ -96,6 +108,9 @@ class Protocol extends _isc.SerializationManager {
     }
     if (t == _icmbt5hs.WidgetDeliveryState) {
       return _icmbt5hs.WidgetDeliveryState.fromJson(data) as T;
+    }
+    if (t == _iv63qsae.WidgetDeviceCredential) {
+      return _iv63qsae.WidgetDeviceCredential.fromJson(data) as T;
     }
     if (t == _iro0jbgj.WidgetScheduleEntry) {
       return _iro0jbgj.WidgetScheduleEntry.fromJson(data) as T;
@@ -115,6 +130,12 @@ class Protocol extends _isc.SerializationManager {
     if (t == _isc.getType<_iuzipihh.MediaFailure?>()) {
       return (data != null ? _iuzipihh.MediaFailure.fromJson(data) : null) as T;
     }
+    if (t == _isc.getType<_ievswv9n.MoodFailure?>()) {
+      return (data != null ? _ievswv9n.MoodFailure.fromJson(data) : null) as T;
+    }
+    if (t == _isc.getType<_i3uwx2a4.MoodState?>()) {
+      return (data != null ? _i3uwx2a4.MoodState.fromJson(data) : null) as T;
+    }
     if (t == _isc.getType<_ium95mnn.PairingFailure?>()) {
       return (data != null ? _ium95mnn.PairingFailure.fromJson(data) : null)
           as T;
@@ -132,6 +153,12 @@ class Protocol extends _isc.SerializationManager {
     if (t == _isc.getType<_icmbt5hs.WidgetDeliveryState?>()) {
       return (data != null
               ? _icmbt5hs.WidgetDeliveryState.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _isc.getType<_iv63qsae.WidgetDeviceCredential?>()) {
+      return (data != null
+              ? _iv63qsae.WidgetDeviceCredential.fromJson(data)
               : null)
           as T;
     }
@@ -178,11 +205,14 @@ class Protocol extends _isc.SerializationManager {
       _ib26upii.AccountState => 'AccountState',
       _ijjfwapm.MediaAsset => 'MediaAsset',
       _iuzipihh.MediaFailure => 'MediaFailure',
+      _ievswv9n.MoodFailure => 'MoodFailure',
+      _i3uwx2a4.MoodState => 'MoodState',
       _ium95mnn.PairingFailure => 'PairingFailure',
       _iyyqlhox.PairingState => 'PairingState',
       _i9648dgo.PushFailure => 'PushFailure',
       _ipjphtkx.ScheduleFailure => 'ScheduleFailure',
       _icmbt5hs.WidgetDeliveryState => 'WidgetDeliveryState',
+      _iv63qsae.WidgetDeviceCredential => 'WidgetDeviceCredential',
       _iro0jbgj.WidgetScheduleEntry => 'WidgetScheduleEntry',
       _iezshfmm.WidgetSendReceipt => 'WidgetSendReceipt',
       _i8hd5s9w.WidgetTimeline => 'WidgetTimeline',
@@ -206,6 +236,10 @@ class Protocol extends _isc.SerializationManager {
         return 'MediaAsset';
       case _iuzipihh.MediaFailure():
         return 'MediaFailure';
+      case _ievswv9n.MoodFailure():
+        return 'MoodFailure';
+      case _i3uwx2a4.MoodState():
+        return 'MoodState';
       case _ium95mnn.PairingFailure():
         return 'PairingFailure';
       case _iyyqlhox.PairingState():
@@ -216,6 +250,8 @@ class Protocol extends _isc.SerializationManager {
         return 'ScheduleFailure';
       case _icmbt5hs.WidgetDeliveryState():
         return 'WidgetDeliveryState';
+      case _iv63qsae.WidgetDeviceCredential():
+        return 'WidgetDeviceCredential';
       case _iro0jbgj.WidgetScheduleEntry():
         return 'WidgetScheduleEntry';
       case _iezshfmm.WidgetSendReceipt():
@@ -253,6 +289,12 @@ class Protocol extends _isc.SerializationManager {
     if (dataClassName == 'MediaFailure') {
       return deserialize<_iuzipihh.MediaFailure>(data['data']);
     }
+    if (dataClassName == 'MoodFailure') {
+      return deserialize<_ievswv9n.MoodFailure>(data['data']);
+    }
+    if (dataClassName == 'MoodState') {
+      return deserialize<_i3uwx2a4.MoodState>(data['data']);
+    }
     if (dataClassName == 'PairingFailure') {
       return deserialize<_ium95mnn.PairingFailure>(data['data']);
     }
@@ -267,6 +309,9 @@ class Protocol extends _isc.SerializationManager {
     }
     if (dataClassName == 'WidgetDeliveryState') {
       return deserialize<_icmbt5hs.WidgetDeliveryState>(data['data']);
+    }
+    if (dataClassName == 'WidgetDeviceCredential') {
+      return deserialize<_iv63qsae.WidgetDeviceCredential>(data['data']);
     }
     if (dataClassName == 'WidgetScheduleEntry') {
       return deserialize<_iro0jbgj.WidgetScheduleEntry>(data['data']);

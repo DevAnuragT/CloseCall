@@ -294,8 +294,9 @@ class PushRegistrationService {
   }
 }
 
-/// Receives only opaque invalidation hints. It does not download photos or
-/// construct an authenticated background Serverpod client.
+/// Records the opaque Dart-side fallback marker. Android's manifest receiver
+/// performs the separate device-credential fetch; this callback never creates
+/// an authenticated user-session client or stores photo data.
 @pragma('vm:entry-point')
 Future<void> closeCallFirebaseMessagingBackgroundHandler(
   RemoteMessage message,

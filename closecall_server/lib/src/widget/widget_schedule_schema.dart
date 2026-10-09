@@ -55,6 +55,18 @@ List<ForeignKeyDefinition> pushOutboxForeignKeys() => [
   ),
 ];
 
+List<ForeignKeyDefinition> widgetCredentialForeignKeys() => [
+  ForeignKeyDefinition(
+    constraintName: 'closecall_widget_credential_same_couple_member',
+    columns: ['coupleId', 'memberId'],
+    referenceTable: 'closecall_couple_member',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+];
+
 List<TableDefinition> withScheduleConstraints(
   List<TableDefinition> tables,
 ) => tables.map((table) {
@@ -65,7 +77,11 @@ List<TableDefinition> withScheduleConstraints(
       table.name == 'closecall_widget_send';
   final isPushTable = table.name == 'closecall_push_device_registration';
   final isPushOutboxTable = table.name == 'closecall_push_outbox';
-  if (!isScheduleTable && !isPushTable && !isPushOutboxTable) {
+  final isCredentialTable = table.name == 'closecall_widget_device_credential';
+  if (!isScheduleTable &&
+      !isPushTable &&
+      !isPushOutboxTable &&
+      !isCredentialTable) {
     return table;
   }
   // Serverpod 4.0.3's PostgresAnalyzer resolves conkey/confkey without WITH
@@ -73,7 +89,9 @@ List<TableDefinition> withScheduleConstraints(
   // view is ONLY for runtime verification, not SQL/artifact generation. The
   // canonical definitions above retain correct paired FK column ordering.
   final additional =
-      (isPushTable
+      (isCredentialTable
+              ? widgetCredentialForeignKeys()
+              : isPushTable
               ? pushRegistrationForeignKeys()
               : isPushOutboxTable
               ? pushOutboxForeignKeys()

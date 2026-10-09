@@ -13,7 +13,7 @@ class MainActivity : FlutterActivity() {
         WidgetTimelineStore.suspendForStartup(applicationContext)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "closecall/widget_timeline")
             .setMethodCallHandler { call, result ->
-                if (call.method !in setOf("cacheTimeline", "disableTimeline", "clearTimeline", "suspendForStartup", "restoreScope", "recordPhotoOwner")) {
+                if (call.method !in setOf("cacheTimeline", "disableTimeline", "clearTimeline", "suspendForStartup", "restoreScope", "recordPhotoOwner", "configureBackgroundServerUrl")) {
                     result.notImplemented()
                     return@setMethodCallHandler
                 }
@@ -28,6 +28,7 @@ class MainActivity : FlutterActivity() {
                             "suspendForStartup" -> WidgetTimelineStore.suspendForStartup(applicationContext)
                             "restoreScope" -> WidgetTimelineStore.restoreScope(applicationContext, call.arguments)
                             "recordPhotoOwner" -> WidgetTimelineStore.recordPhotoOwner(applicationContext, call.arguments)
+                            "configureBackgroundServerUrl" -> WidgetBackgroundDelivery.configureServerUrl(applicationContext, call.arguments)
                             else -> null
                         }
                         runOnUiThread { result.success(if (call.method == "restoreScope") response else null) }

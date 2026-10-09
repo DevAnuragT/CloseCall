@@ -7,17 +7,18 @@ import 'app_spacing.dart';
 /// spacing and gentle typography. Light mode only for the hackathon.
 abstract final class AppTheme {
   static ThemeData get light {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.blush,
-      brightness: Brightness.light,
-    ).copyWith(
-      primary: AppColors.blush,
-      secondary: AppColors.clay,
-      surface: AppColors.card,
-      error: AppColors.error,
-      onPrimary: Colors.white,
-      onSurface: AppColors.ink,
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.blush,
+          brightness: Brightness.light,
+        ).copyWith(
+          primary: AppColors.blush,
+          secondary: AppColors.clay,
+          surface: AppColors.card,
+          error: AppColors.error,
+          onPrimary: Colors.white,
+          onSurface: AppColors.ink,
+        );
 
     final base = ThemeData(
       useMaterial3: true,
@@ -50,6 +51,20 @@ abstract final class AppTheme {
         indicatorColor: AppColors.cream,
         elevation: 0,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            color: selected ? AppColors.plum : AppColors.ink,
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: selected ? AppColors.plum : AppColors.ink,
+          );
+        }),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

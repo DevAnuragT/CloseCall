@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:closecall/app/app_shell.dart';
 import 'package:closecall/main.dart';
 import 'package:closecall/core/theme/app_theme.dart';
@@ -40,6 +42,85 @@ void main() {
 
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(bar.selectedIndex, 2);
+  });
+
+  testWidgets('navigation destinations expose labels and selected state', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    addTearDown(semantics.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const AppShell()),
+    );
+
+    final home = find.bySemanticsLabel(RegExp(r'^Home'));
+    final moments = find.bySemanticsLabel(RegExp(r'^Moments'));
+    expect(home, findsOneWidget);
+    expect(moments, findsOneWidget);
+    expect(
+      tester.getSemantics(home).flagsCollection.isSelected,
+      Tristate.isTrue,
+    );
+    expect(
+      tester.getSemantics(moments).flagsCollection.isSelected,
+      Tristate.isFalse,
+    );
+
+    await tester.tap(moments);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSemantics(moments).flagsCollection.isSelected,
+      Tristate.isTrue,
+    );
+  });
+
+  testWidgets('ignores navigation indexes outside the four-tab range', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const AppShell()),
+    );
+
+    final bar = tester.widget<NavigationBar>(
+      find.byKey(const Key('primary-navigation')),
+    );
+    bar.onDestinationSelected!(-1);
+    bar.onDestinationSelected!(4);
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<NavigationBar>(find.byKey(const Key('primary-navigation')))
+          .selectedIndex,
+      0,
+    );
+  });
+
+  testWidgets('keeps all navigation destinations usable on a small screen', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    addTearDown(semantics.dispose);
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const AppShell()),
+    );
+
+    for (final label in ['Home', 'Moments', 'Widget', 'Profile']) {
+      expect(find.bySemanticsLabel(RegExp('^$label')), findsOneWidget);
+    }
+    expect(
+      tester.getBottomRight(find.byType(NavigationBar)).dy,
+      lessThanOrEqualTo(640),
+    );
   });
 
   for (final pending in [false, true]) {

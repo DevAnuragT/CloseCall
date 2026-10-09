@@ -149,6 +149,37 @@ sdks:
                  for p in stage.rglob("*") if p.is_file()}
         self.assertEqual(before, after)
 
+    def test_reviewed_widget_authority_schema_is_packaged_without_secret_files(self):
+        approved = set(deploy.REVIEWED_AUTHORITY_SOURCES) | {
+            f"closecall_server/migrations/{deploy.REVIEWED_AUTHORITY_MIGRATION}/{name}"
+            for name in deploy.MIGRATION_FILES
+        }
+        denied = {
+            "closecall_server/lib/src/generated/widget/widget_device_credentials.dart",
+            "closecall_server/lib/src/widget/private_credential.dart",
+            "closecall_server/lib/src/generated/widget/widget_device_credential.json",
+            f"closecall_server/migrations/{deploy.REVIEWED_AUTHORITY_MIGRATION}/credentials.json",
+            "closecall_server/migrations/20261007224415374-widget-device-credentials/migration.sql",
+        }
+        for path in approved:
+            self.write(path, "// public schema fixture\n")
+            self.assertTrue(deploy.allowed_runtime_path(path), path)
+        for path in denied:
+            self.write(path, "PRIVATE-CONTENT-MUST-NOT-BE-READ")
+            self.assertFalse(deploy.allowed_runtime_path(path), path)
+        real_read = deploy.read_regular
+
+        def guarded_read(root, path):
+            self.assertNotIn(path, denied)
+            return real_read(root, path)
+
+        with patch.object(deploy, "read_regular", side_effect=guarded_read):
+            stage, _ = deploy.prepare(self.root)
+        for path in approved:
+            self.assertTrue((stage / path).is_file(), path)
+        for path in denied:
+            self.assertFalse((stage / path).exists(), path)
+
     def test_nonignored_new_runtime_is_included_but_ignored_runtime_is_not(self):
         self.write("closecall_server/lib/new_endpoint.dart", "// runtime\n")
         self.write("closecall_server/lib/ignored.dart", "DO NOT READ\n")

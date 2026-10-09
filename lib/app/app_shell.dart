@@ -7,6 +7,7 @@ import '../features/auth/presentation/account_controller.dart';
 import '../features/home/domain/dashboard_snapshot.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/media/presentation/media_controller.dart';
+import '../features/mood/presentation/mood_controller.dart';
 import '../features/pairing/presentation/pairing_controller.dart';
 import '../features/pairing/presentation/pairing_screen.dart';
 import '../features/widget/presentation/schedule_controller.dart';
@@ -21,12 +22,14 @@ class AppShell extends StatefulWidget {
     this.pairing,
     this.account,
     this.media,
+    this.mood,
     this.schedules,
     this.readiness,
   });
 
   final AccountController? account;
   final MediaController? media;
+  final MoodController? mood;
   final ScheduleController? schedules;
   final WidgetReadinessController? readiness;
 
@@ -43,7 +46,12 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
 
-  void _openProfile() => setState(() => _index = 3);
+  void _openProfile() => _selectTab(3);
+
+  void _selectTab(int index) {
+    if (index < 0 || index >= _tabCount || index == _index) return;
+    setState(() => _index = index);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +65,11 @@ class _AppShellState extends State<AppShell> {
           HomeScreen(snapshot: widget.snapshot ?? MockDashboard.snapshot()),
         )
       else
-        HomeScreen(pairing: pairing, onOpenPairing: _openProfile),
+        HomeScreen(
+          pairing: pairing,
+          mood: widget.mood,
+          onOpenPairing: _openProfile,
+        ),
       MomentsScreen(liveMode: liveMode),
       WidgetTabScreen(
         media: widget.media,
@@ -77,34 +89,48 @@ class _AppShellState extends State<AppShell> {
       else
         const _DemoProfileScreen(),
     ];
+    final selectedIndex = _safeTabIndex(_index, tabs.length);
 
     return Scaffold(
-      body: IndexedStack(index: _index, children: tabs),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (index) => setState(() => _index = index),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome_rounded),
-            label: 'Moments',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_customize_outlined),
-            selectedIcon: Icon(Icons.dashboard_customize_rounded),
-            label: 'Widget',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.favorite_outline),
-            selectedIcon: Icon(Icons.favorite_rounded),
-            label: 'Profile',
-          ),
-        ],
+      body: ColoredBox(
+        color: AppColors.paper,
+        child: IndexedStack(index: selectedIndex, children: tabs),
+      ),
+      bottomNavigationBar: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: 'Primary navigation',
+        child: NavigationBar(
+          key: const Key('primary-navigation'),
+          selectedIndex: selectedIndex,
+          onDestinationSelected: _selectTab,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Home',
+              tooltip: 'Home',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.auto_awesome_outlined),
+              selectedIcon: Icon(Icons.auto_awesome_rounded),
+              label: 'Moments',
+              tooltip: 'Moments',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.dashboard_customize_outlined),
+              selectedIcon: Icon(Icons.dashboard_customize_rounded),
+              label: 'Widget',
+              tooltip: 'Widget',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.favorite_outline),
+              selectedIcon: Icon(Icons.favorite_rounded),
+              label: 'Profile',
+              tooltip: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -145,6 +171,13 @@ class _AppShellState extends State<AppShell> {
       Expanded(child: child),
     ],
   );
+
+  static const _tabCount = 4;
+
+  int _safeTabIndex(int index, int tabCount) {
+    if (tabCount == 0) return 0;
+    return index.clamp(0, tabCount - 1).toInt();
+  }
 }
 
 class _DemoProfileScreen extends StatelessWidget {

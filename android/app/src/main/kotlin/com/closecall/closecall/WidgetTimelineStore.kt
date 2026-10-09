@@ -18,6 +18,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
 
 /** All native mutations and rendering share this lock; a wake cannot publish an old generation. */
 internal object WidgetTimelineStore {
@@ -44,6 +46,13 @@ internal object WidgetTimelineStore {
     private fun prefs(context: Context) = context.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE)
     private fun boot(context: Context): Int = Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)
     private fun name() = UUID.randomUUID().toString()
+
+    /** Run a background operation in the same queue as every native mutation. */
+    fun <T> runSerialized(operation: () -> T): T {
+        val task = FutureTask(operation)
+        executor.execute(task)
+        return task.get(35, TimeUnit.SECONDS)
+    }
 
     private data class Owner(val scope: String, val path: String, val assetId: String?, val anchor: WidgetClockAnchor)
 
@@ -124,8 +133,12 @@ internal object WidgetTimelineStore {
         val server = WidgetTimelinePolicy.time(json.getLong("serverTimeMs"))
         val received = WidgetTimelinePolicy.time(json.getLong("receivedServerTimeMs"))
         require(received <= server)
+        val expiresAt = if (json.has("expiresAtMs") && !json.isNull("expiresAtMs"))
+            WidgetTimelinePolicy.time(json.getLong("expiresAtMs")) else null
+        require(expiresAt == null || (expiresAt >= server && expiresAt <= received + WidgetTimelinePolicy.TTL_MS))
         val anchor = WidgetClockAnchor(server, WidgetTimelinePolicy.time(json.getLong("wallTimeMs")),
-            json.getLong("elapsedMs").also { require(it >= 0) }, json.getInt("bootCount"), received)
+            json.getLong("elapsedMs").also { require(it >= 0) }, json.getInt("bootCount"), received,
+            expiresAt)
         val path = json.getString("path")
         require(path == prefs(context).getString(IMAGE_PATH, null))
         require(!anchor.expired(anchor.now(System.currentTimeMillis(), SystemClock.elapsedRealtime(), boot(context))))
@@ -147,6 +160,7 @@ internal object WidgetTimelineStore {
             put("scope", owner.scope); put("path", owner.path); put("assetId", owner.assetId ?: JSONObject.NULL)
             put("serverTimeMs", owner.anchor.serverTimeMs); put("receivedServerTimeMs", owner.anchor.receivedServerTimeMs)
             put("wallTimeMs", owner.anchor.wallTimeMs); put("elapsedMs", owner.anchor.elapsedMs); put("bootCount", owner.anchor.bootCount)
+            if (owner.anchor.expiresAtOverrideMs != null) put("expiresAtMs", owner.anchor.expiresAtOverrideMs)
         }
         val atomic = ownerFile(context)
         val stream = atomic.startWrite()
@@ -160,6 +174,10 @@ internal object WidgetTimelineStore {
         val serverTime = WidgetTimelinePolicy.time(input["serverTimeMs"])
         // Capture at receipt, not after image I/O.
         val anchor = WidgetClockAnchor(serverTime, receivedWallMs, receivedElapsedMs, boot(context))
+        val expiresAt = input["expiresAtMs"]?.let(WidgetTimelinePolicy::time)
+        require(expiresAt == null ||
+            (expiresAt >= serverTime && expiresAt <= serverTime + WidgetTimelinePolicy.TTL_MS))
+        val anchored = anchor.copy(expiresAtOverrideMs = expiresAt)
         val fallback = input["fallbackAssetId"]?.let(WidgetTimelinePolicy::id)
         val rawSchedules = input["schedules"] as? List<*> ?: throw IllegalArgumentException("Missing schedules")
         require(rawSchedules.size <= 100)
@@ -212,7 +230,7 @@ internal object WidgetTimelineStore {
                 else FileOutputStream(destination).use { it.write(bytes); it.fd.sync() }
                 filename
             }
-            val state = State(generation, scope, anchor, fallback, schedules, names)
+            val state = State(generation, scope, anchored, fallback, schedules, names)
             val json = encode(state).toString().toByteArray(Charsets.UTF_8)
             FileOutputStream(File(stage, "timeline.json")).use { it.write(json); it.fd.sync() }
             writePointer(context, json)
@@ -221,7 +239,7 @@ internal object WidgetTimelineStore {
             val current = photo(context, state, currentId)
             check(prefs(context).edit().putString(IMAGE_PATH, current?.absolutePath)
                 .putBoolean(ENABLED, true).putBoolean(SUSPENDED, false).commit())
-            if (current != null) writeOwner(context, Owner(scope, current.absolutePath, currentId, anchor))
+            if (current != null) writeOwner(context, Owner(scope, current.absolutePath, currentId, anchored))
             else ownerFile(context).delete()
             refreshLocked(context, null)
             cleanup(context, generation)
@@ -270,6 +288,26 @@ internal object WidgetTimelineStore {
     fun refresh(context: Context, expectedGeneration: String? = null) = synchronized(lock) {
         refreshLocked(context, expectedGeneration)
     }
+
+    /**
+     * A closed-app read may proceed only while the foreground coordinator has
+     * left a live, enabled native timeline for this identity.  The secure
+     * credential is checked separately by [WidgetBackgroundDelivery].  An
+     * empty cache is allowed so the first closed-app delivery can bootstrap a
+     * timeline; a disabled cache is never treated as consent.
+     */
+    fun backgroundReadAllowed(context: Context, userId: String, coupleId: String): Boolean =
+        synchronized(lock) {
+            if (prefs(context).getBoolean(SUSPENDED, false)) return@synchronized false
+            val state = read(context)
+            if (state == null) {
+                return@synchronized prefs(context).getString(IMAGE_PATH, null) == null
+            }
+            if (!prefs(context).getBoolean(ENABLED, false)) return@synchronized false
+            state.scope == "$userId/$coupleId" ||
+                (state.scope.startsWith("$userId:") &&
+                    state.scope.contains("/$coupleId/paired"))
+        }
 
     private fun refreshLocked(context: Context, expectedGeneration: String?) {
         if (prefs(context).getBoolean(SUSPENDED, false)) {
@@ -382,11 +420,16 @@ internal object WidgetTimelineStore {
             val serverTime = WidgetTimelinePolicy.time(json.getLong("serverTimeMs"))
             val receivedTime = WidgetTimelinePolicy.time(json.getLong("receivedServerTimeMs"))
             require(receivedTime <= serverTime)
+            val expiresAt = if (json.has("expiresAtMs") && !json.isNull("expiresAtMs"))
+                WidgetTimelinePolicy.time(json.getLong("expiresAtMs")) else null
+            require(expiresAt == null ||
+                (expiresAt >= serverTime && expiresAt <= receivedTime + WidgetTimelinePolicy.TTL_MS))
             val scope = json.getString("scope")
             WidgetTimelinePolicy.validate(scope, serverTime, schedules, emptyMap())
             State(WidgetTimelinePolicy.id(json.getString("generation")), scope,
                 WidgetClockAnchor(serverTime, WidgetTimelinePolicy.time(json.getLong("wallTimeMs")),
-                    json.getLong("elapsedMs").also { require(it >= 0) }, json.getInt("bootCount"), receivedTime),
+                    json.getLong("elapsedMs").also { require(it >= 0) }, json.getInt("bootCount"), receivedTime,
+                    expiresAt),
                 if (json.isNull("fallbackAssetId")) null else WidgetTimelinePolicy.id(json.getString("fallbackAssetId")), schedules, photos)
         }
     } catch (_: Exception) { null }
@@ -396,6 +439,7 @@ internal object WidgetTimelineStore {
         put("serverTimeMs", state.anchor.serverTimeMs); put("wallTimeMs", state.anchor.wallTimeMs)
         put("receivedServerTimeMs", state.anchor.receivedServerTimeMs)
         put("elapsedMs", state.anchor.elapsedMs); put("bootCount", state.anchor.bootCount)
+        if (state.anchor.expiresAtOverrideMs != null) put("expiresAtMs", state.anchor.expiresAtOverrideMs)
         put("fallbackAssetId", state.fallback ?: JSONObject.NULL)
         put("schedules", JSONArray().apply { state.schedules.forEach { row ->
             put(JSONObject().apply {

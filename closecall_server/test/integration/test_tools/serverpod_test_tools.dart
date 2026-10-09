@@ -21,10 +21,14 @@ import 'package:closecall_server/src/generated/future_calls_generated_models/wid
     as _ihjesomv;
 import 'package:closecall_server/src/generated/media/media_asset.dart'
     as _ibuid3ro;
+import 'package:closecall_server/src/generated/mood/mood_state.dart'
+    as _i3kuo6kc;
 import 'package:closecall_server/src/generated/pairing/pairing_state.dart'
     as _iye5whdh;
 import 'package:closecall_server/src/generated/widget/widget_delivery_state.dart'
     as _iy1hps0l;
+import 'package:closecall_server/src/generated/widget/widget_device_credential.dart'
+    as _i5z9y5vk;
 import 'package:closecall_server/src/generated/widget/widget_schedule_entry.dart'
     as _i8asvb62;
 import 'package:closecall_server/src/generated/widget/widget_send_receipt.dart'
@@ -180,9 +184,15 @@ class TestEndpoints {
 
   late final _MediaEndpoint media;
 
+  late final _MoodEndpoint mood;
+
   late final _PairingEndpoint pairing;
 
   late final _PushEndpoint push;
+
+  late final _WidgetBackgroundEndpoint widgetBackground;
+
+  late final _WidgetDeviceEndpoint widgetDevice;
 
   late final _WidgetScheduleEndpoint widgetSchedule;
 }
@@ -199,8 +209,14 @@ class _InternalTestEndpoints extends TestEndpoints
     emailIdp = _EmailIdpEndpoint(endpoints, serializationManager);
     jwtRefresh = _JwtRefreshEndpoint(endpoints, serializationManager);
     media = _MediaEndpoint(endpoints, serializationManager);
+    mood = _MoodEndpoint(endpoints, serializationManager);
     pairing = _PairingEndpoint(endpoints, serializationManager);
     push = _PushEndpoint(endpoints, serializationManager);
+    widgetBackground = _WidgetBackgroundEndpoint(
+      endpoints,
+      serializationManager,
+    );
+    widgetDevice = _WidgetDeviceEndpoint(endpoints, serializationManager);
     widgetSchedule = _WidgetScheduleEndpoint(endpoints, serializationManager);
   }
 }
@@ -702,6 +718,75 @@ class _MediaEndpoint {
   }
 }
 
+class _MoodEndpoint {
+  _MoodEndpoint(this._endpointDispatch, this._serializationManager);
+
+  final _is.EndpointDispatch _endpointDispatch;
+
+  final _is.SerializationManager _serializationManager;
+
+  _ida.Future<_i3kuo6kc.MoodState> current(
+    _ist.TestSessionBuilder sessionBuilder,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'mood',
+            method: 'current',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'mood',
+          methodName: 'current',
+          parameters: _ist.testObjectToJson({}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_i3kuo6kc.MoodState>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_i3kuo6kc.MoodState> setMood(
+    _ist.TestSessionBuilder sessionBuilder,
+    String mood,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'mood',
+            method: 'setMood',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'mood',
+          methodName: 'setMood',
+          parameters: _ist.testObjectToJson({'mood': mood}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_i3kuo6kc.MoodState>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+}
+
 class _PairingEndpoint {
   _PairingEndpoint(this._endpointDispatch, this._serializationManager);
 
@@ -904,6 +989,150 @@ class _PushEndpoint {
             'deviceId': deviceId,
             'token': token,
           }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<void>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+}
+
+class _WidgetBackgroundEndpoint {
+  _WidgetBackgroundEndpoint(this._endpointDispatch, this._serializationManager);
+
+  final _is.EndpointDispatch _endpointDispatch;
+
+  final _is.SerializationManager _serializationManager;
+
+  _ida.Future<_ikemxydo.WidgetTimeline> currentTimeline(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String credential,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetBackground',
+            method: 'currentTimeline',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetBackground',
+          methodName: 'currentTimeline',
+          parameters: _ist.testObjectToJson({'credential': credential}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_ikemxydo.WidgetTimeline>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_idt.ByteData> downloadPhoto(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String credential,
+    required String assetId,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetBackground',
+            method: 'downloadPhoto',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetBackground',
+          methodName: 'downloadPhoto',
+          parameters: _ist.testObjectToJson({
+            'credential': credential,
+            'assetId': assetId,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_idt.ByteData>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+}
+
+class _WidgetDeviceEndpoint {
+  _WidgetDeviceEndpoint(this._endpointDispatch, this._serializationManager);
+
+  final _is.EndpointDispatch _endpointDispatch;
+
+  final _is.SerializationManager _serializationManager;
+
+  _ida.Future<_i5z9y5vk.WidgetDeviceCredential> issueCredential(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String deviceId,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetDevice',
+            method: 'issueCredential',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetDevice',
+          methodName: 'issueCredential',
+          parameters: _ist.testObjectToJson({'deviceId': deviceId}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_i5z9y5vk.WidgetDeviceCredential>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<void> revokeCredential(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String deviceId,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'widgetDevice',
+            method: 'revokeCredential',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'widgetDevice',
+          methodName: 'revokeCredential',
+          parameters: _ist.testObjectToJson({'deviceId': deviceId}),
           serializationManager: _serializationManager,
         );
         var _localReturnValue =

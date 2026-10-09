@@ -116,6 +116,15 @@ class WidgetTimelineTest {
         assertFalse(anchor.expired(1000 + WidgetTimelinePolicy.TTL_MS - 1))
         assertTrue(anchor.expired(1000 + WidgetTimelinePolicy.TTL_MS))
     }
+
+    @Test fun explicitCredentialExpiryCapsNativeCacheLifetime() {
+        val expires = 1000L + 60_000L
+        val anchor = WidgetClockAnchor(1000, 5000, 100, 4, expiresAtOverrideMs = expires)
+        assertEquals(expires, anchor.expiresAtMs)
+        assertFalse(anchor.expired(expires - 1))
+        assertTrue(anchor.expired(expires))
+        assertEquals(expires, anchor.reanchor(5200, 20, 5).expiresAtMs)
+    }
     @Test fun newBootReanchorUsesMonotonicTimeAndDoesNotRenewTtl() {
         val anchor = WidgetClockAnchor(1000, 5000, 100, 4)
         val newBoot = anchor.reanchor(5200, 20, 5)

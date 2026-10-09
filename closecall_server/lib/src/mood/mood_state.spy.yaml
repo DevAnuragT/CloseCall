@@ -1,0 +1,7 @@
+class: MoodState
+fields:
+  ownMood: String?
+  ownUpdatedAt: DateTime?
+  partnerUserId: String?
+  partnerMood: String?
+  partnerUpdatedAt: DateTime?

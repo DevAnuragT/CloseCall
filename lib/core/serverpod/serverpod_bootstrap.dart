@@ -10,6 +10,8 @@ import '../../features/auth/presentation/account_controller.dart';
 import '../../features/media/data/serverpod_media_repository.dart';
 import '../../features/media/data/media_client.dart';
 import '../../features/media/presentation/media_controller.dart';
+import '../../features/mood/data/serverpod_mood_repository.dart';
+import '../../features/mood/presentation/mood_controller.dart';
 import '../config/app_config.dart';
 import '../../features/widget/data/home_widget_service.dart';
 import '../../features/widget/data/local_widget_writer.dart';
@@ -20,6 +22,10 @@ import '../../features/widget/presentation/schedule_controller.dart';
 import '../permissions/notification_permission_service.dart';
 import '../push/push_registration_api.dart';
 import '../push/push_registration_service.dart';
+import '../push/single_flight_push_device_identity_store.dart';
+import '../push/widget_read_credential_api.dart';
+import '../push/widget_read_credential_coordinator.dart';
+import '../push/widget_read_credential_store.dart';
 
 /// One secure persisted session, with separate regular and media transports.
 class ServerpodBootstrap {
@@ -36,12 +42,20 @@ class ServerpodBootstrap {
         userId: () => session.userId,
       ),
     );
+    mood = MoodController(
+      pairing: pairing,
+      repository: ServerpodMoodRepository(client, userId: () => session.userId),
+    );
+    final deviceIdentity = SingleFlightPushDeviceIdentityStore(
+      SharedPreferencesPushDeviceIdentityStore(),
+    );
     push = PushRegistrationService(
       pairing: pairing,
       permissions: AndroidWidgetPermissionService(),
       api: ServerpodPushRegistrationApi(client),
       platform: 'android',
       appVersion: '1.0.0+1',
+      deviceIdentity: deviceIdentity,
     );
     account = AccountController(session);
     final mediaRepository = ServerpodMediaRepository(mediaClient);
@@ -59,6 +73,13 @@ class ServerpodBootstrap {
       localWriter: writer,
       consentStore: SharedPreferencesWidgetConsentStore(),
     );
+    widgetCredentials = WidgetReadCredentialCoordinator(
+      pairing: pairing,
+      schedules: schedules,
+      api: ServerpodWidgetReadCredentialApi(client),
+      store: SecureWidgetReadCredentialStore(),
+      deviceIdentity: deviceIdentity,
+    );
     media = MediaController(
       pairing: pairing,
       repository: mediaRepository,
@@ -72,12 +93,16 @@ class ServerpodBootstrap {
   late final Client mediaClient;
   late final ServerpodAuthSession session;
   late final PairingController pairing;
+  late final MoodController mood;
   late final PushRegistrationService push;
   late final AccountController account;
   late final MediaController media;
   late final ScheduleController schedules;
+  late final WidgetReadCredentialCoordinator widgetCredentials;
 
   void dispose() {
+    widgetCredentials.dispose();
+    mood.dispose();
     push.dispose();
     media.dispose();
     schedules.dispose();

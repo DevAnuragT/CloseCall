@@ -17,6 +17,9 @@ media:
   - uploadPhoto:
   - listAssets:
   - downloadPhoto:
+mood:
+  - current:
+  - setMood:
 pairing:
   - createCouple:
   - joinByCode:
@@ -25,6 +28,12 @@ pairing:
 push:
   - registerDevice:
   - revokeDevice:
+widgetBackground:
+  - currentTimeline:
+  - downloadPhoto:
+widgetDevice:
+  - issueCredential:
+  - revokeCredential:
 widgetSchedule:
   - currentTimeline:
   - partnerTimeline:

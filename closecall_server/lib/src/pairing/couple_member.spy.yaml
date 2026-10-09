@@ -11,6 +11,8 @@ fields:
   ownNickname: String?
   partnerNickname: String?
   nicknamesUpdatedAt: DateTime?
+  currentMood: String?
+  moodUpdatedAt: DateTime?
 indexes:
   closecall_member_couple_id_unique:
     fields: coupleId, id

@@ -22,6 +22,8 @@ abstract class CoupleMember
     this.ownNickname,
     this.partnerNickname,
     this.nicknamesUpdatedAt,
+    this.currentMood,
+    this.moodUpdatedAt,
   });
 
   factory CoupleMember({
@@ -32,6 +34,8 @@ abstract class CoupleMember
     String? ownNickname,
     String? partnerNickname,
     DateTime? nicknamesUpdatedAt,
+    String? currentMood,
+    DateTime? moodUpdatedAt,
   }) = _CoupleMemberImpl;
 
   factory CoupleMember.fromJson(Map<String, dynamic> jsonSerialization) {
@@ -50,6 +54,12 @@ abstract class CoupleMember
           ? null
           : _is.DateTimeJsonExtension.fromJson(
               jsonSerialization['nicknamesUpdatedAt'],
+            ),
+      currentMood: jsonSerialization['currentMood'] as String?,
+      moodUpdatedAt: jsonSerialization['moodUpdatedAt'] == null
+          ? null
+          : _is.DateTimeJsonExtension.fromJson(
+              jsonSerialization['moodUpdatedAt'],
             ),
     );
   }
@@ -73,6 +83,10 @@ abstract class CoupleMember
 
   DateTime? nicknamesUpdatedAt;
 
+  String? currentMood;
+
+  DateTime? moodUpdatedAt;
+
   @override
   _is.Table<int?> get table => t;
 
@@ -87,6 +101,8 @@ abstract class CoupleMember
     String? ownNickname,
     String? partnerNickname,
     DateTime? nicknamesUpdatedAt,
+    String? currentMood,
+    DateTime? moodUpdatedAt,
   });
   @override
   Map<String, dynamic> toJson() {
@@ -100,6 +116,8 @@ abstract class CoupleMember
       if (partnerNickname != null) 'partnerNickname': partnerNickname,
       if (nicknamesUpdatedAt != null)
         'nicknamesUpdatedAt': nicknamesUpdatedAt?.toJson(),
+      if (currentMood != null) 'currentMood': currentMood,
+      if (moodUpdatedAt != null) 'moodUpdatedAt': moodUpdatedAt?.toJson(),
     };
   }
 
@@ -147,6 +165,8 @@ class _CoupleMemberImpl extends CoupleMember {
     String? ownNickname,
     String? partnerNickname,
     DateTime? nicknamesUpdatedAt,
+    String? currentMood,
+    DateTime? moodUpdatedAt,
   }) : super._(
          id: id,
          coupleId: coupleId,
@@ -155,6 +175,8 @@ class _CoupleMemberImpl extends CoupleMember {
          ownNickname: ownNickname,
          partnerNickname: partnerNickname,
          nicknamesUpdatedAt: nicknamesUpdatedAt,
+         currentMood: currentMood,
+         moodUpdatedAt: moodUpdatedAt,
        );
 
   /// Returns a shallow copy of this [CoupleMember]
@@ -169,6 +191,8 @@ class _CoupleMemberImpl extends CoupleMember {
     Object? ownNickname = _Undefined,
     Object? partnerNickname = _Undefined,
     Object? nicknamesUpdatedAt = _Undefined,
+    Object? currentMood = _Undefined,
+    Object? moodUpdatedAt = _Undefined,
   }) {
     return CoupleMember(
       id: id is int? ? id : this.id,
@@ -182,6 +206,10 @@ class _CoupleMemberImpl extends CoupleMember {
       nicknamesUpdatedAt: nicknamesUpdatedAt is DateTime?
           ? nicknamesUpdatedAt
           : this.nicknamesUpdatedAt,
+      currentMood: currentMood is String? ? currentMood : this.currentMood,
+      moodUpdatedAt: moodUpdatedAt is DateTime?
+          ? moodUpdatedAt
+          : this.moodUpdatedAt,
     );
   }
 }
@@ -206,6 +234,12 @@ class CoupleMemberUpdateTable extends _is.UpdateTable<CoupleMemberTable> {
 
   _is.ColumnValue<DateTime, DateTime> nicknamesUpdatedAt(DateTime? value) =>
       _is.ColumnValue(table.nicknamesUpdatedAt, value);
+
+  _is.ColumnValue<String, String> currentMood(String? value) =>
+      _is.ColumnValue(table.currentMood, value);
+
+  _is.ColumnValue<DateTime, DateTime> moodUpdatedAt(DateTime? value) =>
+      _is.ColumnValue(table.moodUpdatedAt, value);
 }
 
 class CoupleMemberTable extends _is.Table<int?> {
@@ -218,6 +252,8 @@ class CoupleMemberTable extends _is.Table<int?> {
     ownNickname = _is.ColumnString('ownNickname', this);
     partnerNickname = _is.ColumnString('partnerNickname', this);
     nicknamesUpdatedAt = _is.ColumnDateTime('nicknamesUpdatedAt', this);
+    currentMood = _is.ColumnString('currentMood', this);
+    moodUpdatedAt = _is.ColumnDateTime('moodUpdatedAt', this);
   }
 
   late final CoupleMemberUpdateTable updateTable;
@@ -234,6 +270,10 @@ class CoupleMemberTable extends _is.Table<int?> {
 
   late final _is.ColumnDateTime nicknamesUpdatedAt;
 
+  late final _is.ColumnString currentMood;
+
+  late final _is.ColumnDateTime moodUpdatedAt;
+
   @override
   List<_is.Column> get columns => [
     id,
@@ -243,6 +283,8 @@ class CoupleMemberTable extends _is.Table<int?> {
     ownNickname,
     partnerNickname,
     nicknamesUpdatedAt,
+    currentMood,
+    moodUpdatedAt,
   ];
 }
 

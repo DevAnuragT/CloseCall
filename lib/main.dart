@@ -13,13 +13,15 @@ import 'core/permissions/widget_readiness_controller.dart';
 import 'core/serverpod/serverpod_bootstrap.dart';
 import 'core/push/push_registration_service.dart';
 import 'core/theme/app_theme.dart';
+import 'features/widget/data/native_widget_timeline.dart';
 import 'features/auth/presentation/auth_gate.dart';
 import 'features/widget/presentation/photo_sync_settings_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Background FCM work is an opaque wake marker only. Foreground
-  // reconciliation remains responsible for authorized Serverpod state.
+  // FCM carries only an opaque wake hint. The Android manifest receiver owns
+  // the limited device-credential fetch; this Dart callback remains a
+  // bounded marker fallback and never restores a user session.
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
     FirebaseMessaging.onBackgroundMessage(
       closeCallFirebaseMessagingBackgroundHandler,
@@ -89,12 +91,16 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
       _backend?.dispose();
       _backend = null;
       _backend = ServerpodBootstrap(widget.serverUrl);
+      unawaited(
+        AndroidWidgetTimeline.configureBackgroundServerUrl(widget.serverUrl),
+      );
       _error = null;
       final foreground =
           WidgetsBinding.instance.lifecycleState == null ||
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
       _backend!.pairing.enableForegroundSync(foreground: foreground);
       _backend!.schedules.setForeground(foreground);
+      _backend!.mood.setForeground(foreground);
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         _readiness = WidgetReadinessController(
           service: AndroidWidgetPermissionService(),
@@ -106,6 +112,8 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
         _readiness!.initialize();
       }
       _backend!.pairing.initialize();
+      _backend!.mood.start();
+      _backend!.widgetCredentials.start();
       _backend!.push.start();
     } catch (error) {
       _error = error;
@@ -126,10 +134,12 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _backend?.pairing.setForeground(state == AppLifecycleState.resumed);
     _backend?.schedules.setForeground(state == AppLifecycleState.resumed);
+    _backend?.mood.setForeground(state == AppLifecycleState.resumed);
     _readiness?.setForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
       _readiness?.refresh();
       unawaited(_backend?.push.reconcile());
+      unawaited(_backend?.widgetCredentials.reconcile());
     }
   }
 
@@ -183,6 +193,7 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
           readiness: _readiness,
           child: AppShell(
             pairing: backend.pairing,
+            mood: backend.mood,
             account: backend.account,
             media: backend.media,
             schedules: backend.schedules,

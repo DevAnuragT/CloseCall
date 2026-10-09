@@ -5,11 +5,13 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import java.util.concurrent.Executors
 
 /**
- * Closed-app FCM is only an invalidation hint. This coordinator stores the
- * greatest bounded version and schedules one coalesced native wake. It never
- * stores an FCM token, auth token, payload, or photo bytes.
+ * Closed-app FCM carries only an invalidation hint. This coordinator stores
+ * the greatest bounded version and schedules one coalesced native wake. The
+ * wake obtains its separate device capability from secure storage and never
+ * stores an FCM token, user-session token, payload, or photo bytes.
  */
 internal object PushWakeCoordinator {
     const val ACTION_WAKE = "com.closecall.closecall.PUSH_WAKE"
@@ -17,9 +19,12 @@ internal object PushWakeCoordinator {
     private const val PENDING = "pending_version"
     private const val APPLIED = "applied_version"
     private const val SEEN = "seen_version"
+    private const val RETRIES = "background_retries"
     private const val MAX_VERSION = 9_000_000_000_000_000L
+    private const val MAX_RETRIES = 3
     private const val REQUEST_CODE = 7822
     private val lock = Any()
+    val executor = Executors.newSingleThreadExecutor()
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -44,16 +49,17 @@ internal object PushWakeCoordinator {
             val seen = data.getLong(SEEN, -1L)
             val greatest = maxOf(pending, applied, seen)
             if (version <= greatest) return false
-            check(data.edit().putLong(PENDING, version).putLong(SEEN, version).commit())
+            check(data.edit().putLong(PENDING, version).putLong(SEEN, version)
+                .putInt(RETRIES, 0).commit())
             schedule(context)
             return true
         }
     }
 
     /**
-     * Applies only the native, already-cached timeline. A suspended or invalid
-     * identity is handled by WidgetTimelineStore and cannot become authorized
-     * because a push was received.
+     * Fetches current authorized state, then applies it through the serialized
+     * native timeline store. A suspended or invalid identity cannot become
+     * authorized because a push was received.
      */
     fun process(context: Context) {
         val version: Long
@@ -68,21 +74,46 @@ internal object PushWakeCoordinator {
             version = pending
         }
 
-        // Do not let a malformed/corrupt cache create a receiver crash loop.
+        var completed = false
         try {
-            WidgetTimelineStore.refresh(context)
+            when (WidgetBackgroundDelivery.reconcile(context)) {
+                WidgetBackgroundDelivery.Result.APPLIED,
+                WidgetBackgroundDelivery.Result.NO_AUTHORITY -> completed = true
+                WidgetBackgroundDelivery.Result.RETRY -> Unit
+            }
         } catch (_: Exception) {
-            // Foreground reconciliation remains authoritative.
+            // A malformed/corrupt response must not create a receiver crash loop.
+        }
+        try {
+            // Preserve the prior cached-transition behavior even when this
+            // wake has no usable background authority or the network failed.
+            WidgetTimelineStore.runSerialized { WidgetTimelineStore.refresh(context) }
+        } catch (_: Exception) {
+            // Foreground reconciliation remains authoritative for bad cache data.
         }
 
         synchronized(lock) {
             val data = prefs(context)
             val newest = data.getLong(PENDING, -1L)
-            val applied = data.getLong(APPLIED, -1L)
-            val editor = data.edit().putLong(APPLIED, maxOf(applied, version))
-            if (newest <= version) editor.remove(PENDING)
-            check(editor.commit())
-            if (newest > version) schedule(context) else cancel(context)
+            val highestApplied = data.getLong(APPLIED, -1L)
+            if (newest > version) {
+                schedule(context)
+            } else if (completed) {
+                val editor = data.edit().putLong(APPLIED, maxOf(highestApplied, version))
+                    .remove(PENDING).remove(RETRIES)
+                check(editor.commit())
+                cancel(context)
+            } else {
+                val retries = data.getInt(RETRIES, 0) + 1
+                if (retries >= MAX_RETRIES) {
+                    check(data.edit().putLong(APPLIED, maxOf(highestApplied, version))
+                        .remove(PENDING).remove(RETRIES).commit())
+                    cancel(context)
+                } else {
+                    check(data.edit().putInt(RETRIES, retries).commit())
+                    schedule(context, 30_000L)
+                }
+            }
         }
     }
 
@@ -118,11 +149,11 @@ internal object PushWakeCoordinator {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    private fun schedule(context: Context) {
+    private fun schedule(context: Context, delayMs: Long = 1L) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         manager.setAndAllowWhileIdle(
             AlarmManager.ELAPSED_REALTIME_WAKEUP,
-            SystemClock.elapsedRealtime() + 1L,
+            SystemClock.elapsedRealtime() + delayMs.coerceAtLeast(1L),
             alarmIntent(context),
         )
     }

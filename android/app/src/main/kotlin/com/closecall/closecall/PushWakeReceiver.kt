@@ -9,7 +9,7 @@ class PushWakeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != PushWakeCoordinator.ACTION_WAKE) return
         val pending = goAsync()
-        WidgetTimelineStore.executor.execute {
+        PushWakeCoordinator.executor.execute {
             try {
                 PushWakeCoordinator.process(context.applicationContext)
             } finally {

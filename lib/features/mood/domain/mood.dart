@@ -84,3 +84,12 @@ class MoodCheckIn {
   @override
   int get hashCode => Object.hash(userId, mood, createdAt, note);
 }
+
+/// The latest mood owned by each member of the current couple.
+@immutable
+class MoodSnapshot {
+  const MoodSnapshot({this.own, this.partner});
+
+  final MoodCheckIn? own;
+  final MoodCheckIn? partner;
+}

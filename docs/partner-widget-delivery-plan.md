@@ -352,11 +352,63 @@ partner → enable automatic photos. Sender: send a test photo. Keep recipient C
 verify widget changes without Download/Apply. Verify restart persistence, local
 pause, resume and schedule priority separately.
 
-Backend FCM credentials, durable outbox dispatch and cached-transition wake are
-now implemented. Fresh-photo closed-app reception remains blocked on secure
-background authorization/fetch and per-device applied acknowledgements. Deploy
-the backend and updated APK before physical acceptance; do not describe
-foreground delivery or cached transitions as closed-app fresh-photo delivery.
+Backend FCM dispatch, cached-transition wake, device-scoped background-read
+authorization and the bounded native closed-app fetch/apply path are now
+implemented. Per-device applied acknowledgements are still pending. Deploy the
+backend and updated APK before physical acceptance; do not describe foreground
+delivery or cached transitions alone as closed-app fresh-photo delivery.
+
+### Device-scoped read authorization — 7 October 2026
+
+- Authenticated `widgetDevice.issueCredential` issues a 32-byte random capability
+  bound to the current member, couple and installation. It rotates under a
+  PostgreSQL lock, expires after 24 hours and stores only its SHA-256 digest in a
+  server-only table. `revokeCredential` remains available after consent withdrawal.
+  Issuance and background reads disable endpoint session logging.
+- `widgetBackground.currentTimeline` and `downloadPhoto` use this capability,
+  never an independently refreshed user session. Every read verifies expiry,
+  complete current membership and recipient consent. Private reads are restricted
+  to winning photos in the recipient's current/next-24-hour timeline, capped by
+  credential expiry, 100 schedules and 12 photos. Arbitrary library, fully masked,
+  cancelled, expired and foreign assets are denied. Storage retrieval rechecks
+  authorization and the current allowlist before returning bytes.
+- The Flutter coordinator acquires authority only for Android with validated
+  pairing, restored device opt-in and matching server consent. One secure-storage
+  record holds credential, scope and expiry; no preferences copy of the secret.
+  Fresh same-scope records survive restart. Foreground reconciliation renews below
+  one hour remaining. Sign-out, account/couple changes and local manual pause clear
+  authority; generation guards and a serialized storage queue reject late results.
+  Sign-out clears locally before bounded best-effort remote credential revocation.
+- Notification transport revocation is deliberately separate from widget-read
+  authority. A late FCM-token revoke cannot silently invalidate a newer widget
+  credential; sign-out has its own explicit credential cleanup hook.
+- Migration `20261006224415374-widget-device-credentials` preserves existing
+  composite same-couple FKs and SQL-only checks. Deployment packaging allows only
+  the exact reviewed public credential DTO/schema files and this migration;
+  runtime-looking secret files remain denied before any read.
+- Verified locally: **449 Flutter tests**, **111 backend tests**, clean full
+  analysis, clean generation roundtrip, **26 packaging checks** including offline
+  runtime compilation/archive inspection, and a Cloud-URL debug APK build at
+  `build/app/outputs/flutter-apk/app-debug.apk`. No deployment or phone installation
+  was performed for this slice.
+- The manifest FCM receiver now coalesces the greatest invalidation version onto
+  one native executor. It reads the existing secure credential record, checks
+  the non-suspended native identity/cache boundary and expiry, fetches only the
+  current authorized timeline plus its bounded winning photos, and publishes
+  through the existing serialized native writer. Transport failures retry three
+  times with a bounded delay; missing/expired/revoked authority and local pause
+  fail closed without applying. The existing Flutter background marker remains
+  an opaque fallback and never carries credentials or photo data.
+- This slice still has no per-device applied acknowledgement. Physical
+  acceptance must verify closed-app sends, offline coalescing, opt-out, manual
+  pause, identity changes, expiry and no-installed-widget behavior on both
+  phones.
+- Remaining constraints: private retrieval holds authorization locks during storage
+  I/O, delaying concurrent revocation while it completes. Uncertain foreground
+  issue/revoke operations are fenced only within the running coordinator. Platform
+  secure-storage deletion failures are fail-closed in this coordinator but not
+  proof of physical deletion. An unopened app cannot renew expired credentials;
+  background work stops when authority expires.
 
 ### Push registration foundation — 6 October 2026
 
@@ -370,6 +422,23 @@ foreground delivery or cached transitions as closed-app fresh-photo delivery.
   best-effort revoke the current device registration.
 - The Flutter coordinator reads notification status but never requests it.
   It starts only after a loaded complete pairing and granted notifications.
+
+### Live mood MVP — 7 October 2026
+
+- Each paired member can choose one bounded current mood: Happy, Tired, Busy,
+  Stressed, Missing You or Excited. The server stores only the member's latest
+  value and UTC update time on the couple-member row.
+- Authenticated `mood.current` and `mood.setMood` derive identity and couple
+  membership from the session. A member can read the current partner mood but
+  cannot select another user or couple; unpaired, invalid and stranger calls
+  fail closed.
+- Home shows a real mood card with one-tap choices, partner state, loading,
+  empty, offline/error and retry states. Foreground refresh polls every 15
+  seconds and pauses when the app is backgrounded; it is not an OS background
+  delivery promise.
+- Verified locally with the mood endpoint integration tests, Flutter mood/UI
+  tests, full Flutter analysis and Serverpod generation roundtrip. The mood
+  migration still needs deployment before two real accounts can use it.
   Firebase initialization, token reads, refreshes, unavailable platforms and
   server failures remain non-blocking for auth, pairing, foreground Send and
   widget use. Late async token results are discarded after scope changes.

@@ -110,6 +110,13 @@ MIGRATION_FILES = {
     "definition.json", "definition_project.json", "definition.sql",
     "migration.json", "migration.sql",
 }
+# Public schema/DTO code, not credential values. Keep exceptions exact so new
+# runtime-looking secret files remain denied before any read.
+REVIEWED_AUTHORITY_SOURCES = {
+    "closecall_server/lib/src/generated/widget/widget_device_credential.dart",
+    "closecall_server/lib/src/generated/widget/widget_device_credential_record.dart",
+}
+REVIEWED_AUTHORITY_MIGRATION = "20261006224415374-widget-device-credentials"
 REQUIRED = {
     "closecall_server/bin/main.dart", "closecall_server/lib/server.dart",
     "closecall_server/lib/src/generated/protocol.dart",
@@ -131,8 +138,14 @@ def allowed_runtime_path(value):
         return False
     if any(p.startswith(".") for p in parts):
         return False
-    if any(re.search(r"secret|password|firebase|credential|private", p, re.I)
-           for p in parts):
+    reviewed_authority = value in REVIEWED_AUTHORITY_SOURCES or (
+        len(parts) == 4 and parts[:2] == ("closecall_server", "migrations")
+        and parts[2] == REVIEWED_AUTHORITY_MIGRATION
+        and parts[3] in MIGRATION_FILES
+    )
+    if not reviewed_authority and any(
+            re.search(r"secret|password|firebase|credential|private", p, re.I)
+            for p in parts):
         return False
     if value in REQUIRED or value == "closecall_shared/pubspec.lock":
         return True

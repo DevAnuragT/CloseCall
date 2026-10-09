@@ -84,6 +84,15 @@ class WidgetTimelineDeviceTest {
         assertEquals(9L, PushWakeCoordinator.appliedVersion(context))
     }
 
+    @Test fun closedWakeWithoutSecureAuthorityDoesNotReplaceCachedPhoto() {
+        cache(payload(System.currentTimeMillis()))
+        val before = path()!!.let(::File).readBytes()
+        assertTrue(PushWakeCoordinator.accept(context, "invalidation", "12"))
+        PushWakeCoordinator.process(context)
+        assertArrayEquals(before, File(path()!!).readBytes())
+        assertNull(PushWakeCoordinator.pendingVersion(context))
+    }
+
     @Test fun invalidationPayloadDoesNotPersistArbitraryData() {
         val intent = Intent("com.google.android.c2dm.intent.RECEIVE")
             .putExtra("type", "invalidation")

@@ -947,6 +947,7 @@ void main() {
           // Inside an ephemeral database only: reproduce the prior scheduling
           // actions on a real pre-scheduling schema, not the happy fresh-install SQL.
           await session.db.unsafeSimpleExecute(
+            'DROP TABLE closecall_widget_device_credential; '
             'DROP TABLE closecall_push_outbox; '
             'DROP TABLE closecall_push_device_registration; '
             'DROP TABLE closecall_widget_schedule, closecall_widget_fallback, closecall_widget_delivery, closecall_widget_send; '
@@ -978,6 +979,8 @@ void main() {
             '20261005201637360-push-registration',
             '20261006081030595-nicknames',
             '20261006120000000-fcm-outbox',
+            '20261006224415374-widget-device-credentials',
+            '20261007041835495-live-mood',
           ]);
           expect(
             await database.MigrationManager.verifyDatabaseIntegrity(session),
@@ -1034,7 +1037,7 @@ void main() {
           final constraints = await session.db.unsafeQuery(
             "SELECT conname FROM pg_constraint WHERE conname LIKE 'closecall_widget_%same_couple%'",
           );
-          expect(constraints, hasLength(11));
+          expect(constraints, hasLength(12));
         },
       );
     },

@@ -16,10 +16,14 @@ import 'package:closecall_client/src/protocol/auth/account_state.dart'
     as _iksdjlut;
 import 'package:closecall_client/src/protocol/media/media_asset.dart'
     as _i7z5ta07;
+import 'package:closecall_client/src/protocol/mood/mood_state.dart'
+    as _i5qdsw2w;
 import 'package:closecall_client/src/protocol/pairing/pairing_state.dart'
     as _i9hl8iq9;
 import 'package:closecall_client/src/protocol/widget/widget_delivery_state.dart'
     as _ih73c9dn;
+import 'package:closecall_client/src/protocol/widget/widget_device_credential.dart'
+    as _i3he4cwt;
 import 'package:closecall_client/src/protocol/widget/widget_schedule_entry.dart'
     as _ipgzv14b;
 import 'package:closecall_client/src/protocol/widget/widget_send_receipt.dart'
@@ -293,6 +297,24 @@ class EndpointMedia extends _isc.EndpointRef {
       });
 }
 
+/// Couple-scoped current mood. The authenticated session is the only source
+/// of identity; callers never choose a user or couple.
+/// {@category Endpoint}
+class EndpointMood extends _isc.EndpointRef {
+  EndpointMood(_isc.EndpointCaller caller) : super(caller);
+
+  @override
+  String get name => 'mood';
+
+  _ida.Future<_i5qdsw2w.MoodState> current() =>
+      caller.callServerEndpoint<_i5qdsw2w.MoodState>('mood', 'current', {});
+
+  _ida.Future<_i5qdsw2w.MoodState> setMood(String mood) =>
+      caller.callServerEndpoint<_i5qdsw2w.MoodState>('mood', 'setMood', {
+        'mood': mood,
+      });
+}
+
 /// Identity comes exclusively from authenticated JWT sessions, never arguments.
 /// {@category Endpoint}
 class EndpointPairing extends _isc.EndpointRef {
@@ -365,6 +387,54 @@ class EndpointPush extends _isc.EndpointRef {
     'deviceId': deviceId,
     'token': token,
   });
+}
+
+/// Explicit bearer authorization, independent of the interactive login token.
+/// This capability has no library, partner-view, upload, or mutation methods.
+/// {@category Endpoint}
+class EndpointWidgetBackground extends _isc.EndpointRef {
+  EndpointWidgetBackground(_isc.EndpointCaller caller) : super(caller);
+
+  @override
+  String get name => 'widgetBackground';
+
+  _ida.Future<_ic1bjjnb.WidgetTimeline> currentTimeline({
+    required String credential,
+  }) => caller.callServerEndpoint<_ic1bjjnb.WidgetTimeline>(
+    'widgetBackground',
+    'currentTimeline',
+    {'credential': credential},
+  );
+
+  _ida.Future<_idt.ByteData> downloadPhoto({
+    required String credential,
+    required String assetId,
+  }) => caller.callServerEndpoint<_idt.ByteData>(
+    'widgetBackground',
+    'downloadPhoto',
+    {'credential': credential, 'assetId': assetId},
+  );
+}
+
+/// {@category Endpoint}
+class EndpointWidgetDevice extends _isc.EndpointRef {
+  EndpointWidgetDevice(_isc.EndpointCaller caller) : super(caller);
+
+  @override
+  String get name => 'widgetDevice';
+
+  _ida.Future<_i3he4cwt.WidgetDeviceCredential> issueCredential({
+    required String deviceId,
+  }) => caller.callServerEndpoint<_i3he4cwt.WidgetDeviceCredential>(
+    'widgetDevice',
+    'issueCredential',
+    {'deviceId': deviceId},
+  );
+
+  _ida.Future<void> revokeCredential({required String deviceId}) =>
+      caller.callServerEndpoint<void>('widgetDevice', 'revokeCredential', {
+        'deviceId': deviceId,
+      });
 }
 
 /// {@category Endpoint}
@@ -490,8 +560,11 @@ class Client extends _isc.ServerpodClientShared {
     emailIdp = EndpointEmailIdp(this);
     jwtRefresh = EndpointJwtRefresh(this);
     media = EndpointMedia(this);
+    mood = EndpointMood(this);
     pairing = EndpointPairing(this);
     push = EndpointPush(this);
+    widgetBackground = EndpointWidgetBackground(this);
+    widgetDevice = EndpointWidgetDevice(this);
     widgetSchedule = EndpointWidgetSchedule(this);
     modules = Modules(this);
   }
@@ -506,9 +579,15 @@ class Client extends _isc.ServerpodClientShared {
 
   late final EndpointMedia media;
 
+  late final EndpointMood mood;
+
   late final EndpointPairing pairing;
 
   late final EndpointPush push;
+
+  late final EndpointWidgetBackground widgetBackground;
+
+  late final EndpointWidgetDevice widgetDevice;
 
   late final EndpointWidgetSchedule widgetSchedule;
 
@@ -521,8 +600,11 @@ class Client extends _isc.ServerpodClientShared {
     'emailIdp': emailIdp,
     'jwtRefresh': jwtRefresh,
     'media': media,
+    'mood': mood,
     'pairing': pairing,
     'push': push,
+    'widgetBackground': widgetBackground,
+    'widgetDevice': widgetDevice,
     'widgetSchedule': widgetSchedule,
   };
 

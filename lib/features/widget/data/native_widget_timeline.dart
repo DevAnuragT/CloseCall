@@ -31,6 +31,17 @@ class AndroidWidgetTimeline
     implements NativeWidgetTimeline, ScopedWidgetRestoration {
   const AndroidWidgetTimeline();
   static const channel = MethodChannel('closecall/widget_timeline');
+
+  /// The URL is non-secret configuration. Persist it in native preferences so
+  /// the manifest FCM receiver can reach the limited background endpoints
+  /// without restoring a Flutter user session.
+  static Future<void> configureBackgroundServerUrl(String url) async {
+    if (!(!kIsWeb && defaultTargetPlatform == TargetPlatform.android)) return;
+    await channel.invokeMethod<void>(
+      'configureBackgroundServerUrl',
+      {'url': url},
+    );
+  }
   @override
   bool get supported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;

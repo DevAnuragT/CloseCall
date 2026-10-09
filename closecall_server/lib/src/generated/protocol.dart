@@ -27,6 +27,8 @@ import 'future_calls_generated_models/widget_timeline_future_call_wake_model.dar
 import 'media/media_asset.dart' as _ijjfwapm;
 import 'media/media_failure.dart' as _iuzipihh;
 import 'media/media_record.dart' as _i6kv8n64;
+import 'mood/mood_failure.dart' as _ievswv9n;
+import 'mood/mood_state.dart' as _i3uwx2a4;
 import 'pairing/couple.dart' as _iz3xjlbz;
 import 'pairing/couple_member.dart' as _ijn3tadz;
 import 'pairing/pairing_failure.dart' as _ium95mnn;
@@ -38,6 +40,8 @@ import 'widget/schedule_failure.dart' as _ipjphtkx;
 import 'widget/timeline_notice.dart' as _iulii77s;
 import 'widget/widget_delivery_record.dart' as _ib5zdgim;
 import 'widget/widget_delivery_state.dart' as _icmbt5hs;
+import 'widget/widget_device_credential.dart' as _iv63qsae;
+import 'widget/widget_device_credential_record.dart' as _incj22aa;
 import 'widget/widget_fallback_record.dart' as _i7xena83;
 import 'widget/widget_schedule_entry.dart' as _iro0jbgj;
 import 'widget/widget_schedule_record.dart' as _ipbmbdsw;
@@ -48,6 +52,8 @@ export 'auth/account_state.dart';
 export 'media/media_asset.dart';
 export 'media/media_failure.dart';
 export 'media/media_record.dart';
+export 'mood/mood_failure.dart';
+export 'mood/mood_state.dart';
 export 'pairing/couple.dart';
 export 'pairing/couple_member.dart';
 export 'pairing/pairing_failure.dart';
@@ -59,6 +65,8 @@ export 'widget/schedule_failure.dart';
 export 'widget/timeline_notice.dart';
 export 'widget/widget_delivery_record.dart';
 export 'widget/widget_delivery_state.dart';
+export 'widget/widget_device_credential.dart';
+export 'widget/widget_device_credential_record.dart';
 export 'widget/widget_fallback_record.dart';
 export 'widget/widget_schedule_entry.dart';
 export 'widget/widget_schedule_record.dart';
@@ -176,6 +184,18 @@ class Protocol extends _is.DatabaseSerializationManager {
         ),
         _isp.ColumnDefinition(
           name: 'nicknamesUpdatedAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'currentMood',
+          columnType: _isp.ColumnType.text,
+          isNullable: true,
+          dartType: 'String?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'moodUpdatedAt',
           columnType: _isp.ColumnType.timestampWithoutTimeZone,
           isNullable: true,
           dartType: 'DateTime?',
@@ -747,6 +767,135 @@ class Protocol extends _is.DatabaseSerializationManager {
       managed: true,
     ),
     _isp.TableDefinition(
+      name: 'closecall_widget_device_credential',
+      dartName: 'WidgetDeviceCredentialRecord',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int?',
+          columnDefault: 'serial',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'memberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'userIdentifier',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'deviceId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'credentialHash',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'createdAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+        ),
+        _isp.ColumnDefinition(
+          name: 'expiresAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_device_credential_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_widget_device_credential_fk_1',
+          columns: ['memberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_widget_credential_hash_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'credentialHash',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
+          indexName: 'closecall_widget_credential_member_device_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'memberId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'deviceId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
+          indexName: 'closecall_widget_credential_user_device_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'userIdentifier',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'deviceId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
+    _isp.TableDefinition(
       name: 'closecall_widget_fallback',
       dartName: 'WidgetFallbackRecord',
       schema: 'public',
@@ -1169,6 +1318,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == _i6kv8n64.MediaRecord) {
       return _i6kv8n64.MediaRecord.fromJson(data) as T;
     }
+    if (t == _ievswv9n.MoodFailure) {
+      return _ievswv9n.MoodFailure.fromJson(data) as T;
+    }
+    if (t == _i3uwx2a4.MoodState) {
+      return _i3uwx2a4.MoodState.fromJson(data) as T;
+    }
     if (t == _iz3xjlbz.Couple) {
       return _iz3xjlbz.Couple.fromJson(data) as T;
     }
@@ -1201,6 +1356,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (t == _icmbt5hs.WidgetDeliveryState) {
       return _icmbt5hs.WidgetDeliveryState.fromJson(data) as T;
+    }
+    if (t == _iv63qsae.WidgetDeviceCredential) {
+      return _iv63qsae.WidgetDeviceCredential.fromJson(data) as T;
+    }
+    if (t == _incj22aa.WidgetDeviceCredentialRecord) {
+      return _incj22aa.WidgetDeviceCredentialRecord.fromJson(data) as T;
     }
     if (t == _i7xena83.WidgetFallbackRecord) {
       return _i7xena83.WidgetFallbackRecord.fromJson(data) as T;
@@ -1237,6 +1398,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (t == _is.getType<_i6kv8n64.MediaRecord?>()) {
       return (data != null ? _i6kv8n64.MediaRecord.fromJson(data) : null) as T;
+    }
+    if (t == _is.getType<_ievswv9n.MoodFailure?>()) {
+      return (data != null ? _ievswv9n.MoodFailure.fromJson(data) : null) as T;
+    }
+    if (t == _is.getType<_i3uwx2a4.MoodState?>()) {
+      return (data != null ? _i3uwx2a4.MoodState.fromJson(data) : null) as T;
     }
     if (t == _is.getType<_iz3xjlbz.Couple?>()) {
       return (data != null ? _iz3xjlbz.Couple.fromJson(data) : null) as T;
@@ -1280,6 +1447,18 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == _is.getType<_icmbt5hs.WidgetDeliveryState?>()) {
       return (data != null
               ? _icmbt5hs.WidgetDeliveryState.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _is.getType<_iv63qsae.WidgetDeviceCredential?>()) {
+      return (data != null
+              ? _iv63qsae.WidgetDeviceCredential.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _is.getType<_incj22aa.WidgetDeviceCredentialRecord?>()) {
+      return (data != null
+              ? _incj22aa.WidgetDeviceCredentialRecord.fromJson(data)
               : null)
           as T;
     }
@@ -1348,6 +1527,8 @@ class Protocol extends _is.DatabaseSerializationManager {
       _ijjfwapm.MediaAsset => 'MediaAsset',
       _iuzipihh.MediaFailure => 'MediaFailure',
       _i6kv8n64.MediaRecord => 'MediaRecord',
+      _ievswv9n.MoodFailure => 'MoodFailure',
+      _i3uwx2a4.MoodState => 'MoodState',
       _iz3xjlbz.Couple => 'Couple',
       _ijn3tadz.CoupleMember => 'CoupleMember',
       _ium95mnn.PairingFailure => 'PairingFailure',
@@ -1359,6 +1540,8 @@ class Protocol extends _is.DatabaseSerializationManager {
       _iulii77s.TimelineNotice => 'TimelineNotice',
       _ib5zdgim.WidgetDeliveryRecord => 'WidgetDeliveryRecord',
       _icmbt5hs.WidgetDeliveryState => 'WidgetDeliveryState',
+      _iv63qsae.WidgetDeviceCredential => 'WidgetDeviceCredential',
+      _incj22aa.WidgetDeviceCredentialRecord => 'WidgetDeviceCredentialRecord',
       _i7xena83.WidgetFallbackRecord => 'WidgetFallbackRecord',
       _iro0jbgj.WidgetScheduleEntry => 'WidgetScheduleEntry',
       _ipbmbdsw.WidgetScheduleRecord => 'WidgetScheduleRecord',
@@ -1389,6 +1572,10 @@ class Protocol extends _is.DatabaseSerializationManager {
         return 'MediaFailure';
       case _i6kv8n64.MediaRecord():
         return 'MediaRecord';
+      case _ievswv9n.MoodFailure():
+        return 'MoodFailure';
+      case _i3uwx2a4.MoodState():
+        return 'MoodState';
       case _iz3xjlbz.Couple():
         return 'Couple';
       case _ijn3tadz.CoupleMember():
@@ -1411,6 +1598,10 @@ class Protocol extends _is.DatabaseSerializationManager {
         return 'WidgetDeliveryRecord';
       case _icmbt5hs.WidgetDeliveryState():
         return 'WidgetDeliveryState';
+      case _iv63qsae.WidgetDeviceCredential():
+        return 'WidgetDeviceCredential';
+      case _incj22aa.WidgetDeviceCredentialRecord():
+        return 'WidgetDeviceCredentialRecord';
       case _i7xena83.WidgetFallbackRecord():
         return 'WidgetFallbackRecord';
       case _iro0jbgj.WidgetScheduleEntry():
@@ -1466,6 +1657,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (dataClassName == 'MediaRecord') {
       return deserialize<_i6kv8n64.MediaRecord>(data['data']);
     }
+    if (dataClassName == 'MoodFailure') {
+      return deserialize<_ievswv9n.MoodFailure>(data['data']);
+    }
+    if (dataClassName == 'MoodState') {
+      return deserialize<_i3uwx2a4.MoodState>(data['data']);
+    }
     if (dataClassName == 'Couple') {
       return deserialize<_iz3xjlbz.Couple>(data['data']);
     }
@@ -1498,6 +1695,12 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (dataClassName == 'WidgetDeliveryState') {
       return deserialize<_icmbt5hs.WidgetDeliveryState>(data['data']);
+    }
+    if (dataClassName == 'WidgetDeviceCredential') {
+      return deserialize<_iv63qsae.WidgetDeviceCredential>(data['data']);
+    }
+    if (dataClassName == 'WidgetDeviceCredentialRecord') {
+      return deserialize<_incj22aa.WidgetDeviceCredentialRecord>(data['data']);
     }
     if (dataClassName == 'WidgetFallbackRecord') {
       return deserialize<_i7xena83.WidgetFallbackRecord>(data['data']);
@@ -1570,6 +1773,8 @@ class Protocol extends _is.DatabaseSerializationManager {
         return _i6z8z91q.PushOutbox.t;
       case _ib5zdgim.WidgetDeliveryRecord:
         return _ib5zdgim.WidgetDeliveryRecord.t;
+      case _incj22aa.WidgetDeviceCredentialRecord:
+        return _incj22aa.WidgetDeviceCredentialRecord.t;
       case _i7xena83.WidgetFallbackRecord:
         return _i7xena83.WidgetFallbackRecord.t;
       case _ipbmbdsw.WidgetScheduleRecord:

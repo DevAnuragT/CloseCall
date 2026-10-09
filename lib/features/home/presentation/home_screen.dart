@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../mood/domain/mood.dart';
+import '../../mood/presentation/mood_controller.dart';
 import '../../pairing/presentation/pairing_controller.dart';
 import '../../reminders/domain/reminder.dart';
 import '../../widget/domain/widget_schedule_resolver.dart';
@@ -11,11 +12,17 @@ import '../domain/dashboard_snapshot.dart';
 /// The emotional first screen. Demo snapshots remain available for previews,
 /// while live mode only renders state that came from the pairing controller.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, this.snapshot, this.pairing, this.onOpenPairing})
-    : assert(snapshot != null || pairing != null);
+  const HomeScreen({
+    super.key,
+    this.snapshot,
+    this.pairing,
+    this.mood,
+    this.onOpenPairing,
+  }) : assert(snapshot != null || pairing != null);
 
   final DashboardSnapshot? snapshot;
   final PairingController? pairing;
+  final MoodController? mood;
   final VoidCallback? onOpenPairing;
 
   @override
@@ -24,8 +31,11 @@ class HomeScreen extends StatelessWidget {
     if (livePairing != null) {
       return ListenableBuilder(
         listenable: livePairing,
-        builder: (context, _) =>
-            _LiveHome(controller: livePairing, onOpenPairing: onOpenPairing),
+        builder: (context, _) => _LiveHome(
+          controller: livePairing,
+          mood: mood,
+          onOpenPairing: onOpenPairing,
+        ),
       );
     }
     return _DemoHome(snapshot: snapshot!);
@@ -70,9 +80,10 @@ class _DemoHome extends StatelessWidget {
 }
 
 class _LiveHome extends StatelessWidget {
-  const _LiveHome({required this.controller, this.onOpenPairing});
+  const _LiveHome({required this.controller, this.mood, this.onOpenPairing});
 
   final PairingController controller;
+  final MoodController? mood;
   final VoidCallback? onOpenPairing;
 
   @override
@@ -129,11 +140,13 @@ class _LiveHome extends StatelessWidget {
                   'Your private scrapbook is coming together. Moments are not connected yet.',
             ),
             const SizedBox(height: AppSpacing.md),
-            const _LiveFeatureCard(
-              icon: Icons.schedule_rounded,
-              title: 'Little plans',
-              message: 'Mood and reminders are still being connected.',
-            ),
+            if (mood != null) MoodCard(controller: mood!),
+            if (mood == null)
+              const _LiveFeatureCard(
+                icon: Icons.mood_rounded,
+                title: 'Mood check-in',
+                message: 'Mood is unavailable until your space reconnects.',
+              ),
           ],
           const SizedBox(height: AppSpacing.xl),
           const _PrivacyNote(),
@@ -156,6 +169,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final relativeTime = _relativeMoodTime(mood.createdAt);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -397,6 +411,294 @@ class _LiveFeatureCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Live mood entry point. It stays on Home so setting a mood is one tap away,
+/// while the paired partner's latest state is visible in the same card.
+class MoodCard extends StatelessWidget {
+  const MoodCard({required this.controller, super.key});
+
+  final MoodController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final snapshot = controller.snapshot;
+        if (snapshot == null && controller.loading) {
+          return const _SoftCard(
+            child: Semantics(
+              liveRegion: true,
+              label: 'Checking in on your moods',
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: AppSpacing.md),
+                  Expanded(child: Text('Checking in on your moods…')),
+                ],
+              ),
+            ),
+          );
+        }
+        if (snapshot == null && controller.error != null) {
+          return _SoftCard(
+            child: _MoodError(
+              onRetry: controller.refresh,
+              saving: controller.saving,
+            ),
+          );
+        }
+        final ownMood = snapshot?.own?.mood;
+        final partnerMood = snapshot?.partner;
+        return _SoftCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const _CardLabel('Mood check-in'),
+                  if (controller.loading || controller.saving)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              if (controller.loading && snapshot != null)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Semantics(
+                    liveRegion: true,
+                    label: 'Updating mood check-in',
+                    child: Text(
+                      'Updating your mood check-in…',
+                      style: TextStyle(color: AppColors.inkMuted),
+                    ),
+                  ),
+                ),
+              if (controller.error != null) ...[
+                const Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    'Your mood could not be saved. Check your connection and try again.',
+                    style: TextStyle(color: AppColors.error),
+                  ),
+                ),
+                TextButton(
+                  onPressed: controller.saving ? null : controller.refresh,
+                  child: const Text('Retry'),
+                ),
+              ],
+              if (partnerMood == null)
+                const _MoodEmptyState()
+              else
+                _PartnerMoodLine(mood: partnerMood),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                ownMood == null
+                    ? 'How are you feeling?'
+                    : 'You feel ${ownMood.label.toLowerCase()}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              if (controller.saving)
+                const Padding(
+                  padding: EdgeInsets.only(top: AppSpacing.xs),
+                  child: Semantics(
+                    liveRegion: true,
+                    label: 'Saving your mood',
+                    child: Text(
+                      'Saving your mood…',
+                      style: TextStyle(color: AppColors.inkMuted),
+                    ),
+                  ),
+                )
+              else if (ownMood != null)
+                const Padding(
+                  padding: EdgeInsets.only(top: AppSpacing.xs),
+                  child: Text(
+                    'Visible to your partner',
+                    style: TextStyle(color: AppColors.inkMuted),
+                  ),
+                ),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  for (final mood in MoodKind.values)
+                    _MoodChoice(
+                      mood: mood,
+                      selected: ownMood == mood,
+                      saving: controller.saving,
+                      onSelected: () => controller.setMood(mood),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PartnerMoodLine extends StatelessWidget {
+  const _PartnerMoodLine({required this.mood});
+
+  final MoodCheckIn mood;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(mood.mood.emoji, style: const TextStyle(fontSize: 30)),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Semantics(
+            label: 'Partner feels ${mood.mood.label}, $relativeTime',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Partner feels',
+                  style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
+                ),
+                Text(
+                  mood.mood.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  relativeTime,
+                  style: const TextStyle(
+                    color: AppColors.inkMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MoodEmptyState extends StatelessWidget {
+  const _MoodEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Your partner has not shared a mood yet',
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Your partner has not shared a mood yet.',
+            style: TextStyle(color: AppColors.inkMuted),
+          ),
+          Text(
+            'Send yours to break the ice.',
+            style: TextStyle(color: AppColors.inkMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoodChoice extends StatelessWidget {
+  const _MoodChoice({
+    required this.mood,
+    required this.selected,
+    required this.saving,
+    required this.onSelected,
+  });
+
+  final MoodKind mood;
+  final bool selected;
+  final bool saving;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: selected
+          ? '${mood.label} is selected'
+          : 'Set your mood to ${mood.label}',
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: '${mood.label} mood',
+        hint: selected ? 'Selected' : 'Double tap to select',
+        child: ChoiceChip(
+          key: ValueKey('mood-choice-${mood.key}'),
+          label: Text('${mood.emoji} ${mood.label}'),
+          selected: selected,
+          onSelected: saving || selected ? null : (_) => onSelected(),
+          showCheckmark: true,
+          checkmarkColor: AppColors.plum,
+          selectedColor: (AppColors.mood[mood.key] ?? AppColors.blush)
+              .withValues(alpha: 0.35),
+        ),
+      ),
+    );
+  }
+}
+
+class _MoodError extends StatelessWidget {
+  const _MoodError({required this.onRetry, required this.saving});
+
+  final VoidCallback onRetry;
+  final bool saving;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.cloud_off_rounded, color: AppColors.error),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Mood is unavailable offline. Reconnect to see and share the latest check-in.',
+                style: TextStyle(color: AppColors.inkMuted),
+              ),
+              TextButton(
+                onPressed: saving ? null : onRetry,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _relativeMoodTime(DateTime createdAt) {
+  final elapsed = DateTime.now().toUtc().difference(createdAt.toUtc());
+  if (elapsed.isNegative || elapsed.inSeconds < 60) return 'just now';
+  if (elapsed.inMinutes < 60) return '${elapsed.inMinutes}m ago';
+  if (elapsed.inHours < 24) return '${elapsed.inHours}h ago';
+  if (elapsed.inDays == 1) return 'yesterday';
+  return '${elapsed.inDays}d ago';
 }
 
 class _LiveNotice extends StatelessWidget {

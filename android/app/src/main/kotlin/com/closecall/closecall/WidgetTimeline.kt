@@ -87,6 +87,7 @@ internal data class WidgetClockAnchor(
     val elapsedMs: Long,
     val bootCount: Int,
     val receivedServerTimeMs: Long = serverTimeMs,
+    val expiresAtOverrideMs: Long? = null,
 ) {
     fun now(wallNow: Long, elapsedNow: Long, currentBoot: Int): Long {
         if (bootCount >= 0 && bootCount == currentBoot && elapsedNow >= elapsedMs) {
@@ -97,10 +98,13 @@ internal data class WidgetClockAnchor(
         return (wallNow + offset).coerceAtLeast(serverTimeMs)
     }
 
-    val expiresAtMs: Long get() = receivedServerTimeMs + WidgetTimelinePolicy.TTL_MS
+    val expiresAtMs: Long get() = expiresAtOverrideMs ?: receivedServerTimeMs + WidgetTimelinePolicy.TTL_MS
 
     fun expired(now: Long): Boolean = now >= expiresAtMs
 
     fun reanchor(wallNow: Long, elapsedNow: Long, currentBoot: Int): WidgetClockAnchor =
-        WidgetClockAnchor(now(wallNow, elapsedNow, currentBoot), wallNow, elapsedNow, currentBoot, receivedServerTimeMs)
+        WidgetClockAnchor(
+            now(wallNow, elapsedNow, currentBoot), wallNow, elapsedNow, currentBoot,
+            receivedServerTimeMs, expiresAtOverrideMs,
+        )
 }

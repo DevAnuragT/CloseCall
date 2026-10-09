@@ -27,11 +27,11 @@ class PushEndpoint extends Endpoint {
         throw PushFailure(code: 'not_paired');
       }
       if (await CoupleMember.db.count(
-                session,
-                where: (t) => t.coupleId.equals(member.coupleId),
-                transaction: transaction,
-              ) !=
-              2) {
+            session,
+            where: (t) => t.coupleId.equals(member.coupleId),
+            transaction: transaction,
+          ) !=
+          2) {
         throw PushFailure(code: 'not_paired');
       }
 
@@ -92,29 +92,36 @@ class PushEndpoint extends Endpoint {
       throw PushFailure(code: 'invalid_device');
     }
     final user = session.authenticated!.userIdentifier;
-    await session.db.transaction((transaction) async {
-      final member = await CoupleMember.db.findFirstRow(
-        session,
-        where: (t) => t.userIdentifier.equals(user),
-        transaction: transaction,
-      );
-      if (member == null || member.id == null) {
-        throw PushFailure(code: 'not_paired');
-      }
-      await session.db.unsafeQuery(
-        'UPDATE closecall_push_device_registration '
-        'SET "revokedAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP '
-        'WHERE "memberId" = @member AND "deviceId" = @device '
-        'AND "token" = @token '
-        'AND "revokedAt" IS NULL',
-        parameters: QueryParameters.named({
-          'member': member.id!,
-          'device': deviceId,
-          'token': token,
-        }),
-        transaction: transaction,
-      );
-    });
+    await session.db.transaction(
+      (transaction) async {
+        // Notification transport and widget-read consent are independent.
+        // A late revoke for an old FCM token must not revoke newer read authority.
+        final member = await CoupleMember.db.findFirstRow(
+          session,
+          where: (t) => t.userIdentifier.equals(user),
+          transaction: transaction,
+        );
+        if (member == null || member.id == null) {
+          throw PushFailure(code: 'not_paired');
+        }
+        await session.db.unsafeQuery(
+          'UPDATE closecall_push_device_registration '
+          'SET "revokedAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP '
+          'WHERE "memberId" = @member AND "deviceId" = @device '
+          'AND "token" = @token '
+          'AND "revokedAt" IS NULL',
+          parameters: QueryParameters.named({
+            'member': member.id!,
+            'device': deviceId,
+            'token': token,
+          }),
+          transaction: transaction,
+        );
+      },
+      settings: const TransactionSettings(
+        isolationLevel: IsolationLevel.readCommitted,
+      ),
+    );
   }
 
   void _validate(
@@ -125,7 +132,8 @@ class PushEndpoint extends Endpoint {
   ) {
     // FCM token length is intentionally bounded without assuming a token
     // format; values are never included in failures or logs.
-    if (token.length < 20 || token.length > 4096 ||
+    if (token.length < 20 ||
+        token.length > 4096 ||
         RegExp(r'\s').hasMatch(token)) {
       throw PushFailure(code: 'invalid_token');
     }

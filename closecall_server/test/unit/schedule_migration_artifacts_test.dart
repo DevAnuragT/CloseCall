@@ -158,4 +158,80 @@ void main() {
       );
     },
   );
+  test(
+    'widget credential migration preserves all prior constraints and adds scoped cascade',
+    () {
+      const prior = 'migrations/20261006120000000-fcm-outbox';
+      const current = 'migrations/20261006224415374-widget-device-credentials';
+      final migration = db.DatabaseMigration.fromJson(
+        jsonDecode(File('$current/migration.json').readAsStringSync()),
+      );
+      expect(migration.actions, hasLength(1));
+      expect(
+        migration.actions.single.createTable!.name,
+        'closecall_widget_device_credential',
+      );
+      for (final filename in ['definition.json', 'definition_project.json']) {
+        final old = db.DatabaseDefinition.fromJson(
+          jsonDecode(File('$prior/$filename').readAsStringSync()),
+        );
+        final definition = db.DatabaseDefinition.fromJson(
+          jsonDecode(File('$current/$filename').readAsStringSync()),
+        );
+        for (final table in old.tables) {
+          final actual = definition.tables.singleWhere(
+            (t) => t.name == table.name,
+          );
+          expect(
+            actual.foreignKeys.map((k) => k.toJson()),
+            table.foreignKeys.map((k) => k.toJson()),
+          );
+          expect(
+            actual.indexes.map((i) => i.toJson()),
+            table.indexes.map((i) => i.toJson()),
+          );
+        }
+        final credential = definition.tables.singleWhere(
+          (t) => t.name == 'closecall_widget_device_credential',
+        );
+        expect(
+          credential.columns.map((c) => c.name),
+          isNot(contains('credential')),
+        );
+        final key = credential.foreignKeys.singleWhere(
+          (k) =>
+              k.constraintName ==
+              'closecall_widget_credential_same_couple_member',
+        );
+        expect(key.toJson(), widgetCredentialForeignKeys().single.toJson());
+        expect(credential.indexes.every((i) => i.isUnique), isTrue);
+      }
+      final oldSql = File('$prior/definition.sql').readAsStringSync();
+      final sql = File('$current/definition.sql').readAsStringSync();
+      // SQL-only CHECK definitions must survive the fresh-install snapshot.
+      for (final match in RegExp(
+        r'ALTER TABLE "[^"]+"\s+ADD CONSTRAINT [^;]+;',
+      ).allMatches(oldSql)) {
+        expect(sql, contains(match.group(0)!));
+      }
+      for (final filename in ['definition.sql', 'migration.sql']) {
+        final sql = File('$current/$filename').readAsStringSync();
+        expect(sql, contains('FOREIGN KEY("coupleId", "memberId")'));
+        expect(sql, contains('closecall_widget_credential_valid'));
+        expect(sql, contains("INTERVAL '24 hours'"));
+        expect(sql, contains("'^[0-9a-f]{64}\$'"));
+      }
+      final runtime = Protocol().getTargetTableDefinitions().singleWhere(
+        (t) => t.name == 'closecall_widget_device_credential',
+      );
+      final actual = runtime.foreignKeys.singleWhere(
+        (k) =>
+            k.constraintName ==
+            widgetCredentialForeignKeys().single.constraintName,
+      );
+      expect(actual.columns.toSet(), {'coupleId', 'memberId'});
+      expect(actual.referenceColumns.toSet(), {'coupleId', 'id'});
+      expect(actual.onDelete, widgetCredentialForeignKeys().single.onDelete);
+    },
+  );
 }

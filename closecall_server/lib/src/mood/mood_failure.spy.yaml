@@ -1,0 +1,3 @@
+exception: MoodFailure
+fields:
+  code: String

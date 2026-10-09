@@ -22,8 +22,11 @@ import '../auth/anonymous_idp_endpoint.dart' as _in0zita6;
 import '../auth/email_idp_endpoint.dart' as _iuc1hd5t;
 import '../auth/jwt_refresh_endpoint.dart' as _inwq3ztq;
 import '../media/media_endpoint.dart' as _i9ppd1x8;
+import '../mood/mood_endpoint.dart' as _i3bz3xom;
 import '../pairing/pairing_endpoint.dart' as _iku2870h;
 import '../push/push_endpoint.dart' as _ii21ahkp;
+import '../widget/widget_background_endpoint.dart' as _i0aswh2u;
+import '../widget/widget_device_endpoint.dart' as _iywg07ft;
 import '../widget/widget_schedule_endpoint.dart' as _iiq50v3t;
 export 'future_calls.dart' show ServerpodFutureCallsGetter;
 
@@ -40,9 +43,14 @@ class Endpoints extends _is.EndpointDispatch {
       'jwtRefresh': _inwq3ztq.JwtRefreshEndpoint()
         ..initialize(server, 'jwtRefresh', null),
       'media': _i9ppd1x8.MediaEndpoint()..initialize(server, 'media', null),
+      'mood': _i3bz3xom.MoodEndpoint()..initialize(server, 'mood', null),
       'pairing': _iku2870h.PairingEndpoint()
         ..initialize(server, 'pairing', null),
       'push': _ii21ahkp.PushEndpoint()..initialize(server, 'push', null),
+      'widgetBackground': _i0aswh2u.WidgetBackgroundEndpoint()
+        ..initialize(server, 'widgetBackground', null),
+      'widgetDevice': _iywg07ft.WidgetDeviceEndpoint()
+        ..initialize(server, 'widgetDevice', null),
       'widgetSchedule': _iiq50v3t.WidgetScheduleEndpoint()
         ..initialize(server, 'widgetSchedule', null),
     };
@@ -300,6 +308,33 @@ class Endpoints extends _is.EndpointDispatch {
         ),
       },
     );
+    connectors['mood'] = _is.EndpointConnector(
+      name: 'mood',
+      endpoint: endpoints['mood']!,
+      methodConnectors: {
+        'current': _is.MethodConnector(
+          name: 'current',
+          params: {},
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['mood'] as _i3bz3xom.MoodEndpoint).current(session),
+        ),
+        'setMood': _is.MethodConnector(
+          name: 'setMood',
+          params: {
+            'mood': _is.ParameterDescription(
+              name: 'mood',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['mood'] as _i3bz3xom.MoodEndpoint).setMood(
+                session,
+                params['mood'],
+              ),
+        ),
+      },
+    );
     connectors['pairing'] = _is.EndpointConnector(
       name: 'pairing',
       endpoint: endpoints['pairing']!,
@@ -422,6 +457,81 @@ class Endpoints extends _is.EndpointDispatch {
                 deviceId: params['deviceId'],
                 token: params['token'],
               ),
+        ),
+      },
+    );
+    connectors['widgetBackground'] = _is.EndpointConnector(
+      name: 'widgetBackground',
+      endpoint: endpoints['widgetBackground']!,
+      methodConnectors: {
+        'currentTimeline': _is.MethodConnector(
+          name: 'currentTimeline',
+          params: {
+            'credential': _is.ParameterDescription(
+              name: 'credential',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetBackground']
+                      as _i0aswh2u.WidgetBackgroundEndpoint)
+                  .currentTimeline(session, credential: params['credential']),
+        ),
+        'downloadPhoto': _is.MethodConnector(
+          name: 'downloadPhoto',
+          params: {
+            'credential': _is.ParameterDescription(
+              name: 'credential',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'assetId': _is.ParameterDescription(
+              name: 'assetId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetBackground']
+                      as _i0aswh2u.WidgetBackgroundEndpoint)
+                  .downloadPhoto(
+                    session,
+                    credential: params['credential'],
+                    assetId: params['assetId'],
+                  ),
+        ),
+      },
+    );
+    connectors['widgetDevice'] = _is.EndpointConnector(
+      name: 'widgetDevice',
+      endpoint: endpoints['widgetDevice']!,
+      methodConnectors: {
+        'issueCredential': _is.MethodConnector(
+          name: 'issueCredential',
+          params: {
+            'deviceId': _is.ParameterDescription(
+              name: 'deviceId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetDevice'] as _iywg07ft.WidgetDeviceEndpoint)
+                  .issueCredential(session, deviceId: params['deviceId']),
+        ),
+        'revokeCredential': _is.MethodConnector(
+          name: 'revokeCredential',
+          params: {
+            'deviceId': _is.ParameterDescription(
+              name: 'deviceId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['widgetDevice'] as _iywg07ft.WidgetDeviceEndpoint)
+                  .revokeCredential(session, deviceId: params['deviceId']),
         ),
       },
     );
