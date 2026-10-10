@@ -169,7 +169,6 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final relativeTime = _relativeMoodTime(mood.createdAt);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -231,11 +230,14 @@ class _DemoBanner extends StatelessWidget {
         children: [
           Icon(Icons.visibility_outlined, size: 16, color: AppColors.plum),
           SizedBox(width: AppSpacing.sm),
-          Text(
-            'Demo mode · sample data, not connected',
-            style: TextStyle(
-              color: AppColors.plum,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              'Demo mode · sample data, not connected',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppColors.plum,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -427,7 +429,7 @@ class MoodCard extends StatelessWidget {
       builder: (context, _) {
         final snapshot = controller.snapshot;
         if (snapshot == null && controller.loading) {
-          return const _SoftCard(
+          return _SoftCard(
             child: Semantics(
               liveRegion: true,
               label: 'Checking in on your moods',
@@ -473,7 +475,7 @@ class MoodCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               if (controller.loading && snapshot != null)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(bottom: AppSpacing.sm),
                   child: Semantics(
                     liveRegion: true,
@@ -485,7 +487,7 @@ class MoodCard extends StatelessWidget {
                   ),
                 ),
               if (controller.error != null) ...[
-                const Semantics(
+                Semantics(
                   liveRegion: true,
                   child: Text(
                     'Your mood could not be saved. Check your connection and try again.',
@@ -509,7 +511,7 @@ class MoodCard extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               if (controller.saving)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(top: AppSpacing.xs),
                   child: Semantics(
                     liveRegion: true,
@@ -557,6 +559,7 @@ class _PartnerMoodLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final relativeTime = _relativeMoodTime(mood.createdAt);
     return Row(
       children: [
         Text(mood.mood.emoji, style: const TextStyle(fontSize: 30)),
@@ -837,19 +840,21 @@ class _PartnerMoodCard extends StatelessWidget {
         children: [
           Text(m.mood.emoji, style: const TextStyle(fontSize: 40)),
           const SizedBox(width: AppSpacing.lg),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _CardLabel('Partner feels'),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                m.mood.label,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _CardLabel('Partner feels'),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  m.mood.label,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -871,7 +876,7 @@ class _WidgetPreviewCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const _CardLabel('On their home screen'),
+              const Expanded(child: _CardLabel('On their home screen')),
               _Badge(
                 label: isFallback ? 'Default' : 'Scheduled',
                 color: isFallback ? AppColors.inkMuted : AppColors.clay,
