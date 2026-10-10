@@ -207,6 +207,40 @@ void main() {
     expect(find.text('2h ago'), findsOneWidget);
     expect(find.byTooltip('Set your mood to Excited'), findsOneWidget);
   });
+
+  testWidgets('paired home exposes pull to refresh and mood refresh action', (
+    tester,
+  ) async {
+    final auth = _MoodAuth();
+    final pairing = PairingController(
+      session: auth,
+      repository: _MoodCouples(),
+    );
+    await pairing.initialize();
+    final mood = MoodController(
+      pairing: pairing,
+      repository: _MoodRepository(at: DateTime.now()),
+    )..start();
+    addTearDown(() {
+      mood.dispose();
+      pairing.dispose();
+      auth.dispose();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: HomeScreen(pairing: pairing, mood: mood),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RefreshIndicator), findsOneWidget);
+    expect(find.byKey(const Key('mood-refresh')), findsOneWidget);
+    expect(find.byTooltip('Refresh moods'), findsOneWidget);
+  });
 }
 
 class _MoodAuth extends AuthSession {

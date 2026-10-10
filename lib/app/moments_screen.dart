@@ -29,13 +29,19 @@ class MomentsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Moments',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.ink,
-                          ),
+                    Semantics(
+                      header: true,
+                      label: 'Shared moments page',
+                      child: ExcludeSemantics(
+                        child: Text(
+                          'Moments',
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink,
+                              ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(

@@ -48,14 +48,20 @@ void main() {
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
 
     await tester.pumpWidget(
       MaterialApp(theme: AppTheme.light, home: const AppShell()),
     );
 
-    final home = find.bySemanticsLabel(RegExp(r'^Home'));
-    final moments = find.bySemanticsLabel(RegExp(r'^Moments'));
+    final navigation = find.byType(NavigationBar);
+    final home = find.descendant(
+      of: navigation,
+      matching: find.bySemanticsLabel(RegExp(r'^Home')),
+    );
+    final moments = find.descendant(
+      of: navigation,
+      matching: find.bySemanticsLabel(RegExp(r'^Moments')),
+    );
     expect(home, findsOneWidget);
     expect(moments, findsOneWidget);
     expect(
@@ -74,6 +80,7 @@ void main() {
       tester.getSemantics(moments).flagsCollection.isSelected,
       Tristate.isTrue,
     );
+    semantics.dispose();
   });
 
   testWidgets('ignores navigation indexes outside the four-tab range', (
@@ -102,7 +109,6 @@ void main() {
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -115,12 +121,19 @@ void main() {
     );
 
     for (final label in ['Home', 'Moments', 'Widget', 'Profile']) {
-      expect(find.bySemanticsLabel(RegExp('^$label')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.bySemanticsLabel(RegExp('^$label')),
+        ),
+        findsOneWidget,
+      );
     }
     expect(
       tester.getBottomRight(find.byType(NavigationBar)).dy,
       lessThanOrEqualTo(640),
     );
+    semantics.dispose();
   });
 
   for (final pending in [false, true]) {

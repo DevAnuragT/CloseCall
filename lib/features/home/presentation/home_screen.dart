@@ -93,64 +93,75 @@ class _LiveHome extends StatelessWidget {
     final waiting = !controller.hasLoadedPairing || couple == null || !paired;
 
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.xxl,
-        ),
-        children: [
-          _Header(
-            eyebrow: paired ? 'Your little corner' : 'Welcome to CloseCall',
-            title: paired
-                ? 'Close, even from far away'
-                : 'Make it yours together',
-            icon: paired ? Icons.favorite_rounded : Icons.auto_awesome_rounded,
+      child: RefreshIndicator(
+        color: AppColors.blush,
+        backgroundColor: AppColors.card,
+        onRefresh: () async {
+          await controller.refresh();
+          if (mood != null) await mood!.refresh();
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.xxl,
           ),
-          const SizedBox(height: AppSpacing.xl),
-          if (controller.busy) ...[
-            const LinearProgressIndicator(minHeight: 3),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          if (controller.error != null) ...[
-            _LiveNotice(
-              title: 'We could not refresh your space',
-              message:
-                  'Your existing pairing is safe. Open Profile to try again.',
-              icon: Icons.cloud_off_rounded,
-              color: AppColors.error,
-              onPressed: controller.busy ? null : controller.retry,
-              actionLabel: 'Try again',
+          children: [
+            _Header(
+              eyebrow: paired ? 'Your little corner' : 'Welcome to CloseCall',
+              title: paired
+                  ? 'Close, even from far away'
+                  : 'Make it yours together',
+              icon: paired
+                  ? Icons.favorite_rounded
+                  : Icons.auto_awesome_rounded,
             ),
-            const SizedBox(height: AppSpacing.lg),
-          ],
-          if (waiting)
-            _PairingWelcomeCard(
-              hasLoadedPairing: controller.hasLoadedPairing,
-              onOpenPairing: onOpenPairing,
-            )
-          else ...[
-            _PairedHero(nickname: couple.partnerNickname),
-            const SizedBox(height: AppSpacing.lg),
-            const _LiveFeatureCard(
-              icon: Icons.auto_awesome_rounded,
-              title: 'Shared moments',
-              message:
-                  'Your private scrapbook is coming together. Moments are not connected yet.',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            if (mood != null) MoodCard(controller: mood!),
-            if (mood == null)
-              const _LiveFeatureCard(
-                icon: Icons.mood_rounded,
-                title: 'Mood check-in',
-                message: 'Mood is unavailable until your space reconnects.',
+            const SizedBox(height: AppSpacing.xl),
+            if (controller.busy) ...[
+              const LinearProgressIndicator(minHeight: 3),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            if (controller.error != null) ...[
+              _LiveNotice(
+                title: 'We could not refresh your space',
+                message:
+                    'Your existing pairing is safe. Open Profile to try again.',
+                icon: Icons.cloud_off_rounded,
+                color: AppColors.error,
+                onPressed: controller.busy ? null : controller.retry,
+                actionLabel: 'Try again',
               ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
+            if (waiting)
+              _PairingWelcomeCard(
+                hasLoadedPairing: controller.hasLoadedPairing,
+                onOpenPairing: onOpenPairing,
+              )
+            else ...[
+              _PairedHero(nickname: couple.partnerNickname),
+              const SizedBox(height: AppSpacing.lg),
+              const _LiveFeatureCard(
+                icon: Icons.auto_awesome_rounded,
+                title: 'Shared moments',
+                message:
+                    'Your private scrapbook is coming together. Moments are not connected yet.',
+              ),
+              const SizedBox(height: AppSpacing.md),
+              if (mood != null) MoodCard(controller: mood!),
+              if (mood == null)
+                const _LiveFeatureCard(
+                  icon: Icons.mood_rounded,
+                  title: 'Mood check-in',
+                  message: 'Mood is unavailable until your space reconnects.',
+                ),
+            ],
+            const SizedBox(height: AppSpacing.xl),
+            const _PrivacyNote(),
           ],
-          const SizedBox(height: AppSpacing.xl),
-          const _PrivacyNote(),
-        ],
+        ),
       ),
     );
   }
@@ -462,9 +473,18 @@ class MoodCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const _CardLabel('Mood check-in'),
+                  const Expanded(child: _CardLabel('Mood check-in')),
+                  IconButton(
+                    key: const Key('mood-refresh'),
+                    tooltip: 'Refresh moods',
+                    onPressed: controller.loading || controller.saving
+                        ? null
+                        : controller.refresh,
+                    icon: const Icon(Icons.refresh_rounded),
+                    iconSize: 20,
+                    visualDensity: VisualDensity.compact,
+                  ),
                   if (controller.loading || controller.saving)
                     const SizedBox(
                       width: 16,
@@ -530,6 +550,11 @@ class MoodCard extends StatelessWidget {
                     style: TextStyle(color: AppColors.inkMuted),
                   ),
                 ),
+              const SizedBox(height: AppSpacing.sm),
+              const Text(
+                'Choose one to let your partner know.',
+                style: TextStyle(color: AppColors.inkMuted, fontSize: 13),
+              ),
               const SizedBox(height: AppSpacing.sm),
               Wrap(
                 spacing: AppSpacing.sm,
