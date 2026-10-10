@@ -163,7 +163,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Mood is unavailable offline'), findsOneWidget);
+    expect(
+      find.textContaining('We could not load moods right now'),
+      findsOneWidget,
+    );
     expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
   });
 

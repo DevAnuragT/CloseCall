@@ -705,7 +705,7 @@ class _MoodError extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Mood is unavailable offline. Reconnect to see and share the latest check-in.',
+                'We could not load moods right now. Check your connection and try again.',
                 style: TextStyle(color: AppColors.inkMuted),
               ),
               TextButton(
