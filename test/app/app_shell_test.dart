@@ -44,6 +44,37 @@ void main() {
     expect(bar.selectedIndex, 2);
   });
 
+  testWidgets('Android back returns to Home before exiting the shell', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: AppShell()));
+
+    await tester.tap(find.text('Widget').last);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      2,
+    );
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      0,
+    );
+
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    navigator.push<void>(
+      MaterialPageRoute(builder: (_) => const Scaffold(body: Text('child'))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('child'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('child'), findsNothing);
+  });
+
   testWidgets('navigation destinations expose labels and selected state', (
     tester,
   ) async {

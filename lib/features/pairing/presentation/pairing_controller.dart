@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/async/bounded_retry.dart';
 import '../../auth/data/auth_session.dart';
 import '../../couple/data/couple_repository.dart';
 import '../../couple/domain/couple.dart';
 import '../../couple/domain/nickname.dart';
+import '../data/pairing_cache.dart';
 
 /// Owns async lifecycle; never uses mocks to mask a backend failure.
 class PairingController extends ChangeNotifier {
@@ -13,13 +15,18 @@ class PairingController extends ChangeNotifier {
     required this.session,
     required this.repository,
     this.allowDevGuest = false,
+    this.cache,
   }) : _identity = session.userId {
     session.addListener(_authChanged);
+    if (_identity != null && cache != null) {
+      unawaited(_restoreCachedPairing(_identity!));
+    }
   }
 
   final AuthSession session;
   final bool allowDevGuest;
   final CoupleRepository repository;
+  final PairingCache? cache;
   String? _identity;
   int _authRevision = 0;
   bool _disposed = false;
@@ -46,6 +53,11 @@ class PairingController extends ChangeNotifier {
   Future<bool> Function()? _nicknameRetry;
   int _pairingRevision = 0;
   Future<void> Function()? _retry;
+  bool _cacheRestored = false;
+
+  /// Whether the last failed operation is a user-confirmed mutation. Read
+  /// failures recover in the controller and do not need an inline retry link.
+  bool get hasExplicitRetry => _retry != null && !_retryIsRead;
 
   String? get userId => session.userId;
   int get authRevision => _authRevision;
@@ -57,6 +69,14 @@ class PairingController extends ChangeNotifier {
       couple?.isComplete == true &&
       couple!.memberIds.contains(userId) &&
       repository is NicknameRepository;
+
+  bool get canUnpair =>
+      !_disposed &&
+      initialized &&
+      hasLoadedPairing &&
+      userId != null &&
+      couple != null &&
+      repository is UnpairRepository;
 
   /// Opt-in for the live app only. Demo/fake controllers never start timers.
   void enableForegroundSync({bool foreground = true}) {
@@ -79,8 +99,8 @@ class PairingController extends ChangeNotifier {
     if (value) _schedulePoll(immediate: true);
   }
 
-  // First-load failures and failed writes remain owned by explicit Retry.
-  // A failed re-read may heal quietly only when a valid snapshot already exists.
+  // After bounded first-load retries, a failed re-read may heal quietly when a
+  // valid snapshot already exists. Writes retain explicit recovery.
   bool get _canPoll =>
       !_disposed &&
       _syncEnabled &&
@@ -164,6 +184,15 @@ class PairingController extends ChangeNotifier {
     if (couple != result) couple = result;
     inviteCode = code;
     hasLoadedPairing = true;
+    final id = userId;
+    final pairingCache = cache;
+    if (id != null && pairingCache != null) {
+      if (result?.isComplete == true) {
+        unawaited(pairingCache.write(id, result!, code));
+      } else {
+        unawaited(pairingCache.clear(id));
+      }
+    }
     return changed;
   }
 
@@ -173,7 +202,9 @@ class PairingController extends ChangeNotifier {
 
   void _authChanged() {
     if (_identity == userId) return; // Token refresh is not an identity change.
+    final oldIdentity = _identity;
     _identity = userId;
+    _cacheRestored = false;
     _authRevision++;
     _pairingRevision++;
     nicknameError = null;
@@ -189,6 +220,12 @@ class PairingController extends ChangeNotifier {
     _errorIsRead = false;
     _retry = null;
     _notify();
+    if (oldIdentity != null && userId == null && cache != null) {
+      unawaited(cache!.clear(oldIdentity));
+    }
+    if (userId != null && cache != null) {
+      unawaited(_restoreCachedPairing(userId!));
+    }
     if (!initialized || userId == null) return;
     if (busy || nicknameSaving) {
       _reloadAfter = true;
@@ -239,7 +276,10 @@ class PairingController extends ChangeNotifier {
     final id = userId;
     final revision = _authRevision;
     initialized = false;
-    await session.initialize();
+    await retryWithBackoff(
+      operation: session.initialize,
+      isCurrent: () => !_disposed && revision == _authRevision,
+    );
     if (_disposed ||
         (id != null && userId != null && !_isCurrent(id, revision))) {
       return;
@@ -249,7 +289,7 @@ class PairingController extends ChangeNotifier {
     initialized = true;
     // Pairing read failures retry only the read, not authentication/rotation.
     await _load();
-  });
+  }, readOnly: true);
 
   Future<void> signIn() => _run(() async {
     if (!allowDevGuest) {
@@ -260,6 +300,16 @@ class PairingController extends ChangeNotifier {
     if (userId == null) await session.signInAnonymously();
     await _load();
   });
+
+  Future<void> _restoreCachedPairing(String id) async {
+    final stored = await cache?.read(id);
+    if (_disposed || id != userId || stored == null || _cacheRestored) return;
+    _cacheRestored = true;
+    couple = stored.couple;
+    inviteCode = stored.inviteCode;
+    hasLoadedPairing = true;
+    _notify();
+  }
 
   Future<void> signOut() => _run(() async {
     for (final hook in List<Future<void> Function()>.of(_beforeSignOutHooks)) {
@@ -276,7 +326,34 @@ class PairingController extends ChangeNotifier {
     if (!_disposed && userId == null) initialized = true;
   });
 
-  Future<void> refresh() => _run(_load, readOnly: true);
+  Future<void> refresh() {
+    if (error != null && hasExplicitRetry) return Future.value();
+    return _run(_load, readOnly: true);
+  }
+
+  Future<void> unpair() async {
+    final repository = this.repository;
+    final unpairRepository = repository is UnpairRepository ? repository : null;
+    final id = userId;
+    final current = couple;
+    final revision = _authRevision;
+    if (unpairRepository == null ||
+        id == null ||
+        current == null ||
+        !canUnpair) {
+      throw StateError('Unpairing is unavailable for this account.');
+    }
+    final unpairCall = (unpairRepository as UnpairRepository).unpair;
+    final coupleId = current.id;
+    await _run(() async {
+      if (!_isCurrent(id, revision) || couple?.id != coupleId) {
+        throw StateError('Pairing changed. Open Profile again.');
+      }
+      await unpairCall(id, coupleId);
+      if (!_isCurrent(id, revision)) return;
+      await _load();
+    });
+  }
 
   Future<void> retry() async {
     final action = _retry;
@@ -394,7 +471,11 @@ class PairingController extends ChangeNotifier {
     _retryRevision = revision;
     Couple? result;
     try {
-      result = await repository.coupleForUser(id);
+      result = await retryWithBackoff(
+        operation: () => repository.coupleForUser(id),
+        isCurrent: () => _isCurrent(id, revision),
+        shouldRetry: (failure) => failure is! PairingException,
+      );
     } catch (_) {
       if (_isCurrent(id, revision)) rethrow;
       return;

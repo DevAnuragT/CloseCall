@@ -20,6 +20,15 @@ class SchedulePhotoScreen extends StatefulWidget {
 
 class _SchedulePhotoScreenState extends State<SchedulePhotoScreen> {
   late final _scope = scheduleAccountScope(widget.controller);
+
+  Future<void> _refresh() async {
+    if (_scope != scheduleAccountScope(widget.controller)) return;
+    await Future.wait([
+      widget.controller.refresh(),
+      if (widget.media.canShare) widget.media.refresh(),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([
@@ -31,16 +40,23 @@ class _SchedulePhotoScreenState extends State<SchedulePhotoScreen> {
     builder: (context, _) => Scaffold(
       appBar: AppBar(title: const Text('Send later')),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: _scope == scheduleAccountScope(widget.controller)
-              ? SchedulePanel(
-                  controller: widget.controller,
-                  media: widget.media,
-                )
-              : const WidgetStatusCard(
-                  message: 'Pairing changed. Close this screen and try again.',
-                ),
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            children: [
+              _scope == scheduleAccountScope(widget.controller)
+                  ? SchedulePanel(
+                      controller: widget.controller,
+                      media: widget.media,
+                    )
+                  : const WidgetStatusCard(
+                      message:
+                          'Pairing changed. Close this screen and try again.',
+                    ),
+            ],
+          ),
         ),
       ),
     ),

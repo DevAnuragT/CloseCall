@@ -18,11 +18,8 @@ class StrokeElement extends EditorElement {
   final Color color;
   final double width;
 
-  StrokeElement copyWith({List<Offset>? points}) => StrokeElement(
-        points: points ?? this.points,
-        color: color,
-        width: width,
-      );
+  StrokeElement copyWith({List<Offset>? points}) =>
+      StrokeElement(points: points ?? this.points, color: color, width: width);
 }
 
 /// A handwritten/typed text note placed at [position] (top-left anchor).

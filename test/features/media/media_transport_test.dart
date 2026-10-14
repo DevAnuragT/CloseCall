@@ -245,8 +245,8 @@ void main() {
       final photo = Uint8List.fromList(testPng);
       await media.uploadConfirmed(photo);
       photo[0] = 0;
-      expect(media.error, isA<ServerpodClientNetworkException>());
-      expect(mediaErrorMessage(media.error!), contains('may have succeeded'));
+      expect(media.error, isNull);
+      expect(media.status, contains('waiting for server confirmation'));
       expect(media.busy, isFalse);
       expect(media.hasPendingUpload, isTrue);
       final pendingId = media.pendingRequestId;

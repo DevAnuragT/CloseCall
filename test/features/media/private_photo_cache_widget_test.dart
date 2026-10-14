@@ -61,43 +61,34 @@ void main() {
     },
   );
 
-  testWidgets('failed preview retries explicitly and never leaks error text', (
-    tester,
-  ) async {
-    repository.downloadFailure = TimeoutException('secret signed URL');
-    await tester.pumpWidget(preview());
-    await tester.pumpAndSettle();
-    expect(find.text('Could not load this private photo.'), findsOneWidget);
-    expect(find.textContaining('secret signed URL'), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-    repository.downloadFailure = null;
-    await tester.tap(find.text('Retry photo'));
-    await tester.pumpAndSettle();
-    expect(find.byType(Image), findsOneWidget);
-    expect(repository.downloads, hasLength(2));
-  });
-
   testWidgets(
-    'eviction shows explicit load without repeated rebuild downloads',
+    'failed preview retries automatically and never leaks error text',
     (tester) async {
+      repository.downloadFailure = TimeoutException('secret signed URL');
       await tester.pumpWidget(preview());
       await tester.pumpAndSettle();
-      for (var i = 0; i < 13; i++) {
-        await media.loadPhoto(testAsset(id: '$i'));
-      }
-      await tester.pumpAndSettle();
-      expect(find.byType(Image), findsNothing);
-      expect(find.text('Load photo'), findsOneWidget);
+      expect(find.text('Could not load this private photo.'), findsOneWidget);
+      expect(find.textContaining('secret signed URL'), findsNothing);
       expect(find.byType(CircularProgressIndicator), findsNothing);
-      await tester.pumpWidget(preview());
-      await tester.pumpAndSettle();
-      expect(repository.downloads, hasLength(14));
-      await tester.tap(find.text('Load photo'));
-      await tester.pumpAndSettle();
-      expect(find.byType(Image), findsOneWidget);
-      expect(repository.downloads, hasLength(15));
+      expect(find.text('Retry photo'), findsNothing);
+      expect(repository.downloads, hasLength(3));
     },
   );
+
+  testWidgets('eviction reloads automatically without a load button', (
+    tester,
+  ) async {
+    await tester.pumpWidget(preview());
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 13; i++) {
+      await media.loadPhoto(testAsset(id: '$i'));
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('Load photo'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(Image), findsOneWidget);
+    expect(repository.downloads, hasLength(14));
+  });
 
   testWidgets('hidden preview loads only on becoming visible', (tester) async {
     Widget hidden(bool enabled) => MaterialApp(

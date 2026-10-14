@@ -211,18 +211,8 @@ void main() {
     test('back-to-back windows with same asset report no false transition', () {
       final mid = t0.add(const Duration(hours: 1));
       final end = t0.add(const Duration(hours: 2));
-      final first = sched(
-        id: '1',
-        asset: 'same',
-        from: t0,
-        until: mid,
-      );
-      final second = sched(
-        id: '2',
-        asset: 'same',
-        from: mid,
-        until: end,
-      );
+      final first = sched(id: '1', asset: 'same', from: t0, until: mid);
+      final second = sched(id: '2', asset: 'same', from: mid, until: end);
       final r = WidgetScheduleResolver.resolve(
         now: t0,
         schedules: [first, second],

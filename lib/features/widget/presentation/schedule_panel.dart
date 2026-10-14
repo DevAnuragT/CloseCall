@@ -372,25 +372,6 @@ class _SchedulePanelState extends State<SchedulePanel> {
                 tilePadding: EdgeInsets.zero,
                 title: const Text('Upcoming photos'),
                 children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: c.busy
-                          ? null
-                          : () async {
-                              if (!_current) return;
-                              await c.refresh();
-                              if (!_current) return;
-                              setState(() {
-                                _formError = c.error == null
-                                    ? null
-                                    : friendlyScheduleError(c.error!);
-                              });
-                            },
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Refresh upcoming photos'),
-                    ),
-                  ),
                   if (entries.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(AppSpacing.md),

@@ -9,7 +9,9 @@ abstract final class AppColors {
   static const Color plum = Color(0xFF6B5B6E); // accent — muted plum text
 
   // Surfaces
-  static const Color paper = Color(0xFFFBF6F2); // app background (warm off-white)
+  static const Color paper = Color(
+    0xFFFBF6F2,
+  ); // app background (warm off-white)
   static const Color card = Color(0xFFFFFFFF); // raised surfaces
   static const Color cream = Color(0xFFF3E9E2); // subtle fills / chips
 

@@ -32,6 +32,8 @@ class ServerpodPushRegistrationApi implements PushRegistrationApi {
   );
 
   @override
-  Future<void> revokeDevice({required String deviceId, required String token}) =>
-      client.push.revokeDevice(deviceId: deviceId, token: token);
+  Future<void> revokeDevice({
+    required String deviceId,
+    required String token,
+  }) => client.push.revokeDevice(deviceId: deviceId, token: token);
 }

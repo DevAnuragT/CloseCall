@@ -23,10 +23,7 @@ abstract final class PairingCode {
   /// Normalizes user input to canonical form: trims, uppercases, and strips
   /// spaces and hyphens. Does not validate — call [isValid] for that.
   static String normalize(String input) {
-    return input
-        .toUpperCase()
-        .replaceAll(RegExp(r'[\s-]'), '')
-        .trim();
+    return input.toUpperCase().replaceAll(RegExp(r'[\s-]'), '').trim();
   }
 
   /// Whether [input], once normalized, is a well-formed code.

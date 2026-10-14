@@ -23,7 +23,7 @@ String mediaErrorMessage(Object failure) {
       'request_conflict' =>
         'This request ID belongs to a different photo. Cancel and start again.',
       'asset_not_found' =>
-        'That private photo is no longer available. Refresh the list.',
+        'That private photo is no longer available. Pull down to refresh the list.',
       'not_paired' => 'Complete pairing before sharing private photos.',
       'quota_exceeded' => 'Your private photo storage quota has been reached.',
       _ => 'The private photo request could not be completed. Try again.',
@@ -32,7 +32,7 @@ String mediaErrorMessage(Object failure) {
   if (failure is ServerpodClientNetworkException ||
       failure is TimeoutException) {
     return 'The connection was interrupted or timed out. An upload may have '
-        'succeeded. Retry the same upload or refresh private photos to check.';
+        'succeeded. Retry the same upload or pull down to refresh private photos.';
   }
   if (failure is FormatException) {
     // FormatException can also come from a remote response or image decoder.
@@ -51,5 +51,5 @@ String mediaErrorMessage(Object failure) {
     }
   }
   return 'Could not confirm the photo operation. An upload may have succeeded. '
-      'Retry the same upload or refresh private photos to check.';
+      'Retry the same upload or pull down to refresh private photos.';
 }

@@ -18,12 +18,16 @@ class HomeScreen extends StatelessWidget {
     this.pairing,
     this.mood,
     this.onOpenPairing,
+    this.onOpenMoments,
+    this.onOpenReminders,
   }) : assert(snapshot != null || pairing != null);
 
   final DashboardSnapshot? snapshot;
   final PairingController? pairing;
   final MoodController? mood;
   final VoidCallback? onOpenPairing;
+  final VoidCallback? onOpenMoments;
+  final VoidCallback? onOpenReminders;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +39,8 @@ class HomeScreen extends StatelessWidget {
           controller: livePairing,
           mood: mood,
           onOpenPairing: onOpenPairing,
+          onOpenMoments: onOpenMoments,
+          onOpenReminders: onOpenReminders,
         ),
       );
     }
@@ -80,11 +86,19 @@ class _DemoHome extends StatelessWidget {
 }
 
 class _LiveHome extends StatelessWidget {
-  const _LiveHome({required this.controller, this.mood, this.onOpenPairing});
+  const _LiveHome({
+    required this.controller,
+    this.mood,
+    this.onOpenPairing,
+    this.onOpenMoments,
+    this.onOpenReminders,
+  });
 
   final PairingController controller;
   final MoodController? mood;
   final VoidCallback? onOpenPairing;
+  final VoidCallback? onOpenMoments;
+  final VoidCallback? onOpenReminders;
 
   @override
   Widget build(BuildContext context) {
@@ -119,19 +133,12 @@ class _LiveHome extends StatelessWidget {
                   : Icons.auto_awesome_rounded,
             ),
             const SizedBox(height: AppSpacing.xl),
-            if (controller.busy) ...[
-              const LinearProgressIndicator(minHeight: 3),
-              const SizedBox(height: AppSpacing.md),
-            ],
             if (controller.error != null) ...[
               _LiveNotice(
                 title: 'We could not refresh your space',
-                message:
-                    'Your existing pairing is safe. Open Profile to try again.',
+                message: 'Your existing pairing is safe. Pull down to refresh.',
                 icon: Icons.cloud_off_rounded,
                 color: AppColors.error,
-                onPressed: controller.busy ? null : controller.retry,
-                actionLabel: 'Try again',
               ),
               const SizedBox(height: AppSpacing.lg),
             ],
@@ -143,12 +150,23 @@ class _LiveHome extends StatelessWidget {
             else ...[
               _PairedHero(nickname: couple.partnerNickname),
               const SizedBox(height: AppSpacing.lg),
-              const _LiveFeatureCard(
+              _LiveFeatureCard(
                 icon: Icons.auto_awesome_rounded,
                 title: 'Shared moments',
-                message:
-                    'Your private scrapbook is coming together. Moments are not connected yet.',
+                message: onOpenMoments == null
+                    ? 'Reconnect your shared space to see your moments.'
+                    : 'Keep a little note or a familiar voice, just for you two.',
               ),
+              if (onOpenMoments != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const Key('home-open-moments'),
+                    onPressed: onOpenMoments,
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                    label: const Text('Open moments'),
+                  ),
+                ),
               const SizedBox(height: AppSpacing.md),
               if (mood != null) MoodCard(controller: mood!),
               if (mood == null)
@@ -156,6 +174,15 @@ class _LiveHome extends StatelessWidget {
                   icon: Icons.mood_rounded,
                   title: 'Mood check-in',
                   message: 'Mood is unavailable until your space reconnects.',
+                ),
+              if (onOpenReminders != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: onOpenReminders,
+                    icon: const Icon(Icons.notifications_outlined),
+                    label: const Text('Open reminders'),
+                  ),
                 ),
             ],
             const SizedBox(height: AppSpacing.xl),
@@ -289,7 +316,7 @@ class _PairingWelcomeCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            hasLoadedPairing ? 'Start with an invite' : 'Connecting your space',
+            hasLoadedPairing ? 'Start with an invite' : 'Your private space',
             style: const TextStyle(
               color: AppColors.ink,
               fontSize: 22,
@@ -300,7 +327,7 @@ class _PairingWelcomeCard extends StatelessWidget {
           Text(
             hasLoadedPairing
                 ? 'Create an invite for your person, or join theirs with a private code.'
-                : 'We are checking your pairing status. Your private space will be ready soon.',
+                : 'Your space opens here. Pair with your person whenever you are ready.',
             style: const TextStyle(color: AppColors.inkMuted, height: 1.4),
           ),
           if (onOpenPairing != null) ...[
@@ -439,32 +466,10 @@ class MoodCard extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         final snapshot = controller.snapshot;
-        if (snapshot == null && controller.loading) {
-          return _SoftCard(
-            child: Semantics(
-              liveRegion: true,
-              label: 'Checking in on your moods',
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: AppSpacing.md),
-                  Expanded(child: Text('Checking in on your moods…')),
-                ],
-              ),
-            ),
-          );
-        }
-        if (snapshot == null && controller.error != null) {
-          return _SoftCard(
-            child: _MoodError(
-              onRetry: controller.refresh,
-              saving: controller.saving,
-            ),
-          );
+        if (snapshot == null &&
+            controller.error != null &&
+            !controller.hasFailedMood) {
+          return _SoftCard(child: const _MoodError());
         }
         final ownMood = snapshot?.own?.mood;
         final partnerMood = snapshot?.partner;
@@ -473,51 +478,24 @@ class MoodCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                children: [
-                  const Expanded(child: _CardLabel('Mood check-in')),
-                  IconButton(
-                    key: const Key('mood-refresh'),
-                    tooltip: 'Refresh moods',
-                    onPressed: controller.loading || controller.saving
-                        ? null
-                        : controller.refresh,
-                    icon: const Icon(Icons.refresh_rounded),
-                    iconSize: 20,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  if (controller.loading || controller.saving)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                ],
+                children: [const Expanded(child: _CardLabel('Mood check-in'))],
               ),
               const SizedBox(height: AppSpacing.sm),
-              if (controller.loading && snapshot != null)
-                Padding(
-                  padding: EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: Semantics(
-                    liveRegion: true,
-                    label: 'Updating mood check-in',
-                    child: Text(
-                      'Updating your mood check-in…',
-                      style: TextStyle(color: AppColors.inkMuted),
-                    ),
-                  ),
-                ),
               if (controller.error != null) ...[
                 Semantics(
                   liveRegion: true,
                   child: Text(
-                    'Your mood could not be saved. Check your connection and try again.',
+                    controller.hasFailedMood
+                        ? 'Your mood could not be saved. Try again when ready.'
+                        : 'Moods could not be updated. Pull down to refresh.',
                     style: TextStyle(color: AppColors.error),
                   ),
                 ),
-                TextButton(
-                  onPressed: controller.saving ? null : controller.refresh,
-                  child: const Text('Retry'),
-                ),
+                if (controller.hasFailedMood)
+                  TextButton(
+                    onPressed: controller.saving ? null : controller.retryMood,
+                    child: const Text('Retry mood'),
+                  ),
               ],
               if (partnerMood == null)
                 const _MoodEmptyState()
@@ -688,10 +666,7 @@ class _MoodChoice extends StatelessWidget {
 }
 
 class _MoodError extends StatelessWidget {
-  const _MoodError({required this.onRetry, required this.saving});
-
-  final VoidCallback onRetry;
-  final bool saving;
+  const _MoodError();
 
   @override
   Widget build(BuildContext context) {
@@ -705,12 +680,8 @@ class _MoodError extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'We could not load moods right now. Check your connection and try again.',
+                'We could not load moods right now. Pull down to refresh.',
                 style: TextStyle(color: AppColors.inkMuted),
-              ),
-              TextButton(
-                onPressed: saving ? null : onRetry,
-                child: const Text('Retry'),
               ),
             ],
           ),
@@ -735,16 +706,12 @@ class _LiveNotice extends StatelessWidget {
     required this.message,
     required this.icon,
     required this.color,
-    required this.onPressed,
-    required this.actionLabel,
   });
 
   final String title;
   final String message;
   final IconData icon;
   final Color color;
-  final VoidCallback? onPressed;
-  final String actionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -772,7 +739,6 @@ class _LiveNotice extends StatelessWidget {
                   message,
                   style: const TextStyle(color: AppColors.inkMuted),
                 ),
-                TextButton(onPressed: onPressed, child: Text(actionLabel)),
               ],
             ),
           ),

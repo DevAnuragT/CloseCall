@@ -166,158 +166,171 @@ class _UnpairedWidgetScreenState extends State<UnpairedWidgetScreen> {
     return Material(
       color: AppColors.paper,
       child: SafeArea(
-        child: ListView(
-          key: const Key('unpaired-widget-list'),
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-          children: [
-            Text(
-              'Your widget',
-              style: TextStyle(
-                fontSize: largeText ? 24 : 30,
-                fontWeight: FontWeight.w700,
-                color: AppColors.ink,
-                letterSpacing: -0.6,
-              ),
-            ),
-            if (!largeText) ...[
-              const SizedBox(height: 4),
-              const Text(
-                'A little moment, just for you.',
-                style: TextStyle(color: AppColors.plum, fontSize: 15),
-              ),
-            ],
-            const SizedBox(height: 20),
-            Semantics(
-              label: _photo == null
-                  ? 'Illustration of a widget preview. Not an installed widget.'
-                  : 'Preview of your local photo. Not an installation check.',
-              child: Container(
-                key: const Key('local-widget-preview'),
-                height: 166,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  color: AppColors.cream,
-                ),
-                child: _photo == null
-                    ? const _PreviewIllustration()
-                    : Image.memory(_photo!, fit: BoxFit.cover),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _photo == null
-                  ? 'Preview · illustration'
-                  : 'Preview · your photo',
-              style: const TextStyle(fontSize: 12, color: AppColors.plum),
-            ),
-            const SizedBox(height: 18),
-            FilledButton(
-              key: const Key('choose-local-photo'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.plum,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 52),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+        child: RefreshIndicator(
+          onRefresh: widget.pairing.refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            key: const Key('unpaired-widget-list'),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            children: [
+              Text(
+                'Your widget',
+                style: TextStyle(
+                  fontSize: largeText ? 24 : 30,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink,
+                  letterSpacing: -0.6,
                 ),
               ),
-              onPressed: _busy ? null : () => _edit(),
-              child: const Text('Choose a photo', textAlign: TextAlign.center),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Only on this device. Nothing is shared.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: AppColors.plum),
-            ),
-            const SizedBox(height: 4),
-            TextButton(
-              key: const Key('blank-local-canvas'),
-              style: TextButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-                foregroundColor: AppColors.plum,
-              ),
-              onPressed: _busy ? null : () => _edit(blank: true),
-              child: const Text(
-                'Start with a blank canvas',
-                textAlign: TextAlign.center,
-              ),
-            ),
-            if (_busy) ...[
-              const SizedBox(height: 8),
+              if (!largeText) ...[
+                const SizedBox(height: 4),
+                const Text(
+                  'A little moment, just for you.',
+                  style: TextStyle(color: AppColors.plum, fontSize: 15),
+                ),
+              ],
+              const SizedBox(height: 20),
               Semantics(
-                liveRegion: true,
-                child: const Text('Working on your photo…'),
-              ),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, key: const Key('local-photo-error')),
-              if (_saveFailed && _retryPhoto != null)
-                TextButton(
-                  style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-                  onPressed: _busy ? null : _retrySave,
-                  child: const Text('Retry save'),
+                label: _photo == null
+                    ? 'Illustration of a widget preview. Not an installed widget.'
+                    : 'Preview of your local photo. Not an installation check.',
+                child: Container(
+                  key: const Key('local-widget-preview'),
+                  height: 166,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    color: AppColors.cream,
+                  ),
+                  child: _photo == null
+                      ? const _PreviewIllustration()
+                      : Image.memory(_photo!, fit: BoxFit.cover),
                 ),
-            ],
-            if (_saved) ...[
-              const SizedBox(height: 12),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _photo == null
+                    ? 'Preview · illustration'
+                    : 'Preview · your photo',
+                style: const TextStyle(fontSize: 12, color: AppColors.plum),
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                key: const Key('choose-local-photo'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.plum,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 52),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                onPressed: _busy ? null : () => _edit(),
+                child: const Text(
+                  'Choose a photo',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 8),
               const Text(
-                'Photo saved. Add the widget to your home screen to see it.',
-                key: Key('local-photo-saved'),
-                style: TextStyle(color: AppColors.plum),
+                'Only on this device. Nothing is shared.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppColors.plum),
               ),
-            ],
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppColors.blush.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: AppColors.blush.withValues(alpha: 0.25),
+              const SizedBox(height: 4),
+              TextButton(
+                key: const Key('blank-local-canvas'),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  foregroundColor: AppColors.plum,
+                ),
+                onPressed: _busy ? null : () => _edit(blank: true),
+                child: const Text(
+                  'Start with a blank canvas',
+                  textAlign: TextAlign.center,
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    pending ? 'Waiting for your partner' : 'Better together',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    pending
-                        ? 'Your invitation is ready when they are.'
-                        : 'Share little moments with your favorite person.',
-                    style: const TextStyle(color: AppColors.plum, fontSize: 14),
-                  ),
-                  const SizedBox(height: 6),
+              if (_busy) ...[
+                const SizedBox(height: 8),
+                Semantics(
+                  liveRegion: true,
+                  child: const Text('Working on your photo…'),
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, key: const Key('local-photo-error')),
+                if (_saveFailed && _retryPhoto != null)
                   TextButton(
-                    key: const Key('widget-connect-partner'),
                     style: TextButton.styleFrom(
                       minimumSize: const Size(48, 48),
-                      foregroundColor: AppColors.plum,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 0,
-                        vertical: 12,
+                    ),
+                    onPressed: _busy ? null : _retrySave,
+                    child: const Text('Retry save'),
+                  ),
+              ],
+              if (_saved) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Photo saved on this device. Add CloseCall manually to your '
+                  'home screen to see it.',
+                  key: Key('local-photo-saved'),
+                  style: TextStyle(color: AppColors.plum),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppColors.blush.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: AppColors.blush.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      pending ? 'Waiting for your partner' : 'Better together',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
                       ),
                     ),
-                    onPressed: widget.onConnectPartner,
-                    child: Text(pending ? 'View invite' : 'Connect partner'),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      pending
+                          ? 'Your invitation is ready when they are.'
+                          : 'Share little moments with your favorite person.',
+                      style: const TextStyle(
+                        color: AppColors.plum,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextButton(
+                      key: const Key('widget-connect-partner'),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                        foregroundColor: AppColors.plum,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 0,
+                          vertical: 12,
+                        ),
+                      ),
+                      onPressed: widget.onConnectPartner,
+                      child: Text(pending ? 'View invite' : 'Connect partner'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            const _WidgetHelp(),
-          ],
+              const SizedBox(height: 12),
+              const _WidgetHelp(),
+            ],
+          ),
         ),
       ),
     );
@@ -417,40 +430,33 @@ class WidgetPairingStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final failed = pairing?.error != null;
     final signedOut = pairing != null && pairing!.userId == null;
+    Future<void> refresh() => pairing == null
+        ? Future<void>.value()
+        : pairing!.initialized
+        ? pairing!.refresh()
+        : pairing!.initialize();
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const Text(
-            'Your widget',
-            style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 24),
-          if (!failed && !signedOut)
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: CircularProgressIndicator(
-                semanticsLabel: 'Checking your connection',
-              ),
+      child: RefreshIndicator(
+        onRefresh: refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          children: [
+            const Text(
+              'Your widget',
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
             ),
-          const SizedBox(height: 16),
-          Text(
-            failed
-                ? 'We couldn’t check your partner connection.'
-                : signedOut
-                ? 'Sign in to personalize your widget.'
-                : 'Checking your partner connection…',
-          ),
-          if (failed) ...[
-            const SizedBox(height: 12),
-            OutlinedButton(
-              key: const Key('widget-pairing-retry'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
-              onPressed: pairing!.busy ? null : pairing!.retry,
-              child: const Text('Retry'),
+            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            Text(
+              failed
+                  ? 'We couldn’t check your partner connection.'
+                  : signedOut
+                  ? 'Sign in to personalize your widget.'
+                  : 'Your partner space will appear here when it is ready.',
             ),
           ],
-        ],
+        ),
       ),
     );
   }

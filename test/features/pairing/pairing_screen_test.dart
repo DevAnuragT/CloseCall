@@ -35,11 +35,13 @@ class FakeSession extends AuthSession {
   Future<void> signOut() async => setIdentity(null);
 }
 
-class FakeRepository implements CoupleRepository, PairingCodeReader {
+class FakeRepository
+    implements CoupleRepository, PairingCodeReader, UnpairRepository {
   Couple? current;
   Object? failure;
   Completer<Couple?>? pending;
   String? joinedCode;
+  int unpairCalls = 0;
   @override
   String? currentInviteCode;
   @override
@@ -62,6 +64,13 @@ class FakeRepository implements CoupleRepository, PairingCodeReader {
     joinedCode = code;
     currentInviteCode = null;
     return current = Couple(id: 'couple', memberIds: [userId, 'partner']);
+  }
+
+  @override
+  Future<void> unpair(String userId, String coupleId) async {
+    unpairCalls++;
+    current = Couple(id: coupleId, memberIds: ['partner']);
+    currentInviteCode = 'NEW123';
   }
 }
 
@@ -86,7 +95,7 @@ void main() {
   testWidgets('guest warning, invite, join, refresh and auth-driven reset', (
     tester,
   ) async {
-    await controller.initialize();
+    await tester.runAsync(controller.initialize);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(body: PairingScreen(controller: controller)),
@@ -105,7 +114,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.joinedCode, 'OTHER1');
     expect(find.text('Paired with your partner'), findsOneWidget);
-    await controller.refresh();
+    await tester.runAsync(controller.initialize);
     expect(controller.couple?.isComplete, isTrue);
     session.setIdentity(null);
     await tester.pumpAndSettle();
@@ -114,45 +123,76 @@ void main() {
     expect(controller.couple, isNull);
   });
 
-  testWidgets('configured failure stays visible and Retry reconnects', (
+  testWidgets('profile exposes confirmed unpair and keeps sign-in', (
     tester,
   ) async {
-    session.initializationError = StateError('offline');
-    await controller.initialize();
+    session.setIdentity('me');
+    repository.current = Couple(id: 'couple', memberIds: ['me', 'partner']);
+    await tester.runAsync(controller.initialize);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(body: PairingScreen(controller: controller)),
       ),
     );
-    expect(find.textContaining('offline'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('Unpair from partner'), findsOneWidget);
+    await tester.tap(find.text('Unpair from partner'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'This device will lose access to the shared space, Moments, photos '
+        'and widget updates. Shared history remains available to your '
+        'partner, and they can invite someone new.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Unpair').last);
+    await tester.pumpAndSettle();
+    expect(repository.unpairCalls, 1);
+    expect(session.userId, 'me');
+  });
+
+  testWidgets('configured failure stays visible and pull refresh reconnects', (
+    tester,
+  ) async {
+    session.initializationError = StateError('offline');
+    await tester.runAsync(controller.initialize);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: PairingScreen(controller: controller)),
+      ),
+    );
+    expect(find.textContaining('could not sync your pairing'), findsOneWidget);
     expect(find.text('Continue as development guest'), findsNothing);
     session.initializationError = null;
-    await tester.tap(find.text('Retry'));
+    expect(find.text('Retry'), findsNothing);
+    await tester.drag(find.byType(ListView), const Offset(0, 400));
     await tester.pumpAndSettle();
     expect(find.text('Continue as development guest'), findsOneWidget);
   });
 
-  testWidgets('loading disables mutations and typed errors are actionable', (
-    tester,
-  ) async {
-    session.setIdentity('me');
-    repository.pending = Completer<Couple?>();
-    final initializing = controller.initialize();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: PairingScreen(controller: controller)),
-      ),
-    );
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
-    repository.pending!.complete(null);
-    await initializing;
-    await tester.pumpAndSettle();
-    repository.failure = const PairingException(PairingError.codeNotFound);
-    await tester.enterText(find.byType(TextField), 'BAD123');
-    await tester.tap(find.text('Join by code'));
-    await tester.pumpAndSettle();
-    expect(find.text('That invite code was not found.'), findsOneWidget);
-  });
+  testWidgets(
+    'background pairing refresh keeps the surface calm and errors actionable',
+    (tester) async {
+      session.setIdentity('me');
+      repository.pending = Completer<Couple?>();
+      final initializing = controller.initialize();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PairingScreen(controller: controller)),
+        ),
+      );
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      repository.pending!.complete(null);
+      await initializing;
+      await tester.pumpAndSettle();
+      repository.failure = const PairingException(PairingError.codeNotFound);
+      await tester.enterText(find.byType(TextField), 'BAD123');
+      await tester.tap(find.text('Join by code'));
+      await tester.pumpAndSettle();
+      expect(find.text('That invite code was not found.'), findsOneWidget);
+    },
+  );
 
   test(
     'late response after sign-out cannot restore another auth state',
@@ -196,6 +236,6 @@ void main() {
     expect(find.text('Paired'), findsOneWidget);
     expect(find.text('Call tonight'), findsNothing);
     expect(find.text('morning_surprise.jpg'), findsNothing);
-    expect(find.textContaining('not connected yet'), findsOneWidget);
+    expect(find.textContaining('Reconnect your shared space'), findsOneWidget);
   });
 }

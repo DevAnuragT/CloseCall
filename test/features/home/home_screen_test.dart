@@ -58,25 +58,33 @@ void main() {
   group('HomeScreen', () {
     testWidgets('renders partner nickname, mood, reminder', (tester) async {
       _tallView(tester);
-      await tester.pumpWidget(_wrap(HomeScreen(snapshot: _snapshot(scheduled: true))));
+      await tester.pumpWidget(
+        _wrap(HomeScreen(snapshot: _snapshot(scheduled: true))),
+      );
 
       expect(find.text('Love'), findsOneWidget);
       expect(find.text('Missing You'), findsOneWidget);
       expect(find.text('Call tonight'), findsOneWidget);
     });
 
-    testWidgets('shows Scheduled badge + asset when a schedule is active',
-        (tester) async {
+    testWidgets('shows Scheduled badge + asset when a schedule is active', (
+      tester,
+    ) async {
       _tallView(tester);
-      await tester.pumpWidget(_wrap(HomeScreen(snapshot: _snapshot(scheduled: true))));
+      await tester.pumpWidget(
+        _wrap(HomeScreen(snapshot: _snapshot(scheduled: true))),
+      );
       expect(find.text('Scheduled'), findsOneWidget);
       expect(find.text('surprise.jpg'), findsOneWidget);
     });
 
-    testWidgets('shows Default badge + fallback asset otherwise',
-        (tester) async {
+    testWidgets('shows Default badge + fallback asset otherwise', (
+      tester,
+    ) async {
       _tallView(tester);
-      await tester.pumpWidget(_wrap(HomeScreen(snapshot: _snapshot(scheduled: false))));
+      await tester.pumpWidget(
+        _wrap(HomeScreen(snapshot: _snapshot(scheduled: false))),
+      );
       expect(find.text('Default'), findsOneWidget);
       expect(find.text('fallback.jpg'), findsOneWidget);
     });

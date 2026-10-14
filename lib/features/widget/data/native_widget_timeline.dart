@@ -37,11 +37,11 @@ class AndroidWidgetTimeline
   /// without restoring a Flutter user session.
   static Future<void> configureBackgroundServerUrl(String url) async {
     if (!(!kIsWeb && defaultTargetPlatform == TargetPlatform.android)) return;
-    await channel.invokeMethod<void>(
-      'configureBackgroundServerUrl',
-      {'url': url},
-    );
+    await channel.invokeMethod<void>('configureBackgroundServerUrl', {
+      'url': url,
+    });
   }
+
   @override
   bool get supported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;

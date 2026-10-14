@@ -131,6 +131,18 @@ Future<void> _returnEditorPhoto(WidgetTester tester) async {
     await Future<void>.delayed(const Duration(milliseconds: 100));
   });
   await tester.pumpAndSettle();
+  // Image validation/PNG work runs outside the fake frame clock. Wait for the
+  // route, not an assumed 100 ms wall-clock duration under suite load.
+  for (
+    var i = 0;
+    i < 50 && find.byType(WidgetPreviewScreen).evaluate().isEmpty;
+    i++
+  ) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pumpAndSettle();
+  }
 }
 
 Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
@@ -153,7 +165,9 @@ void main() {
         final f = _Fixture();
         addTearDown(f.dispose);
         if (state == 'error') f.couples.failure = StateError('offline');
-        if (state != 'unknown') await f.pairing.initialize();
+        if (state != 'unknown') {
+          await tester.runAsync(f.pairing.initialize);
+        }
         // Deliberately seed old private results: the UI must not render them.
         f.media.assets = [testAsset(couple: 'old-couple')];
         f.media.downloadedPhoto = testPng;
@@ -194,7 +208,10 @@ void main() {
       final f = _Fixture();
       addTearDown(f.dispose);
       await _pump(tester, f);
-      expect(find.text('Checking your partner connection…'), findsOneWidget);
+      expect(
+        find.text('Your partner space will appear here when it is ready.'),
+        findsOneWidget,
+      );
       expect(find.byType(UnpairedWidgetScreen), findsNothing);
       expect(find.text('Connect partner'), findsNothing);
       _noPrivate(f);
@@ -211,12 +228,12 @@ void main() {
   );
 
   testWidgets(
-    'pairing read error has inline Retry and no fabricated local/private state',
+    'pairing read error has no inline retry and no fabricated local/private state',
     (tester) async {
       final f = _Fixture();
       addTearDown(f.dispose);
       f.couples.failure = StateError('secret diagnostic');
-      await f.pairing.initialize();
+      await tester.runAsync(f.pairing.initialize);
       await _pump(tester, f);
       expect(
         find.text('We couldn’t check your partner connection.'),
@@ -226,7 +243,8 @@ void main() {
       expect(find.text('Choose a photo'), findsNothing);
       _noPrivate(f);
       f.couples.failure = null;
-      await tester.tap(find.byKey(const Key('widget-pairing-retry')));
+      expect(find.byKey(const Key('widget-pairing-retry')), findsNothing);
+      await tester.drag(find.byType(ListView), const Offset(0, 400));
       await tester.pumpAndSettle();
       expect(find.text('Better together'), findsOneWidget);
       _noPrivate(f);

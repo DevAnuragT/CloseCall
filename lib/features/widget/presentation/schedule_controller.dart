@@ -4,6 +4,7 @@ import 'package:closecall_client/closecall_client.dart' hide Uuid;
 import 'package:closecall_shared/closecall_shared.dart' as shared;
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/async/bounded_retry.dart';
 import '../../media/data/media_repository.dart';
 import '../../media/data/photo_preparation.dart';
 import '../../pairing/presentation/pairing_controller.dart';
@@ -85,6 +86,7 @@ class ScheduleController extends ChangeNotifier {
   bool _consentRestored = false;
   bool _photoSetupComplete = false;
   bool? _requestedPartnerUpdates;
+  bool get hasExplicitPartnerUpdatesRetry => _requestedPartnerUpdates != null;
   bool get restoringPartnerPhotoConsent => _consentRestoring;
   bool get partnerPhotoConsentRestored => _consentRestored;
   bool get partnerPhotoSetupComplete => _photoSetupComplete;
@@ -135,6 +137,8 @@ class ScheduleController extends ChangeNotifier {
   String? _appliedAsset;
   bool _appliedEmpty = false;
   Future<void> Function()? _retry;
+  bool _retryIsRead = false;
+  bool get hasExplicitRetry => _retry != null && !_retryIsRead;
   Future<void>? _syncFuture;
   int _syncFlightVersion = -1;
   int _syncFlightTicket = 0;
@@ -149,6 +153,26 @@ class ScheduleController extends ChangeNotifier {
   Uint8List? get currentPhoto => _cache[ownCurrentAssetId];
   String? get ownCurrentAssetId => _asset(ownResolution);
   String? get partnerCurrentAssetId => _asset(partnerResolution);
+  bool get currentPhotoApplied =>
+      effectivePartnerUpdatesEnabled &&
+      (ownCurrentAssetId == null
+          ? _appliedEmpty
+          : _appliedAsset == ownCurrentAssetId);
+
+  /// A delivery receipt is deliberately separate from a send receipt. The
+  /// sender can know a photo was accepted, while this device can only claim
+  /// delivery/apply after its own current timeline and native write say so.
+  String? get widgetDeliveryStatus {
+    if (!effectivePartnerUpdatesEnabled || ownCurrentAssetId == null) {
+      return null;
+    }
+    if (syncing || downloadingNewPhoto) {
+      return 'Delivered · applying to this device…';
+    }
+    if (currentPhotoApplied) return 'Applied to this device';
+    return 'Delivered · waiting to apply on this device';
+  }
+
   DateTime get serverNow => _ownClock?.now(_elapsed()) ?? _now().toUtc();
   bool get canSchedule =>
       !_disposed &&
@@ -434,7 +458,8 @@ class ScheduleController extends ChangeNotifier {
     unawaited(_restoreConsent(_scopeVersion, _consentVersion));
   }
 
-  /// A failed read is not an unset preference. Retry only on user action.
+  /// A failed read is not an unset preference. Pull refresh can restart its
+  /// bounded read recovery without changing the user's preference.
   Future<void> retryPartnerPhotoConsent() async {
     if (!canSchedule || _consentRestoring || partnerUpdatesBusy) return;
     partnerUpdatesError = null;
@@ -449,7 +474,11 @@ class ScheduleController extends ChangeNotifier {
 
   Future<void> _restoreConsent(int scope, int version) async {
     try {
-      final saved = await _enqueueConsent(consentStore.read);
+      final saved = await retryWithBackoff(
+        operation: () => _enqueueConsent(consentStore.read),
+        isCurrent: () => _consentCurrent(scope, version),
+        initialDelay: Duration.zero,
+      );
       if (!_consentCurrent(scope, version)) return;
       final matches =
           saved?.matches(pairing.userId!, pairing.couple!.id) == true;
@@ -468,7 +497,11 @@ class ScheduleController extends ChangeNotifier {
       _photoSetupComplete = true;
       _deviceConsentManaged = true;
       if (!saved!.enabled) return;
-      final remote = await _deliveryRepository.getDeliveryState();
+      final remote = await retryWithBackoff(
+        operation: _deliveryRepository.getDeliveryState,
+        isCurrent: () => _consentCurrent(scope, version),
+        shouldRetry: _retryableReadFailure,
+      );
       if (!_consentCurrent(scope, version)) return;
       _validateDelivery(remote);
       if (!remote.autoUpdateEnabled) {
@@ -477,7 +510,11 @@ class ScheduleController extends ChangeNotifier {
       }
       // The owned display may survive validation, but old alarms stay paused.
       // Only fresh recipient truth can republish a running native timeline.
-      final timeline = await repository.currentTimeline();
+      final timeline = await retryWithBackoff(
+        operation: repository.currentTimeline,
+        isCurrent: () => _consentCurrent(scope, version),
+        shouldRetry: _retryableReadFailure,
+      );
       if (!_consentCurrent(scope, version)) return;
       _accept(timeline, own: true);
       if (!ownTimeline!.autoUpdateEnabled) {
@@ -645,6 +682,11 @@ class ScheduleController extends ChangeNotifier {
             'asset_not_found',
           ].contains(failure.code));
 
+  bool _retryableReadFailure(Object failure) =>
+      !_privateFailure(failure) &&
+      failure is! ScheduleFailure &&
+      failure is! FormatException;
+
   void _streamFailed(Object failure, int scope) {
     if (!_current(scope)) return;
     final old = _subscription;
@@ -702,8 +744,9 @@ class ScheduleController extends ChangeNotifier {
 
   Future<void> _run(
     Future<void> Function(int, int) action,
-    Future<void> Function() retry,
-  ) async {
+    Future<void> Function() retry, {
+    bool autoRetry = false,
+  }) async {
     if (_disposed || busy) return;
     if (!canSchedule) {
       error = StateError('Complete pairing before scheduling.');
@@ -715,9 +758,18 @@ class ScheduleController extends ChangeNotifier {
     busy = true;
     error = null;
     _retry = retry;
+    _retryIsRead = autoRetry;
     _notify();
     try {
-      await action(scope, operation);
+      if (autoRetry) {
+        await retryWithBackoff(
+          operation: () => action(scope, operation),
+          isCurrent: () => _operationCurrent(scope, operation),
+          shouldRetry: _retryableReadFailure,
+        );
+      } else {
+        await action(scope, operation);
+      }
       if (_current(scope) && operation == _operationVersion) _retry = null;
     } catch (failure) {
       if (_current(scope) && operation == _operationVersion) {
@@ -735,21 +787,29 @@ class ScheduleController extends ChangeNotifier {
   Future<void> refresh() => _refresh(retryPrivate: true);
 
   Future<void> _refresh({required bool retryPrivate}) {
+    // A read must not replace recovery for an uncertain schedule mutation.
+    if (pendingCreate != null || (error != null && hasExplicitRetry)) {
+      return Future.value();
+    }
     if (_streamBlocked && !retryPrivate) return Future.value();
-    return _run((scope, operation) async {
-      if (streamError != null) _stopListening();
-      _streamBlocked =
-          false; // Only an explicit refresh/scope change retries auth.
-      _subscribe();
-      final timelines = await Future.wait([
-        repository.currentTimeline(),
-        repository.partnerTimeline(),
-      ]);
-      if (!_operationCurrent(scope, operation)) return;
-      _accept(timelines[0], own: true);
-      _accept(timelines[1], own: false);
-      streamError = null;
-    }, refresh);
+    return _run(
+      (scope, operation) async {
+        if (streamError != null) _stopListening();
+        _streamBlocked =
+            false; // Only an explicit refresh/scope change retries auth.
+        _subscribe();
+        final timelines = await Future.wait([
+          repository.currentTimeline(),
+          repository.partnerTimeline(),
+        ]);
+        if (!_operationCurrent(scope, operation)) return;
+        _accept(timelines[0], own: true);
+        _accept(timelines[1], own: false);
+        streamError = null;
+      },
+      refresh,
+      autoRetry: true,
+    );
   }
 
   void _accept(WidgetTimeline timeline, {required bool own}) {

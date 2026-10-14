@@ -221,11 +221,6 @@ class _HubPhotoPreviewState extends State<HubPhotoPreview> {
                     ),
             ),
           ),
-          if (failed)
-            TextButton(
-              onPressed: () => media.loadPhoto(widget.asset),
-              child: const Text('Try loading again'),
-            ),
           const SizedBox(height: AppSpacing.md),
           if (_finished)
             Text(
@@ -248,11 +243,12 @@ class _HubPhotoPreviewState extends State<HubPhotoPreview> {
               child: Text(widget.label),
             ),
           if (_working) const LinearProgressIndicator(),
-          if (media.error != null) ...[
+          if ((media.hasPendingSend || media.hasPendingUpload) ||
+              (media.error != null && media.downloadedPhoto != null)) ...[
             const Padding(
               padding: EdgeInsets.only(top: AppSpacing.sm),
               child: Text(
-                'Could not finish. You can retry or cancel.',
+                'The photo is waiting for confirmation. You can retry the same operation or cancel.',
                 style: TextStyle(color: AppColors.error),
               ),
             ),

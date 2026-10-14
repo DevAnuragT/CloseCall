@@ -347,7 +347,7 @@ void main() {
       await openSetup(tester);
       await scrollSheet(
         tester,
-        find.byKey(const Key('widget-check-setup')),
+        find.byKey(const Key('widget-setup-card')),
         180,
       );
       expect(tester.takeException(), isNull);
@@ -380,13 +380,10 @@ void main() {
     );
     expect(find.textContaining('private native failure'), findsNothing);
     service.failReads = false;
-    await scrollSheet(tester, find.byKey(const Key('widget-check-setup')), 100);
-    await tester.ensureVisible(find.byKey(const Key('widget-check-setup')));
     await tester.pumpAndSettle();
     final previousReads = service.reads;
     await tester.runAsync(() async {
-      await tester.tap(find.byKey(const Key('widget-check-setup')));
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await readiness.refresh();
     });
     await tester.pumpAndSettle();
     expect(service.reads, previousReads + 1);

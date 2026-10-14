@@ -49,11 +49,11 @@ class Reminder {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'kind': kind.key,
-        'when': when.toIso8601String(),
-      };
+    'id': id,
+    'title': title,
+    'kind': kind.key,
+    'when': when.toIso8601String(),
+  };
 
   @override
   bool operator ==(Object other) =>

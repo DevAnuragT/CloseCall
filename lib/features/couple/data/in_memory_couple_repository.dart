@@ -5,7 +5,7 @@ import '../../pairing/domain/pairing_code.dart';
 import 'couple_repository.dart';
 
 /// In-memory [CoupleRepository] for tests and offline demos. Not persistent.
-class InMemoryCoupleRepository implements CoupleRepository {
+class InMemoryCoupleRepository implements CoupleRepository, UnpairRepository {
   InMemoryCoupleRepository({Random? random}) : this._(random);
 
   InMemoryCoupleRepository._(this._random);
@@ -63,6 +63,22 @@ class InMemoryCoupleRepository implements CoupleRepository {
       if (couple.memberIds.contains(userId)) return couple;
     }
     return null;
+  }
+
+  @override
+  Future<void> unpair(String userId, String coupleId) async {
+    final couple = _couples[coupleId];
+    if (couple == null || !couple.memberIds.contains(userId)) {
+      throw const PairingException(PairingError.alreadyPaired);
+    }
+    final members = couple.memberIds.where((id) => id != userId).toList();
+    _pendingCodes.removeWhere((_, id) => id == coupleId);
+    if (members.isEmpty) {
+      _couples.remove(coupleId);
+      return;
+    }
+    _couples[coupleId] = couple.copyWith(memberIds: members);
+    _pendingCodes[_uniqueCode()] = coupleId;
   }
 
   Couple? _pendingCoupleForUser(String userId) {

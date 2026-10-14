@@ -506,14 +506,18 @@ void main() {
     expect(phone.auth.initializations, 1);
   });
 
-  _syncTest('fresh read failure stays explicit Retry; a loaded read can heal', (
+  _syncTest('fresh read retries are bounded; a loaded read can heal', (
     tester,
   ) async {
     final phone = _Phone(_PersistedPairing());
     phone.repository.readFailure = StateError('Synthetic offline');
-    await phone.start();
+    final starting = phone.start();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 200));
+    await starting;
     await tester.pump(const Duration(minutes: 5));
-    expect(phone.repository.reads, 1);
+    expect(phone.repository.reads, 3);
     expect(phone.pairing.hasLoadedPairing, isFalse);
     expect(phone.pairing.error, isNotNull);
     phone.repository.readFailure = null;
@@ -521,7 +525,11 @@ void main() {
     expect(phone.pairing.error, isNull);
     expect(phone.pairing.hasLoadedPairing, isTrue);
     phone.repository.readFailure = StateError('Synthetic read failure');
-    await phone.pairing.refresh();
+    final refreshing = phone.pairing.refresh();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 200));
+    await refreshing;
     expect(phone.pairing.error, isNotNull);
     phone.repository.readFailure = null;
     await tester.pump(const Duration(seconds: 5));

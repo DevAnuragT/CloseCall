@@ -6,12 +6,19 @@ import '../../features/auth/data/auth_session.dart';
 import '../../features/auth/data/session_restoration.dart';
 import '../../features/couple/data/serverpod_couple_repository.dart';
 import '../../features/pairing/presentation/pairing_controller.dart';
+import '../../features/pairing/data/pairing_cache.dart';
 import '../../features/auth/presentation/account_controller.dart';
 import '../../features/media/data/serverpod_media_repository.dart';
 import '../../features/media/data/media_client.dart';
 import '../../features/media/presentation/media_controller.dart';
 import '../../features/mood/data/serverpod_mood_repository.dart';
 import '../../features/mood/presentation/mood_controller.dart';
+import '../../features/moments/data/moment_audio.dart';
+import '../../features/moments/data/moments_repository.dart';
+import '../../features/moments/presentation/moments_controller.dart';
+import '../../features/reminders/data/reminder_notifications.dart';
+import '../../features/reminders/data/reminders_repository.dart';
+import '../../features/reminders/presentation/reminder_controller.dart';
 import '../config/app_config.dart';
 import '../../features/widget/data/home_widget_service.dart';
 import '../../features/widget/data/local_widget_writer.dart';
@@ -41,10 +48,21 @@ class ServerpodBootstrap {
         client,
         userId: () => session.userId,
       ),
+      cache: SharedPreferencesPairingCache(),
     );
     mood = MoodController(
       pairing: pairing,
       repository: ServerpodMoodRepository(client, userId: () => session.userId),
+    );
+    moments = MomentsController(
+      pairing: pairing,
+      repository: ServerpodMomentsRepository(mediaClient),
+      audio: PrivateMomentAudio(),
+    );
+    reminders = ReminderController(
+      pairing: pairing,
+      repository: ServerpodRemindersRepository(client),
+      notifications: LocalReminderNotifications(),
     );
     final deviceIdentity = SingleFlightPushDeviceIdentityStore(
       SharedPreferencesPushDeviceIdentityStore(),
@@ -94,6 +112,8 @@ class ServerpodBootstrap {
   late final ServerpodAuthSession session;
   late final PairingController pairing;
   late final MoodController mood;
+  late final MomentsController moments;
+  late final ReminderController reminders;
   late final PushRegistrationService push;
   late final AccountController account;
   late final MediaController media;
@@ -102,6 +122,8 @@ class ServerpodBootstrap {
 
   void dispose() {
     widgetCredentials.dispose();
+    moments.dispose();
+    reminders.dispose();
     mood.dispose();
     push.dispose();
     media.dispose();

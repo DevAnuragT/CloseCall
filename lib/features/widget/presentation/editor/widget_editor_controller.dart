@@ -76,12 +76,14 @@ class WidgetEditorController extends ChangeNotifier {
   void addText(String text, Offset position, {double fontSize = 28}) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
-    _elements.add(TextElement(
-      text: trimmed,
-      position: position,
-      color: color,
-      fontSize: fontSize,
-    ));
+    _elements.add(
+      TextElement(
+        text: trimmed,
+        position: position,
+        color: color,
+        fontSize: fontSize,
+      ),
+    );
     notifyListeners();
   }
 

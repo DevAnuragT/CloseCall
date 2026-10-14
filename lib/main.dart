@@ -7,11 +7,15 @@ import 'package:serverpod_auth_idp_flutter/serverpod_auth_idp_flutter.dart';
 
 import 'app/app_shell.dart';
 import 'core/config/app_config.dart';
+import 'core/permissions/background_reliability_service.dart';
+import 'core/permissions/background_setup_prompt.dart';
 import 'core/permissions/notification_permission_service.dart';
 import 'core/permissions/permission_onboarding.dart';
 import 'core/permissions/widget_readiness_controller.dart';
 import 'core/serverpod/serverpod_bootstrap.dart';
 import 'core/push/push_registration_service.dart';
+import 'core/push/moment_notification_presenter.dart';
+import 'core/push/push_notification_payload.dart';
 import 'core/theme/app_theme.dart';
 import 'features/widget/data/native_widget_timeline.dart';
 import 'features/auth/presentation/auth_gate.dart';
@@ -74,6 +78,12 @@ class _LiveApp extends StatefulWidget {
 class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
   ServerpodBootstrap? _backend;
   WidgetReadinessController? _readiness;
+  StreamSubscription<RemoteMessage>? _foregroundMessages;
+  StreamSubscription<RemoteMessage>? _openedMessages;
+  MomentNotificationPresenter? _momentPresenter;
+  String? _pendingMomentNotificationId;
+  String? _momentNotificationId;
+  int _momentNotificationRevision = 0;
   Object? _error;
 
   @override
@@ -85,6 +95,7 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
 
   void _connect() {
     try {
+      _stopMomentNotifications();
       _readiness?.bindPairing(null);
       _readiness?.dispose();
       _readiness = null;
@@ -101,10 +112,14 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
       _backend!.pairing.enableForegroundSync(foreground: foreground);
       _backend!.schedules.setForeground(foreground);
       _backend!.mood.setForeground(foreground);
+      _backend!.moments.setForeground(foreground);
+      _backend!.reminders.setForeground(foreground);
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         _readiness = WidgetReadinessController(
           service: AndroidWidgetPermissionService(),
           promptStore: SharedPreferencesPermissionPromptStore(),
+          background: AndroidBackgroundReliabilityService(),
+          backgroundStore: SharedPreferencesBackgroundSetupStore(),
         );
         _readiness!.addListener(_permissionReadinessChanged);
         _readiness!.bindPairing(_backend!.pairing);
@@ -112,9 +127,12 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
         _readiness!.initialize();
       }
       _backend!.pairing.initialize();
+      _backend!.pairing.addListener(_flushMomentNotification);
       _backend!.mood.start();
+      _backend!.moments.start();
       _backend!.widgetCredentials.start();
       _backend!.push.start();
+      _configureMomentNotifications(_backend!);
     } catch (error) {
       _error = error;
     }
@@ -126,6 +144,7 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
     _readiness?.removeListener(_permissionReadinessChanged);
     _readiness?.bindPairing(null);
     _readiness?.dispose();
+    _stopMomentNotifications();
     _backend?.dispose();
     super.dispose();
   }
@@ -135,6 +154,8 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
     _backend?.pairing.setForeground(state == AppLifecycleState.resumed);
     _backend?.schedules.setForeground(state == AppLifecycleState.resumed);
     _backend?.mood.setForeground(state == AppLifecycleState.resumed);
+    _backend?.moments.setForeground(state == AppLifecycleState.resumed);
+    _backend?.reminders.setForeground(state == AppLifecycleState.resumed);
     _readiness?.setForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
       _readiness?.refresh();
@@ -149,20 +170,98 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
     }
   }
 
+  void _configureMomentNotifications(ServerpodBootstrap backend) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    unawaited(() async {
+      if (!await FirebasePushBootstrap.ensureInitialized() ||
+          !mounted ||
+          !identical(_backend, backend)) {
+        return;
+      }
+      _momentPresenter = MomentNotificationPresenter(
+        onTap: (momentId) {
+          _receiveMomentPayload(momentId);
+        },
+      );
+      await _momentPresenter!.initialize();
+      _foregroundMessages = FirebaseMessaging.onMessage.listen(
+        (message) => _receiveMomentNotification(message, showBanner: true),
+        onError: (_) {},
+      );
+      _openedMessages = FirebaseMessaging.onMessageOpenedApp.listen(
+        _receiveMomentNotification,
+        onError: (_) {},
+      );
+      try {
+        final initial = await FirebaseMessaging.instance.getInitialMessage();
+        if (initial != null) _receiveMomentNotification(initial);
+      } catch (_) {
+        // Push is optional; authentication and the private shell remain usable.
+      }
+    }());
+  }
+
+  void _receiveMomentNotification(
+    RemoteMessage message, {
+    bool showBanner = false,
+  }) {
+    final payload = PushNotificationPayload.parse(message.data);
+    if (payload == null) return;
+
+    final presenter = _momentPresenter;
+    switch (payload.type) {
+      case PushNotificationType.momentCreated:
+        _receiveMomentPayload(payload.id);
+        if (showBanner && presenter != null) {
+          unawaited(presenter.show(payload.id));
+        }
+      case PushNotificationType.reminderCreated:
+        if (showBanner && presenter != null) {
+          unawaited(presenter.showReminder(payload.id));
+        }
+    }
+  }
+
+  void _receiveMomentPayload(String id) {
+    _pendingMomentNotificationId = id;
+    _flushMomentNotification();
+  }
+
+  void _flushMomentNotification() {
+    final backend = _backend;
+    final id = _pendingMomentNotificationId;
+    final couple = backend?.pairing.couple;
+    if (backend == null ||
+        id == null ||
+        !backend.pairing.hasLoadedPairing ||
+        backend.pairing.userId == null ||
+        couple?.isComplete != true ||
+        !couple!.memberIds.contains(backend.pairing.userId)) {
+      return;
+    }
+    _pendingMomentNotificationId = null;
+    if (!mounted) return;
+    setState(() {
+      _momentNotificationId = id;
+      _momentNotificationRevision++;
+    });
+  }
+
+  void _stopMomentNotifications() {
+    _backend?.pairing.removeListener(_flushMomentNotification);
+    unawaited(_foregroundMessages?.cancel() ?? Future<void>.value());
+    unawaited(_openedMessages?.cancel() ?? Future<void>.value());
+    _foregroundMessages = null;
+    _openedMessages = null;
+    _momentPresenter = null;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
       return Scaffold(
         body: SafeArea(
-          child: Column(
-            children: [
-              Text('Serverpod setup failed: $_error'),
-              TextButton(
-                onPressed: () => setState(_connect),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
+          child: Column(children: [Text('Serverpod setup failed: $_error')]),
         ),
       );
     }
@@ -194,15 +293,25 @@ class _LiveAppState extends State<_LiveApp> with WidgetsBindingObserver {
           child: AppShell(
             pairing: backend.pairing,
             mood: backend.mood,
+            moments: backend.moments,
+            reminders: backend.reminders,
             account: backend.account,
             media: backend.media,
             schedules: backend.schedules,
             readiness: _readiness,
+            momentNotificationId: _momentNotificationId,
+            momentNotificationRevision: _momentNotificationRevision,
           ),
         );
         return _readiness == null
             ? child
-            : PermissionOnboarding(controller: _readiness!, child: child);
+            : PermissionOnboarding(
+                controller: _readiness!,
+                child: BackgroundSetupPrompt(
+                  controller: _readiness!,
+                  child: child,
+                ),
+              );
       },
     );
     return gate;

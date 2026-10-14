@@ -278,7 +278,7 @@ void main() {
     ];
     await showTab(tester);
     await tester.pumpAndSettle();
-    await open(tester, 'hub-send-to-partner');
+    await open(tester, 'hub-send-saved-photo');
     expect(find.byKey(const ValueKey(('hub-photo', 'received'))), findsNothing);
     expect(find.text('Saved photos'), findsOneWidget);
     expect(find.text('Previously sent'), findsNothing);
@@ -329,7 +329,7 @@ void main() {
       expect(send.onTap, isNull);
       await tester.scrollUntilVisible(find.text('Retry photo operation'), 300);
       expect(
-        find.textContaining('Could not confirm the send.'),
+        find.textContaining('waiting for server confirmation'),
         findsOneWidget,
       );
       expect(find.textContaining('Authorization'), findsNothing);
@@ -354,7 +354,7 @@ void main() {
       sendFailure = TimeoutException('private.invalid raw-id');
       await showTab(tester);
       await tester.pumpAndSettle();
-      await open(tester, 'hub-send-to-partner');
+      await open(tester, 'hub-send-saved-photo');
       await tester.tap(find.byKey(const ValueKey(('hub-photo', 'saved'))));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('hub-photo-confirm')));
@@ -424,7 +424,7 @@ void main() {
       await showTab(tester);
       await tester.pumpAndSettle();
       expect(photos.downloads, isEmpty);
-      await open(tester, 'hub-send-to-partner');
+      await open(tester, 'hub-send-saved-photo');
       await tester.tap(find.byKey(const ValueKey(('hub-photo', 'private-id'))));
       await tester.pumpAndSettle();
       expect(sends, isEmpty);
@@ -475,7 +475,7 @@ void main() {
       media.assets = [testAsset(id: 'private-id', uploader: 'me')];
       await showTab(tester);
       await tester.pumpAndSettle();
-      await open(tester, 'hub-send-to-partner');
+      await open(tester, 'hub-send-saved-photo');
       await tester.tap(find.byKey(const ValueKey(('hub-photo', 'private-id'))));
       await tester.pumpAndSettle();
       expect(find.byType(HubPhotoPreview), findsOneWidget);
@@ -492,18 +492,18 @@ void main() {
   );
 
   testWidgets(
-    'send card opens existing editor and preview without local apply',
+    'send card opens the editor directly and sends without a preview step',
     (tester) async {
       applied = 0;
       await showTab(tester);
       await tester.pumpAndSettle();
-      await open(tester, 'hub-send-to-partner');
       await tester.runAsync(() async {
-        await tester.tap(find.byKey(const Key('hub-send-new-photo')));
+        await open(tester, 'hub-send-to-partner');
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
       await tester.pumpAndSettle();
       await awaitRoute(tester, WidgetEditorScreen);
+      expect(find.text('Send to partner'), findsOneWidget);
       await tester.runAsync(() async {
         Navigator.of(
           tester.element(find.byType(WidgetEditorScreen)),
@@ -511,12 +511,9 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
       await tester.pumpAndSettle();
-      await awaitRoute(tester, WidgetPreviewScreen);
-      expect(find.byKey(const Key('preview-save-privately')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('preview-cancel')));
-      await tester.pumpAndSettle();
+      expect(find.byType(WidgetPreviewScreen), findsNothing);
       expect(applied, 0);
-      expect(sends, isEmpty);
+      expect(sends, hasLength(1));
       await tester.pumpWidget(const SizedBox());
     },
   );
@@ -558,7 +555,7 @@ void main() {
       media.assets = [testAsset(id: 'mine', uploader: 'me')];
       await showTab(tester);
       await tester.pumpAndSettle();
-      await open(tester, 'hub-send-to-partner');
+      await open(tester, 'hub-send-saved-photo');
       expect(find.byKey(const ValueKey(('hub-photo', 'mine'))), findsOneWidget);
       auth.change(null);
       await tester.pumpAndSettle();
@@ -591,6 +588,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
       await tester.pumpAndSettle();
+      await awaitRoute(tester, WidgetPreviewScreen);
       await tester.runAsync(() async {
         await tester.tap(find.byKey(const Key('preview-confirm')));
         await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -702,7 +700,7 @@ void main() {
       for (final entry in {
         'hub-my-widget': 'My widget',
         'hub-partner-updates': 'Photos from your partner',
-        'hub-send-to-partner': 'Send a photo',
+        'hub-send-saved-photo': 'Send a photo',
       }.entries) {
         await open(tester, entry.key);
         expect(tester.takeException(), isNull);

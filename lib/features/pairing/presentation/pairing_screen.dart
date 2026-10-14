@@ -34,6 +34,15 @@ class PairingScreen extends StatefulWidget {
 class _PairingScreenState extends State<PairingScreen> {
   final _code = TextEditingController();
 
+  Future<void> _refresh() async {
+    await Future.wait([
+      widget.controller.initialized
+          ? widget.controller.refresh()
+          : widget.controller.initialize(),
+      if (widget.account != null) widget.account!.refresh(),
+    ]);
+  }
+
   @override
   void dispose() {
     _code.dispose();
@@ -52,73 +61,72 @@ class _PairingScreenState extends State<PairingScreen> {
         final c = widget.controller;
         final couple = c.couple;
         return SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.lg,
-              AppSpacing.xxl,
-            ),
-            children: [
-              const _ProfileHeader(),
-              const SizedBox(height: AppSpacing.md),
-              _AccountCard(account: account),
-              const SizedBox(height: AppSpacing.md),
-              _ConnectionCard(controller: c),
-              if (c.error != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                _ErrorCard(
-                  message: _errorMessage(c.error!),
-                  onRetry: c.busy ? null : c.retry,
-                ),
-              ],
-              if (!c.initialized && !c.busy && c.error == null) ...[
-                const SizedBox(height: AppSpacing.md),
-                FilledButton.icon(
-                  onPressed: c.initialize,
-                  icon: const Icon(Icons.wifi_rounded),
-                  label: const Text('Connect to server'),
-                ),
-              ],
-              if (c.initialized && c.userId == null && c.allowDevGuest) ...[
-                const SizedBox(height: AppSpacing.md),
-                FilledButton.icon(
-                  onPressed: c.busy ? null : c.signIn,
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                  label: const Text('Continue as development guest'),
-                ),
-              ],
-              if (c.initialized && c.userId != null) ...[
-                const SizedBox(height: AppSpacing.lg),
-                _PairingSection(
-                  controller: c,
-                  couple: couple,
-                  codeController: _code,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _SignOutSection(
+          child: RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                AppSpacing.xxl,
+              ),
+              children: [
+                _ProfileHeader(
                   busy: c.busy,
-                  onPressed: () => _confirmSignOut(context),
+                  onSignOut: () => _confirmSignOut(context),
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                NicknameEditor(controller: c),
-                if (widget.schedules != null) ...[
-                  const SizedBox(height: AppSpacing.lg),
-                  OutlinedButton.icon(
-                    key: const Key('profile-settings'),
-                    onPressed: identical(widget.schedules!.pairing, c)
-                        ? () => openPhotoSyncSettings(
-                            context,
-                            schedules: widget.schedules!,
-                            readiness: widget.readiness,
-                          )
-                        : null,
-                    icon: const Icon(Icons.settings_outlined),
-                    label: const Text('Settings'),
+                const SizedBox(height: AppSpacing.md),
+                _AccountCard(account: account),
+                const SizedBox(height: AppSpacing.md),
+                _ConnectionCard(controller: c),
+                if (c.error != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _ErrorCard(message: _errorMessage(c.error!)),
+                ],
+                if (c.initialized && c.userId == null && c.allowDevGuest) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  FilledButton.icon(
+                    onPressed: c.busy ? null : c.signIn,
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                    label: const Text('Continue as development guest'),
                   ),
                 ],
+                if (c.initialized && c.userId != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  _PairingSection(
+                    controller: c,
+                    couple: couple,
+                    codeController: _code,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  if (c.canUnpair) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    _UnpairSection(
+                      busy: c.busy,
+                      onPressed: () => _confirmUnpair(context),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.lg),
+                  NicknameEditor(controller: c),
+                  if (widget.schedules != null) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    OutlinedButton.icon(
+                      key: const Key('profile-settings'),
+                      onPressed: identical(widget.schedules!.pairing, c)
+                          ? () => openPhotoSyncSettings(
+                              context,
+                              schedules: widget.schedules!,
+                              readiness: widget.readiness,
+                            )
+                          : null,
+                      icon: const Icon(Icons.settings_outlined),
+                      label: const Text('Settings'),
+                    ),
+                  ],
+                ],
               ],
-            ],
+            ),
           ),
         );
       },
@@ -157,22 +165,53 @@ class _PairingScreenState extends State<PairingScreen> {
     if (confirmed == true && mounted) await widget.controller.signOut();
   }
 
+  Future<void> _confirmUnpair(BuildContext context) async {
+    if (!widget.controller.canUnpair || widget.controller.busy) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unpair from your partner?'),
+        content: const Text(
+          'This device will lose access to the shared space, Moments, photos '
+          'and widget updates. Shared history remains available to your '
+          'partner, and they can invite someone new.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Unpair'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await widget.controller.unpair();
+    }
+  }
+
   String _errorMessage(Object error) {
     if (error is PairingException) {
       return switch (error.error) {
         PairingError.invalidCode => 'Enter a valid invite code.',
         PairingError.codeNotFound => 'That invite code was not found.',
         PairingError.alreadyPaired =>
-          'You are already paired. Refresh your pairing to see the latest state.',
+          'You are already paired. Your pairing will update automatically.',
         PairingError.cannotPairWithSelf => 'You cannot join your own invite.',
       };
     }
-    return 'We could not reach the pairing service. Please try again. ($error)';
+    return 'We could not sync your pairing right now. It will retry automatically.';
   }
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader();
+  const _ProfileHeader({required this.busy, required this.onSignOut});
+
+  final bool busy;
+  final VoidCallback onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -198,14 +237,24 @@ class _ProfileHeader extends StatelessWidget {
             ],
           ),
         ),
-        Container(
-          width: 48,
-          height: 48,
-          decoration: const BoxDecoration(
-            color: AppColors.cream,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.favorite_rounded, color: AppColors.clay),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Sign out of this device',
+              onPressed: busy ? null : onSignOut,
+              icon: const Icon(Icons.logout_rounded),
+            ),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                color: AppColors.cream,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.favorite_rounded, color: AppColors.clay),
+            ),
+          ],
         ),
       ],
     );
@@ -277,26 +326,15 @@ class _AccountCard extends StatelessWidget {
               !account!.busy) ...[
             const SizedBox(height: AppSpacing.sm),
             const Text(
-              'Account status is unknown. Refresh before signing out.',
+              'Account status is unknown. We will check it automatically.',
               style: TextStyle(color: AppColors.warning, fontSize: 13),
             ),
           ],
           if (account?.error != null) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Account status unavailable: ${account!.error}',
+              'Account status is temporarily unavailable. We will check again automatically.',
               style: const TextStyle(color: AppColors.error, fontSize: 13),
-            ),
-          ],
-          if (account != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: account!.busy ? null : account!.refresh,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Refresh account status'),
-              ),
             ),
           ],
         ],
@@ -333,7 +371,7 @@ class _ConnectionCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Text(
             !controller.hasLoadedPairing
-                ? 'Checking your pairing…'
+                ? 'Your private space'
                 : complete
                 ? 'Paired with your partner'
                 : couple == null
@@ -348,10 +386,6 @@ class _ConnectionCard extends StatelessWidget {
                 : 'Invite your person or join their private space below.',
             style: const TextStyle(color: AppColors.inkMuted, height: 1.35),
           ),
-          if (controller.busy) ...[
-            const SizedBox(height: AppSpacing.lg),
-            const LinearProgressIndicator(minHeight: 3),
-          ],
         ],
       ),
     );
@@ -413,12 +447,6 @@ class _PairingSection extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: AppSpacing.sm),
-        OutlinedButton.icon(
-          onPressed: controller.busy ? null : controller.refresh,
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('Refresh pairing'),
-        ),
       ],
     );
   }
@@ -460,10 +488,9 @@ class _InviteCard extends StatelessWidget {
 }
 
 class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message, required this.onRetry});
+  const _ErrorCard({required this.message});
 
   final String message;
-  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -482,11 +509,7 @@ class _ErrorCard extends StatelessWidget {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(message, style: const TextStyle(height: 1.35)),
-                const SizedBox(height: AppSpacing.xs),
-                TextButton(onPressed: onRetry, child: const Text('Retry')),
-              ],
+              children: [Text(message, style: const TextStyle(height: 1.35))],
             ),
           ),
         ],
@@ -495,22 +518,21 @@ class _ErrorCard extends StatelessWidget {
   }
 }
 
-class _SignOutSection extends StatelessWidget {
-  const _SignOutSection({required this.busy, required this.onPressed});
+class _UnpairSection extends StatelessWidget {
+  const _UnpairSection({required this.busy, required this.onPressed});
 
   final bool busy;
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: TextButton.icon(
-        onPressed: busy ? null : onPressed,
-        icon: const Icon(Icons.logout_rounded, size: 18),
-        label: const Text('Sign out of this device'),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Center(
+    child: TextButton.icon(
+      onPressed: busy ? null : onPressed,
+      style: TextButton.styleFrom(foregroundColor: AppColors.error),
+      icon: const Icon(Icons.link_off_rounded, size: 18),
+      label: const Text('Unpair from partner'),
+    ),
+  );
 }
 
 class _SurfaceCard extends StatelessWidget {

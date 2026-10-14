@@ -26,11 +26,11 @@ class AppUser {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'display_name': displayName,
-        'email': email,
-        'photo_url': photoUrl,
-      };
+    'id': id,
+    'display_name': displayName,
+    'email': email,
+    'photo_url': photoUrl,
+  };
 
   @override
   bool operator ==(Object other) =>

@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../async/bounded_retry.dart';
 import '../../features/pairing/presentation/pairing_controller.dart';
+import 'background_reliability_service.dart';
 import 'notification_permission_service.dart';
 
 /// Read-only readiness checks never request permission or grant widget consent.
@@ -11,10 +13,20 @@ class WidgetReadinessController extends ChangeNotifier {
   WidgetReadinessController({
     required this.service,
     PermissionPromptStore? promptStore,
-  }) : promptStore = promptStore ?? MemoryPermissionPromptStore();
+    this.background,
+    BackgroundSetupStore? backgroundStore,
+  }) : promptStore = promptStore ?? MemoryPermissionPromptStore(),
+       backgroundStore = backgroundStore ?? MemoryBackgroundSetupStore();
 
   final WidgetPermissionService service;
   final PermissionPromptStore promptStore;
+
+  /// Null on platforms without vendor background limits (and in most tests).
+  final BackgroundReliabilityService? background;
+  final BackgroundSetupStore backgroundStore;
+  BackgroundStatus? _backgroundStatus;
+  bool _backgroundHandled = false;
+  bool _backgroundKnown = false;
 
   NotificationAccess _notificationAccess = NotificationAccess.unknown;
   bool _widgetInstalled = false;
@@ -49,6 +61,22 @@ class WidgetReadinessController extends ChangeNotifier {
   /// not, because it is gated separately by [shouldPrompt].
   bool get canRequestNotifications =>
       _notificationAccess == NotificationAccess.denied;
+
+  BackgroundStatus? get backgroundStatus => _backgroundStatus;
+  bool get backgroundSupported => background != null;
+
+  /// One-time setup invitation. It waits for the notification prompt so two
+  /// dialogs never compete.
+  bool get shouldPromptBackground =>
+      !_disposed &&
+      background != null &&
+      _foreground &&
+      _initialised &&
+      !busy &&
+      _backgroundKnown &&
+      _backgroundStatus != null &&
+      !_backgroundHandled &&
+      !shouldPrompt;
 
   bool get shouldPrompt =>
       !_disposed &&
@@ -119,25 +147,53 @@ class WidgetReadinessController extends ChangeNotifier {
   }
 
   Future<void> _read(int revision, {bool notifications = true}) async {
+    await retryWithBackoff(
+      operation: () async {
+        final failed = await _readOnce(revision, notifications: notifications);
+        if (failed) throw StateError('Device readiness read failed.');
+      },
+      isCurrent: () => _current(revision),
+      // A private prompt-store failure is not a transient device read. Do not
+      // repeatedly touch the OS permission service when local state is
+      // unavailable; ordinary status failures remain automatically retryable.
+      shouldRetry: (_) => _promptKnown,
+    );
+  }
+
+  Future<bool> _readOnce(int revision, {bool notifications = true}) async {
     bool failed = false;
     try {
       final handled = await promptStore.wasHandled();
-      if (!_current(revision)) return;
+      if (!_current(revision)) return false;
       // A handled prompt cannot become unhandled during this controller's life.
       _handled |= handled;
       _promptKnown = true;
     } catch (_) {
-      if (!_current(revision)) return;
+      if (!_current(revision)) return false;
       _promptKnown = false;
       failed = true;
+    }
+    final backgroundService = background;
+    if (backgroundService != null) {
+      // Best effort: vendor settings must never block readiness.
+      try {
+        final handled = await backgroundStore.wasHandled();
+        final status = await backgroundService.status();
+        if (!_current(revision)) return false;
+        _backgroundHandled |= handled;
+        _backgroundStatus = status;
+        _backgroundKnown = true;
+      } catch (_) {
+        if (!_current(revision)) return false;
+      }
     }
     if (notifications) {
       try {
         final access = await service.notificationStatus();
-        if (!_current(revision)) return;
+        if (!_current(revision)) return false;
         _notificationAccess = access;
       } catch (_) {
-        if (!_current(revision)) return;
+        if (!_current(revision)) return false;
         _notificationAccess = NotificationAccess.unknown;
         failed = true;
       }
@@ -147,28 +203,29 @@ class WidgetReadinessController extends ChangeNotifier {
     if (_completeCoupleId != null) {
       try {
         final installed = await service.hasInstalledWidget();
-        if (!_current(revision)) return;
+        if (!_current(revision)) return false;
         _widgetInstalled = installed;
       } catch (_) {
-        if (!_current(revision)) return;
+        if (!_current(revision)) return false;
         _widgetInstalled = false;
         failed = true;
       }
       try {
         final supported = await service.canPinWidget();
-        if (!_current(revision)) return;
+        if (!_current(revision)) return false;
         _pinSupported = supported;
       } catch (_) {
-        if (!_current(revision)) return;
+        if (!_current(revision)) return false;
         _pinSupported = false;
         failed = true;
       }
     }
-    if (!_current(revision)) return;
+    if (!_current(revision)) return false;
     _initialised = true;
     _error = failed
         ? 'Could not check device readiness. Please try again.'
         : null;
+    return failed;
   }
 
   Future<void> requestNotifications() {
@@ -198,6 +255,30 @@ class WidgetReadinessController extends ChangeNotifier {
     await promptStore.markHandled();
     _handled = true;
     _promptKnown = true;
+  });
+
+  Future<void> deferBackgroundPrompt() => _enqueue((revision) async {
+    await backgroundStore.markHandled();
+    _backgroundHandled = true;
+  });
+
+  Future<void> requestBackgroundExemption() => _enqueue((revision) async {
+    final service = background;
+    if (service == null) return;
+    await backgroundStore.markHandled();
+    _backgroundHandled = true;
+    await service.requestBatteryExemption();
+    if (!_current(revision)) return;
+    _backgroundStatus = await service.status();
+  });
+
+  Future<void> openAutostartSettings() => _enqueue((revision) async {
+    final service = background;
+    if (service == null) return;
+    await backgroundStore.markHandled();
+    _backgroundHandled = true;
+    await service.openAutostart();
+    // The lifecycle resume re-reads battery state when the user returns.
   });
 
   Future<void> openSettings() => _enqueue((revision) async {

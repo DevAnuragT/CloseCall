@@ -53,9 +53,12 @@ void main() {
     );
     await media.uploadConfirmed(testPng);
     await tester.pumpAndSettle();
-    expect(media.error, isA<ServerpodClientNetworkException>());
-    expect(find.textContaining('may have succeeded'), findsOneWidget);
-    expect(find.textContaining('Retry the same upload'), findsOneWidget);
+    expect(media.error, isNull);
+    expect(media.status, contains('waiting for server confirmation'));
+    expect(
+      find.textContaining('waiting for server confirmation'),
+      findsOneWidget,
+    );
     expect(find.textContaining('private.invalid'), findsNothing);
     expect(find.textContaining('Authorization'), findsNothing);
     expect(repository.requestIds, hasLength(1));
@@ -96,9 +99,9 @@ void main() {
     },
   );
 
-  for (final action in ['send', 'save', 'cancel']) {
+  {
     testWidgets(
-      'picked photo reaches editor and preview explicitly confirms $action',
+      'picked photo reaches editor and Send to partner sends it straight away',
       (tester) async {
         final auth = FakeAuth()..change('me');
         final pairing = PairingController(
@@ -147,14 +150,13 @@ void main() {
             ),
           ),
         );
-        await tester.tap(find.byKey(const Key('hub-send-to-partner')));
-        await tester.pumpAndSettle();
         await tester.runAsync(() async {
-          await tester.tap(find.byKey(const Key('hub-send-new-photo')));
+          await tester.tap(find.byKey(const Key('hub-send-to-partner')));
           await Future<void>.delayed(const Duration(milliseconds: 100));
         });
         await tester.pumpAndSettle();
         await waitForRoute(tester, WidgetEditorScreen);
+        expect(find.text('Send to partner'), findsOneWidget);
         expect(
           tester
               .widget<WidgetEditorScreen>(find.byType(WidgetEditorScreen))
@@ -170,27 +172,10 @@ void main() {
           await Future<void>.delayed(const Duration(milliseconds: 100));
         });
         await tester.pumpAndSettle();
-        await waitForRoute(tester, WidgetPreviewScreen);
-        expect(find.text('Send to partner'), findsOneWidget);
-        expect(find.text('Save privately'), findsOneWidget);
-        expect(repository.requestIds, isEmpty);
-        expect(sends, isEmpty);
-        await tester.runAsync(() async {
-          await tester.tap(
-            find.byKey(
-              Key(switch (action) {
-                'send' => 'preview-confirm',
-                'save' => 'preview-save-privately',
-                _ => 'preview-cancel',
-              }),
-            ),
-          );
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-        });
-        await tester.pumpAndSettle();
-        expect(repository.requestIds, hasLength(action == 'cancel' ? 0 : 1));
-        expect(sends, hasLength(action == 'send' ? 1 : 0));
-        if (action == 'send') expect(sends.single.$1, 'uploaded');
+        expect(find.byType(WidgetPreviewScreen), findsNothing);
+        expect(repository.requestIds, hasLength(1));
+        expect(sends, hasLength(1));
+        expect(sends.single.$1, 'uploaded');
         expect(localApplied, 0);
       },
     );

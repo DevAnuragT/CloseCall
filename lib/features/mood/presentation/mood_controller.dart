@@ -18,6 +18,7 @@ class MoodController extends ChangeNotifier {
   Object? error;
   bool loading = false;
   bool saving = false;
+  MoodKind? _failedMood;
   bool _started = false;
   bool _disposed = false;
   // The live app explicitly supplies lifecycle state. Keeping this false
@@ -27,8 +28,13 @@ class MoodController extends ChangeNotifier {
   Timer? _pollTimer;
 
   static const _pollInterval = Duration(seconds: 15);
+  static const _automaticRetryDelays = <Duration>[
+    Duration(milliseconds: 150),
+    Duration(milliseconds: 400),
+  ];
 
   bool get paired => pairing.couple?.isComplete == true;
+  bool get hasFailedMood => _failedMood != null;
 
   void start() {
     if (_started || _disposed) return;
@@ -44,7 +50,7 @@ class MoodController extends ChangeNotifier {
     _pollTimer?.cancel();
     _pollTimer = null;
     if (_foreground && paired && !loading && !saving) {
-      unawaited(refresh());
+      unawaited(refresh(automatic: true));
     }
   }
 
@@ -56,12 +62,13 @@ class MoodController extends ChangeNotifier {
       _pollTimer = null;
       snapshot = null;
       error = null;
+      _failedMood = null;
       loading = false;
       saving = false;
       notifyListeners();
       return;
     }
-    if (!loading && !saving) unawaited(refresh());
+    if (!loading && !saving) unawaited(refresh(automatic: true));
   }
 
   void _schedulePoll() {
@@ -69,22 +76,42 @@ class MoodController extends ChangeNotifier {
     if (_disposed || !_foreground || !paired || loading || saving) return;
     _pollTimer = Timer(_pollInterval, () {
       _pollTimer = null;
-      if (!_disposed && _foreground && paired) unawaited(refresh());
+      if (!_disposed && _foreground && paired) {
+        unawaited(refresh(automatic: true));
+      }
     });
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool automatic = false}) async {
     if (_disposed || !paired || loading || saving) return;
     final revision = ++_revision;
+    final attempts = automatic ? _automaticRetryDelays.length + 1 : 1;
     loading = true;
     error = null;
     notifyListeners();
     try {
-      final result = await repository.currentMood();
-      if (_disposed || revision != _revision || !paired) return;
-      snapshot = result;
-    } catch (failure) {
-      if (!_disposed && revision == _revision && paired) error = failure;
+      for (var attempt = 0; attempt < attempts; attempt++) {
+        if (_disposed || revision != _revision || !paired) return;
+        try {
+          final result = await repository.currentMood();
+          if (_disposed || revision != _revision || !paired) return;
+          snapshot = result;
+          return;
+        } catch (failure) {
+          final canRetry =
+              attempt + 1 < attempts &&
+              !_disposed &&
+              revision == _revision &&
+              paired;
+          if (!canRetry) {
+            if (!_disposed && revision == _revision && paired) {
+              error = failure;
+            }
+            return;
+          }
+          await Future<void>.delayed(_automaticRetryDelays[attempt]);
+        }
+      }
     } finally {
       if (!_disposed && revision == _revision) {
         loading = false;
@@ -97,6 +124,7 @@ class MoodController extends ChangeNotifier {
   Future<void> setMood(MoodKind mood) async {
     if (_disposed || !paired || loading || saving) return;
     final revision = ++_revision;
+    _failedMood = mood;
     saving = true;
     error = null;
     notifyListeners();
@@ -104,6 +132,7 @@ class MoodController extends ChangeNotifier {
       final result = await repository.setMood(mood);
       if (_disposed || revision != _revision || !paired) return;
       snapshot = result;
+      _failedMood = null;
     } catch (failure) {
       if (!_disposed && revision == _revision && paired) error = failure;
     } finally {
@@ -113,6 +142,11 @@ class MoodController extends ChangeNotifier {
         _schedulePoll();
       }
     }
+  }
+
+  Future<void> retryMood() async {
+    final mood = _failedMood;
+    if (mood != null) await setMood(mood);
   }
 
   @override

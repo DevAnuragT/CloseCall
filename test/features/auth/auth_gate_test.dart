@@ -131,8 +131,7 @@ void main() {
       );
       expect(find.textContaining('Development guest account'), findsNothing);
       expect(find.text('Email account: me@example.test'), findsOneWidget);
-      await tester.ensureVisible(find.text('Sign out of this device'));
-      await tester.tap(find.text('Sign out of this device'));
+      await tester.tap(find.byTooltip('Sign out of this device'));
       await tester.pumpAndSettle();
       expect(auth.signOuts, 1);
       expect(find.byType(AlertDialog), findsNothing);
@@ -151,8 +150,7 @@ void main() {
         ),
       ),
     );
-    await tester.ensureVisible(find.text('Sign out of this device'));
-    await tester.tap(find.text('Sign out of this device'));
+    await tester.tap(find.byTooltip('Sign out of this device'));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(auth.signOuts, 0);
@@ -160,7 +158,7 @@ void main() {
 
   Future<void> showPausedGate(WidgetTester tester) async {
     auth.initializationFailure = const SessionValidationException();
-    await pairing.initialize();
+    await tester.runAsync(pairing.initialize);
     await tester.pumpWidget(
       MaterialApp(
         home: AuthGate(
@@ -170,132 +168,17 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Connection paused'), findsOneWidget);
-    expect(find.text('private space'), findsNothing);
+    expect(find.text('private space'), findsOneWidget);
+    expect(find.text('Connecting you'), findsNothing);
   }
 
-  testWidgets('offline identity is not allowed through the private auth gate', (
-    tester,
-  ) async {
-    auth.change('me');
-    await showPausedGate(tester);
-    expect(auth.userId, 'me');
-    expect(pairing.initialized, isFalse);
-  });
-
   testWidgets(
-    'email start-over confirms, disables in flight, and handles local-only sign-out',
-    (tester) async {
-      auth.account = AccountState(
-        userId: 'me',
-        isGuest: false,
-        email: 'me@example.test',
-      );
-      auth.change('me');
-      await showPausedGate(tester);
-      await tester.tap(find.text('Start over with sign in'));
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsOneWidget);
-      expect(find.textContaining('same email'), findsOneWidget);
-      expect(find.textContaining('cannot be recovered'), findsNothing);
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      expect(auth.signOuts, 0);
-
-      auth.pendingSignOut = Completer<void>();
-      auth.signOutFailure = const LocalSignOutException();
-      await tester.tap(find.text('Start over with sign in'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Sign out and continue'));
-      await tester.pump();
-      expect(pairing.busy, isTrue);
-      expect(find.text('Start over with sign in'), findsNothing);
-      expect(find.text('Retry connection'), findsNothing);
-      auth.pendingSignOut!.complete();
-      await tester.pumpAndSettle();
-      expect(auth.signOuts, 1);
-      expect(find.text('email sign-in'), findsOneWidget);
-      expect(find.text('Connection paused'), findsNothing);
-      expect(
-        find.textContaining('Server revocation could not be confirmed'),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets('unknown/offline account start-over warns of guest access loss', (
-    tester,
-  ) async {
-    auth.change('me');
-    auth.accountFailure = StateError('Synthetic offline error');
-    await showPausedGate(tester);
-    await tester.tap(find.text('Start over with sign in'));
-    await tester.pumpAndSettle();
-    expect(
-      find.textContaining('cannot be recovered after sign-out'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-    expect(auth.userId, 'me');
-    expect(auth.signOuts, 0);
-  });
-
-  testWidgets(
-    'failed local clear returns to retryable paused state without an unhandled error',
+    'cached identity keeps the private shell visible during startup',
     (tester) async {
       auth.change('me');
-      auth.signOutFailure = const SessionValidationException();
-      auth.clearBeforeFailure = false;
       await showPausedGate(tester);
-      await tester.tap(find.text('Start over with sign in'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Sign out and continue'));
-      await tester.pumpAndSettle();
-      expect(find.text('Connection paused'), findsOneWidget);
       expect(auth.userId, 'me');
-      expect(
-        tester
-            .widget<TextButton>(
-              find.widgetWithText(TextButton, 'Start over with sign in'),
-            )
-            .onPressed,
-        isNotNull,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'no cached identity does not prove a failed local reset succeeded',
-    (tester) async {
-      auth.signOutFailure = const SessionValidationException();
-      auth.clearBeforeFailure = false;
-      await showPausedGate(tester);
-      await tester.tap(find.text('Start over with sign in'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Sign out and continue'));
-      await tester.pumpAndSettle();
       expect(pairing.initialized, isFalse);
-      expect(find.text('Connection paused'), findsOneWidget);
-      expect(find.text('email sign-in'), findsNothing);
-      expect(tester.takeException(), isNull);
     },
   );
-
-  testWidgets('stale reset confirmation cannot sign out a switched account', (
-    tester,
-  ) async {
-    auth.change('old');
-    await showPausedGate(tester);
-    await tester.tap(find.text('Start over with sign in'));
-    await tester.pumpAndSettle();
-    auth.change('new');
-    await tester.pump();
-    await tester.tap(find.text('Sign out and continue'));
-    await tester.pumpAndSettle();
-    expect(auth.signOuts, 0);
-    expect(auth.userId, 'new');
-  });
 }

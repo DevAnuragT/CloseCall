@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:closecall/features/auth/data/auth_session.dart';
 import 'package:closecall/features/couple/domain/couple.dart';
+import 'package:closecall/features/pairing/data/pairing_cache.dart';
 import 'package:closecall/features/pairing/presentation/pairing_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -32,6 +33,21 @@ class _Couples extends FakeCouples {
     if (pending != null) return pending!.future;
     return super.coupleForUser(id);
   }
+}
+
+class _PairingCache implements PairingCache {
+  CachedPairing? stored;
+
+  @override
+  Future<CachedPairing?> read(String userId) async => stored;
+
+  @override
+  Future<void> write(String userId, Couple couple, String? inviteCode) async {
+    stored = CachedPairing(couple: couple, inviteCode: inviteCode);
+  }
+
+  @override
+  Future<void> clear(String userId) async => stored = null;
 }
 
 void main() {
@@ -129,6 +145,40 @@ void main() {
       expect(pairing.authRevision, 1);
       pairing.dispose();
       auth.dispose();
+    },
+  );
+
+  test(
+    'restores a complete cached pairing before the server read completes',
+    () async {
+      final auth = _CountingAuth()..change('me');
+      final repository = _Couples()..pending = Completer<Couple?>();
+      final cache = _PairingCache()
+        ..stored = CachedPairing(
+          couple: Couple(id: 'cached', memberIds: ['me', 'partner']),
+          inviteCode: 'CACHED',
+        );
+      final pairing = PairingController(
+        session: auth,
+        repository: repository,
+        cache: cache,
+      );
+      addTearDown(() {
+        pairing.dispose();
+        auth.dispose();
+      });
+
+      final initialization = pairing.initialize();
+      await Future<void>.delayed(Duration.zero);
+      expect(pairing.couple?.id, 'cached');
+      expect(pairing.inviteCode, 'CACHED');
+      expect(pairing.hasLoadedPairing, isTrue);
+
+      repository.pending!.complete(
+        Couple(id: 'server', memberIds: ['me', 'partner']),
+      );
+      await initialization;
+      expect(pairing.couple?.id, 'server');
     },
   );
 }

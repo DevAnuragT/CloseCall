@@ -6,7 +6,11 @@ import 'couple_repository.dart';
 
 /// The server derives identity from the session: userId is never sent over RPC.
 class ServerpodCoupleRepository
-    implements CoupleRepository, PairingCodeReader, NicknameRepository {
+    implements
+        CoupleRepository,
+        PairingCodeReader,
+        NicknameRepository,
+        UnpairRepository {
   ServerpodCoupleRepository(
     api.Client client, {
     required String? Function() userId,
@@ -16,6 +20,7 @@ class ServerpodCoupleRepository
          join: client.pairing.joinByCode,
          current: client.pairing.currentCouple,
          updateNicknames: client.pairing.updateNicknames,
+         unpair: client.pairing.unpair,
        );
 
   /// Injectable typed RPC boundaries, without fabricating a generated client.
@@ -26,7 +31,8 @@ class ServerpodCoupleRepository
     required Future<api.PairingState?> Function() current,
     Future<api.PairingState> Function(String, String?, String?)?
     updateNicknames,
-  }) : this._(userId, create, join, current, updateNicknames);
+    Future<void> Function(String)? unpair,
+  }) : this._(userId, create, join, current, updateNicknames, unpair);
 
   ServerpodCoupleRepository._(
     this._userId,
@@ -34,6 +40,7 @@ class ServerpodCoupleRepository
     this._join,
     this._current,
     this._updateNicknames,
+    this._unpair,
   );
 
   final String? Function() _userId;
@@ -42,6 +49,7 @@ class ServerpodCoupleRepository
   final Future<api.PairingState?> Function() _current;
   final Future<api.PairingState> Function(String, String?, String?)?
   _updateNicknames;
+  final Future<void> Function(String)? _unpair;
 
   @override
   String? currentInviteCode;
@@ -104,6 +112,16 @@ class ServerpodCoupleRepository
     final state = await _translate(_current);
     currentInviteCode = state?.pairingCode;
     return state == null ? null : toCouple(state);
+  }
+
+  @override
+  Future<void> unpair(String userId, String coupleId) async {
+    _checkIdentity(userId);
+    final call = _unpair;
+    if (call == null) throw UnsupportedError('Unpairing unavailable.');
+    await _translate(() => call(coupleId));
+    _checkIdentity(userId);
+    currentInviteCode = null;
   }
 
   @override

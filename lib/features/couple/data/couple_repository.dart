@@ -39,6 +39,10 @@ abstract interface class CoupleRepository {
   Future<Couple?> coupleForUser(String userId);
 }
 
+abstract interface class UnpairRepository {
+  Future<void> unpair(String userId, String coupleId);
+}
+
 /// Invite code returned by the most recent server pairing response.
 abstract interface class PairingCodeReader {
   String? get currentInviteCode;

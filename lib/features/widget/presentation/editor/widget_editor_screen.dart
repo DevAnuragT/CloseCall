@@ -21,9 +21,11 @@ class WidgetEditorScreen extends StatefulWidget {
     this.background,
     this.onExport,
     this.controller,
+    this.doneLabel = 'Done',
   });
 
   final Widget? background;
+  final String doneLabel;
   final ValueChanged<Uint8List>? onExport;
   final WidgetEditorController? controller;
 
@@ -195,6 +197,7 @@ class _WidgetEditorScreenState extends State<WidgetEditorScreen> {
               _sticker = e;
               _c.tool = EditorTool.sticker;
             }),
+            doneLabel: widget.doneLabel,
             onDone: _handleDone,
           ),
         ],
@@ -211,6 +214,7 @@ class _Toolbar extends StatelessWidget {
     required this.selectedEmoji,
     required this.onEmoji,
     required this.onDone,
+    required this.doneLabel,
   });
 
   final WidgetEditorController controller;
@@ -219,6 +223,7 @@ class _Toolbar extends StatelessWidget {
   final String selectedEmoji;
   final ValueChanged<String> onEmoji;
   final VoidCallback onDone;
+  final String doneLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -252,7 +257,7 @@ class _Toolbar extends StatelessWidget {
                   FilledButton(
                     key: const Key('editor-done'),
                     onPressed: onDone,
-                    child: const Text('Done'),
+                    child: Text(doneLabel),
                   ),
                 ],
               ),

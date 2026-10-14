@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'media_controller.dart';
 
 /// A read-only private picture. Mounting (or becoming visible via TickerMode)
-/// requests it once. Cache eviction shows Load photo rather than starting an
-/// endless reload loop when a grid contains more pictures than the LRU holds.
+/// requests it once. Cache eviction loads again when the preview becomes
+/// visible; ordinary photo reads never require a retry button.
 class PrivatePhotoPreview extends StatefulWidget {
   const PrivatePhotoPreview({
     super.key,
@@ -73,7 +73,12 @@ class _PrivatePhotoPreviewState extends State<PrivatePhotoPreview> {
 
   void _changed() {
     if (!mounted) return;
-    if (_loadedScope != _scope && _visible) _scheduleLoad();
+    final assetId = widget.asset.assetId;
+    final evicted =
+        widget.media.photoFor(assetId) == null &&
+        !widget.media.photoLoading(assetId) &&
+        widget.media.photoLoadErrorFor(assetId) == null;
+    if (_visible && (_loadedScope != _scope || evicted)) _scheduleLoad();
     setState(() {});
   }
 
@@ -106,20 +111,22 @@ class _PrivatePhotoPreviewState extends State<PrivatePhotoPreview> {
         ),
       );
     }
-    final label = failed ? 'Retry photo' : 'Load photo';
     return Center(
       child: widget.compact
-          ? IconButton(
-              tooltip: label,
-              onPressed: _scheduleLoad,
-              icon: Icon(failed ? Icons.refresh : Icons.photo_outlined),
+          ? Icon(
+              failed ? Icons.broken_image_outlined : Icons.photo_outlined,
+              semanticLabel: failed
+                  ? 'Private photo unavailable'
+                  : 'Private photo',
             )
           : Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.photo_outlined, size: 32),
+                Icon(
+                  failed ? Icons.broken_image_outlined : Icons.photo_outlined,
+                  size: 32,
+                ),
                 if (failed) const Text('Could not load this private photo.'),
-                TextButton(onPressed: _scheduleLoad, child: Text(label)),
               ],
             ),
     );

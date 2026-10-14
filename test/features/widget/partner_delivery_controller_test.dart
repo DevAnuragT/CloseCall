@@ -250,20 +250,17 @@ void main() {
     expect(h.repository.consentCalls, isEmpty);
   });
 
-  test(
-    'consent read failure is distinct and only retries explicitly',
-    () async {
-      final h = DeliveryHarness(store: FailingReadStore());
-      addTearDown(h.dispose);
-      await h.start();
-      expect(h.controller.partnerPhotoConsentRestored, isFalse);
-      expect(h.controller.restoringPartnerPhotoConsent, isFalse);
-      expect(h.controller.needsPartnerPhotoSetup, isFalse);
-      expect(h.controller.partnerUpdatesError, isNotNull);
-      await h.controller.retryPartnerPhotoConsent();
-      expect(h.controller.partnerUpdatesError, isNotNull);
-    },
-  );
+  test('consent read failure is distinct after bounded retries', () async {
+    final h = DeliveryHarness(store: FailingReadStore());
+    addTearDown(h.dispose);
+    await h.start();
+    expect(h.controller.partnerPhotoConsentRestored, isFalse);
+    expect(h.controller.restoringPartnerPhotoConsent, isFalse);
+    expect(h.controller.needsPartnerPhotoSetup, isFalse);
+    expect(h.controller.partnerUpdatesError, isNotNull);
+    await h.controller.retryPartnerPhotoConsent();
+    expect(h.controller.partnerUpdatesError, isNotNull);
+  });
 
   test(
     'explicit enable persists and partner notice downloads/applies automatically',

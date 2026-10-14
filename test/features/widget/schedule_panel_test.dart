@@ -468,7 +468,7 @@ void main() {
       await tester.ensureVisible(find.text('Schedule photo'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byType(SingleChildScrollView), findsWidgets);
+      expect(find.byType(RefreshIndicator), findsOneWidget);
       await closePanel(tester, h);
     },
   );

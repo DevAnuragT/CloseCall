@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/permissions/widget_readiness_controller.dart';
@@ -8,6 +10,9 @@ import '../features/home/domain/dashboard_snapshot.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/media/presentation/media_controller.dart';
 import '../features/mood/presentation/mood_controller.dart';
+import '../features/moments/presentation/moments_controller.dart';
+import '../features/reminders/presentation/reminder_controller.dart';
+import '../features/reminders/presentation/reminders_screen.dart';
 import '../features/pairing/presentation/pairing_controller.dart';
 import '../features/pairing/presentation/pairing_screen.dart';
 import '../features/widget/presentation/schedule_controller.dart';
@@ -23,15 +28,23 @@ class AppShell extends StatefulWidget {
     this.account,
     this.media,
     this.mood,
+    this.moments,
+    this.reminders,
     this.schedules,
     this.readiness,
+    this.momentNotificationId,
+    this.momentNotificationRevision = 0,
   });
 
   final AccountController? account;
   final MediaController? media;
   final MoodController? mood;
+  final MomentsController? moments;
+  final ReminderController? reminders;
   final ScheduleController? schedules;
   final WidgetReadinessController? readiness;
+  final String? momentNotificationId;
+  final int momentNotificationRevision;
 
   /// Injectable for tests; falls back to deterministic mock data in demo mode.
   final DashboardSnapshot? snapshot;
@@ -46,10 +59,52 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    _scheduleMomentNotification(widget.momentNotificationRevision);
+  }
+
+  @override
+  void didUpdateWidget(AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.momentNotificationRevision !=
+        oldWidget.momentNotificationRevision) {
+      _scheduleMomentNotification(widget.momentNotificationRevision);
+    }
+  }
+
+  void _scheduleMomentNotification(int revision) {
+    if (revision == 0 || widget.momentNotificationId == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || revision != widget.momentNotificationRevision) return;
+      _selectTab(1);
+      final moments = widget.moments;
+      if (moments != null) {
+        unawaited(moments.openFromNotification(widget.momentNotificationId!));
+      }
+    });
+  }
+
   void _openProfile() => _selectTab(3);
+
+  void _openReminders() {
+    final controller = widget.reminders;
+    if (controller == null) return;
+    // Reminders are scoped background work, so start them lazily when this
+    // surface becomes reachable rather than during the startup shell.
+    controller.start();
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => RemindersScreen(controller: controller),
+      ),
+    );
+  }
 
   void _selectTab(int index) {
     if (index < 0 || index >= _tabCount || index == _index) return;
+    if (_index == 1) widget.moments?.leaveScreen();
+    if (index == 1) widget.moments?.refresh();
     setState(() => _index = index);
   }
 
@@ -68,9 +123,15 @@ class _AppShellState extends State<AppShell> {
         HomeScreen(
           pairing: pairing,
           mood: widget.mood,
+          onOpenReminders: _openReminders,
           onOpenPairing: _openProfile,
+          onOpenMoments: widget.moments == null ? null : () => _selectTab(1),
         ),
-      MomentsScreen(liveMode: liveMode),
+      MomentsScreen(
+        liveMode: liveMode,
+        controller: widget.moments,
+        onConnectPartner: _openProfile,
+      ),
       WidgetTabScreen(
         media: widget.media,
         pairing: pairing,
@@ -91,45 +152,57 @@ class _AppShellState extends State<AppShell> {
     ];
     final selectedIndex = _safeTabIndex(_index, tabs.length);
 
-    return Scaffold(
-      body: ColoredBox(
-        color: AppColors.paper,
-        child: IndexedStack(index: selectedIndex, children: tabs),
-      ),
-      bottomNavigationBar: Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: 'Primary navigation',
-        child: NavigationBar(
-          key: const Key('primary-navigation'),
-          selectedIndex: selectedIndex,
-          onDestinationSelected: _selectTab,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
-              label: 'Home',
-              tooltip: 'Home',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.auto_awesome_outlined),
-              selectedIcon: Icon(Icons.auto_awesome_rounded),
-              label: 'Moments',
-              tooltip: 'Moments',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.dashboard_customize_outlined),
-              selectedIcon: Icon(Icons.dashboard_customize_rounded),
-              label: 'Widget',
-              tooltip: 'Widget',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.favorite_outline),
-              selectedIcon: Icon(Icons.favorite_rounded),
-              label: 'Profile',
-              tooltip: 'Profile',
-            ),
-          ],
+    return PopScope<void>(
+      // A tab is not a route. On a non-Home tab Android back first returns to
+      // Home; only Home allows the enclosing route/activity to exit. Routes
+      // pushed on the enclosing Navigator still pop normally before this is
+      // consulted.
+      canPop: selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && selectedIndex != 0 && mounted) {
+          _selectTab(0);
+        }
+      },
+      child: Scaffold(
+        body: ColoredBox(
+          color: AppColors.paper,
+          child: IndexedStack(index: selectedIndex, children: tabs),
+        ),
+        bottomNavigationBar: Semantics(
+          container: true,
+          explicitChildNodes: true,
+          label: 'Primary navigation',
+          child: NavigationBar(
+            key: const Key('primary-navigation'),
+            selectedIndex: selectedIndex,
+            onDestinationSelected: _selectTab,
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'Home',
+                tooltip: 'Home',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.auto_awesome_outlined),
+                selectedIcon: Icon(Icons.auto_awesome_rounded),
+                label: 'Moments',
+                tooltip: 'Moments',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.dashboard_customize_outlined),
+                selectedIcon: Icon(Icons.dashboard_customize_rounded),
+                label: 'Widget',
+                tooltip: 'Widget',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.favorite_outline),
+                selectedIcon: Icon(Icons.favorite_rounded),
+                label: 'Profile',
+                tooltip: 'Profile',
+              ),
+            ],
+          ),
         ),
       ),
     );

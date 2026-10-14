@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a photo to decorate and optionally share privately with your partner.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record a voice moment when you choose, to share privately with your partner.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -100,7 +100,9 @@ void main() {
     expect(find.byTooltip('Excited is selected'), findsOneWidget);
   });
 
-  testWidgets('mood card presents a loading state', (tester) async {
+  testWidgets('mood card stays usable while the first refresh runs', (
+    tester,
+  ) async {
     final auth = _MoodAuth();
     final pairing = PairingController(
       session: auth,
@@ -124,7 +126,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Checking in on your moods…'), findsOneWidget);
+    expect(find.text('How are you feeling?'), findsOneWidget);
 
     repository.current.complete(const MoodSnapshot());
     await tester.pumpAndSettle();
@@ -135,7 +137,7 @@ void main() {
     );
   });
 
-  testWidgets('mood card presents an error state with a retry action', (
+  testWidgets('mood card presents an error state without a retry action', (
     tester,
   ) async {
     final auth = _MoodAuth();
@@ -163,11 +165,50 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('How are you feeling?'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Retry'), findsNothing);
     expect(
-      find.textContaining('We could not load moods right now'),
-      findsOneWidget,
+      (mood.repository as _FailingMoodRepository).currentCalls,
+      greaterThanOrEqualTo(1),
     );
-    expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 500));
+    mood.setForeground(false);
+  });
+
+  testWidgets('mood save keeps an explicit retry for the user action', (
+    tester,
+  ) async {
+    final auth = _MoodAuth();
+    final pairing = PairingController(
+      session: auth,
+      repository: _MoodCouples(),
+    );
+    await pairing.initialize();
+    final repository = _MoodRepository()..setFailure = StateError('offline');
+    final mood = MoodController(pairing: pairing, repository: repository);
+    mood.start();
+    addTearDown(() {
+      mood.dispose();
+      pairing.dispose();
+      auth.dispose();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(body: MoodCard(controller: mood)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mood-choice-excited')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Retry mood'), findsOneWidget);
+    repository.setFailure = null;
+    await tester.tap(find.text('Retry mood'));
+    await tester.pumpAndSettle();
+    expect(find.text('Retry mood'), findsNothing);
+    expect(repository.lastMood, MoodKind.excited);
   });
 
   testWidgets('mood card remains usable at a narrow width', (tester) async {
@@ -211,39 +252,40 @@ void main() {
     expect(find.byTooltip('Set your mood to Excited'), findsOneWidget);
   });
 
-  testWidgets('paired home exposes pull to refresh and mood refresh action', (
-    tester,
-  ) async {
-    final auth = _MoodAuth();
-    final pairing = PairingController(
-      session: auth,
-      repository: _MoodCouples(),
-    );
-    await pairing.initialize();
-    final mood = MoodController(
-      pairing: pairing,
-      repository: _MoodRepository(at: DateTime.now()),
-    )..start();
-    addTearDown(() {
-      mood.dispose();
-      pairing.dispose();
-      auth.dispose();
-    });
+  testWidgets(
+    'paired home exposes pull to refresh without a mood refresh button',
+    (tester) async {
+      final auth = _MoodAuth();
+      final pairing = PairingController(
+        session: auth,
+        repository: _MoodCouples(),
+      );
+      await pairing.initialize();
+      final mood = MoodController(
+        pairing: pairing,
+        repository: _MoodRepository(at: DateTime.now()),
+      )..start();
+      addTearDown(() {
+        mood.dispose();
+        pairing.dispose();
+        auth.dispose();
+      });
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: Scaffold(
-          body: HomeScreen(pairing: pairing, mood: mood),
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: HomeScreen(pairing: pairing, mood: mood),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byType(RefreshIndicator), findsOneWidget);
-    expect(find.byKey(const Key('mood-refresh')), findsOneWidget);
-    expect(find.byTooltip('Refresh moods'), findsOneWidget);
-  });
+      expect(find.byType(RefreshIndicator), findsOneWidget);
+      expect(find.byKey(const Key('mood-refresh')), findsNothing);
+      expect(find.byTooltip('Refresh moods'), findsNothing);
+    },
+  );
 }
 
 class _MoodAuth extends AuthSession {
@@ -274,6 +316,7 @@ class _MoodRepository implements MoodRepository {
 
   MoodKind? lastMood;
   int setCalls = 0;
+  Object? setFailure;
   final DateTime _at;
 
   @override
@@ -289,6 +332,7 @@ class _MoodRepository implements MoodRepository {
   Future<MoodSnapshot> setMood(MoodKind mood) async {
     setCalls++;
     lastMood = mood;
+    if (setFailure != null) throw setFailure!;
     return MoodSnapshot(
       own: MoodCheckIn(userId: 'me', mood: mood, createdAt: _at),
       partner: MoodCheckIn(
@@ -315,9 +359,13 @@ class _DelayedMoodRepository implements MoodRepository {
 }
 
 class _FailingMoodRepository implements MoodRepository {
+  int currentCalls = 0;
+
   @override
-  Future<MoodSnapshot> currentMood() async =>
-      throw StateError('offline for test');
+  Future<MoodSnapshot> currentMood() async {
+    currentCalls++;
+    throw StateError('offline for test');
+  }
 
   @override
   Future<MoodSnapshot> setMood(MoodKind mood) async =>

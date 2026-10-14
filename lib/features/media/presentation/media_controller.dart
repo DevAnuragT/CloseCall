@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:closecall_client/closecall_client.dart' hide Uuid;
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/async/bounded_retry.dart';
 import '../../pairing/presentation/pairing_controller.dart';
 import '../data/media_repository.dart';
 import '../data/photo_preparation.dart';
@@ -44,6 +45,8 @@ class MediaController extends ChangeNotifier {
   MediaAsset? _pendingSendAsset;
   String? _pendingSendRequestId;
   Future<void> Function()? _retry;
+  bool _retryIsRead = false;
+  bool get hasExplicitRetry => _retry != null && !_retryIsRead;
   Future<void> _localQueue = Future.value();
   // Preview reads have their own lifecycle: a new upload/send command must not
   // invalidate them, and reading a picture must not steal the command's retry.
@@ -144,7 +147,11 @@ class MediaController extends ChangeNotifier {
   Future<void> _fetchPhoto(_PhotoRequest request) async {
     try {
       _validatePhotoAsset(request.asset);
-      final bytes = await repository.downloadPhoto(request.asset.assetId);
+      final bytes = await retryWithBackoff(
+        operation: () => repository.downloadPhoto(request.asset.assetId),
+        isCurrent: () => _photoRequestCurrent(request),
+        shouldRetry: _retryableReadFailure,
+      );
       if (_photoRequestCurrent(request)) _cachePhoto(request.asset, bytes);
     } catch (failure) {
       if (_photoRequestCurrent(request)) {
@@ -175,8 +182,18 @@ class MediaController extends ChangeNotifier {
   }
 
   bool get canShare => _currentScope != null;
+  bool _retryableReadFailure(Object failure) =>
+      failure is! MediaFailure &&
+      failure is! FormatException &&
+      !(failure is ServerpodClientHttpException &&
+          failure.statusCode >= 400 &&
+          failure.statusCode < 500 &&
+          failure.statusCode != 408 &&
+          failure.statusCode != 429);
   bool get hasPendingUpload => _pendingPhoto != null;
   bool get hasPendingSend => _pendingSendRequestId != null;
+  bool get hasPendingMutation =>
+      hasPendingUpload || hasPendingSend || _pendingSendAsset != null;
   String? get _currentScope =>
       pairing.userId != null &&
           pairing.hasLoadedPairing &&
@@ -230,9 +247,16 @@ class MediaController extends ChangeNotifier {
     Future<void> Function(int) action,
     Future<void> Function() retry, {
     bool resumePending = false,
+    bool readOnly = false,
   }) async {
     if (_disposed || busy) return;
-    if (!resumePending && (hasPendingUpload || hasPendingSend)) return;
+    if (readOnly && error != null && hasExplicitRetry) return;
+    // Reads are also the reconciliation path for an upload/send whose
+    // response was lost. They must be allowed to run while that mutation is
+    // still held for an exact-UUID retry.
+    if (!resumePending && !readOnly && (hasPendingUpload || hasPendingSend)) {
+      return;
+    }
     if (!canShare) {
       error = StateError('Complete pairing before sharing photos.');
       _notify();
@@ -242,13 +266,38 @@ class MediaController extends ChangeNotifier {
     busy = true;
     error = null;
     status = null;
+    final mutationRetry = _retry;
     _retry = retry;
+    _retryIsRead = readOnly;
     _notify();
     try {
       if (_current(revision)) await action(revision);
-      if (_current(revision)) _retry = null;
+      if (_current(revision)) {
+        if (readOnly && (hasPendingUpload || hasPendingSend)) {
+          // Refresh is a read, not a replacement for the exact-UUID mutation
+          // retry that is still waiting for explicit confirmation.
+          _retry = mutationRetry ?? (hasPendingSend ? _retrySend : retryUpload);
+          _retryIsRead = false;
+        } else {
+          _retry = null;
+        }
+      }
     } catch (failure) {
-      if (_current(revision)) error = failure;
+      if (_current(revision)) {
+        if (!readOnly && _ambiguousFailure(failure)) {
+          // A timeout is not a failed mutation: the server may have committed
+          // it. Keep it pending until a refresh reads fresh server media.
+          error = null;
+          status = _pendingStatus;
+        } else if (readOnly && (hasPendingUpload || hasPendingSend)) {
+          // A refresh transport failure must not turn an uncertain mutation
+          // into a false failure or discard the content already on screen.
+          error = null;
+          status = _pendingStatus;
+        } else {
+          error = failure;
+        }
+      }
     } finally {
       if (_current(revision)) {
         busy = false;
@@ -341,8 +390,8 @@ class MediaController extends ChangeNotifier {
       _pendingSendAsset = null;
       _pendingSendRequestId = null;
       status = receipt.recipientAutoUpdateEnabled
-          ? 'Sent. Active schedules take priority. Your partner can receive it on an opted-in device while CloseCall is open.'
-          : 'Sent — queued until your partner allows updates. Active schedules take priority.';
+          ? 'Sent. Delivery is waiting for your partner’s opted-in device. Active schedules take priority.'
+          : 'Sent. Delivery is waiting for your partner to enable photo updates; queued until your partner allows updates. Active schedules take priority.';
     },
     _retrySend,
     resumePending: true,
@@ -382,26 +431,88 @@ class MediaController extends ChangeNotifier {
     return result;
   }
 
-  Future<void> refresh() => _run((revision) async {
-    final result = await repository.listAssets();
-    if (!_current(revision)) return;
-    assets =
-        result
-            .where(
-              (a) =>
-                  a.coupleId == pairing.couple!.id &&
-                  pairing.couple!.memberIds.contains(a.uploaderId),
-            )
-            .toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    downloadedPhoto = null;
-    selectedAsset = null;
-    final received = assets.where((a) => a.uploaderId != pairing.userId);
-    if (received.isNotEmpty) await _download(received.first, revision);
-  }, refresh);
+  bool _ambiguousFailure(Object failure) {
+    if (failure is TimeoutException ||
+        failure is ServerpodClientNetworkException) {
+      return true;
+    }
+    return failure is ServerpodClientHttpException &&
+        (failure.statusCode == 408 ||
+            failure.statusCode == 429 ||
+            failure.statusCode >= 500);
+  }
 
-  Future<void> download(MediaAsset asset) =>
-      _run((revision) => _download(asset, revision), () => download(asset));
+  String get _pendingStatus => _pendingSendRequestId != null
+      ? 'Photo send is waiting for server confirmation. Pull down to refresh or retry the same send.'
+      : 'Photo upload is waiting for server confirmation. Pull down to refresh or retry the same upload.';
+
+  Future<void> refresh() => _run(
+    (revision) async {
+      final result = await retryWithBackoff(
+        operation: repository.listAssets,
+        isCurrent: () => _current(revision),
+        shouldRetry: _retryableReadFailure,
+      );
+      if (!_current(revision)) return;
+      final oldSelected = selectedAsset;
+      final oldDownloaded = downloadedPhoto;
+      assets =
+          result
+              .where(
+                (a) =>
+                    a.coupleId == pairing.couple!.id &&
+                    pairing.couple!.memberIds.contains(a.uploaderId),
+              )
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (oldSelected == null ||
+          !assets.any((asset) => asset.assetId == oldSelected.assetId)) {
+        downloadedPhoto = null;
+        selectedAsset = null;
+      } else {
+        selectedAsset = assets.firstWhere(
+          (asset) => asset.assetId == oldSelected.assetId,
+        );
+        downloadedPhoto = oldDownloaded;
+      }
+      final received = assets
+          .where((asset) => asset.uploaderId != pairing.userId)
+          .firstOrNull;
+      // Recover failed thumbnails without evicting verified photos or replaying
+      // pending uploads/sends.
+      await Future.wait([
+        for (final asset in assets)
+          if (_photoErrors.containsKey(asset.assetId)) loadPhoto(asset),
+      ]);
+      if (!_current(revision)) return;
+      if (!hasPendingMutation &&
+          received != null &&
+          selectedAsset?.assetId != received.assetId &&
+          selectedAsset == null) {
+        await _download(received, revision);
+      }
+      if (!_current(revision)) return;
+      if (_current(revision) && (hasPendingUpload || hasPendingSend)) {
+        // Do not download private bytes just to guess whether an ambiguous
+        // mutation committed. The stable request UUID is the authority: an
+        // explicit retry asks the server to return the existing row without
+        // duplicating the upload or send.
+        status = _pendingStatus;
+      }
+    },
+    refresh,
+    readOnly: true,
+  );
+
+  Future<void> download(MediaAsset asset) {
+    if (hasPendingMutation) return Future<void>.value();
+    return _run(
+      (revision) => _download(asset, revision),
+      () => download(asset),
+      readOnly: true,
+    );
+  }
+
   Future<void> _download(MediaAsset asset, int revision) async {
     _validatePhotoAsset(asset);
     downloadedPhoto = null;

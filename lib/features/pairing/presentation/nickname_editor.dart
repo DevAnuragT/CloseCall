@@ -23,6 +23,7 @@ class _NicknameEditorState extends State<NicknameEditor> {
   bool _saved = false;
   String? _scope;
   bool _dirty = false;
+  bool _editing = false;
   int _draft = 0;
 
   @override
@@ -51,6 +52,7 @@ class _NicknameEditorState extends State<NicknameEditor> {
     _dirty = false;
     _error = null;
     _saved = false;
+    _editing = false;
     _draft++;
   }
 
@@ -95,6 +97,7 @@ class _NicknameEditorState extends State<NicknameEditor> {
       _dirty = false;
       _error = null;
       _saved = false;
+      _editing = false;
       _draft++;
     });
   }
@@ -132,6 +135,7 @@ class _NicknameEditorState extends State<NicknameEditor> {
           _partner.text = widget.controller.couple?.partnerNickname ?? '';
           _dirty = false;
           _saved = true;
+          _editing = false;
         });
       } else if (widget.controller.nicknameError != null) {
         final failure = widget.controller.nicknameError;
@@ -139,7 +143,7 @@ class _NicknameEditorState extends State<NicknameEditor> {
           () => _error = failure is NicknameValidationException
               ? 'Use up to 40 characters, without control characters.'
               : failure is NicknameScopeException
-              ? 'Pairing changed. Refresh Profile and try again.'
+              ? 'Pairing changed. Open Profile again and try again.'
               : 'Could not save nicknames. Try again.',
         );
       }
@@ -166,91 +170,325 @@ class _NicknameEditorState extends State<NicknameEditor> {
             !stale &&
             !widget.controller.busy &&
             !widget.controller.nicknameSaving;
+        final couple = paired && _scope != null && !stale
+            ? widget.controller.couple
+            : null;
         return Container(
           key: const Key('nickname-editor'),
           padding: AppSpacing.card,
           decoration: BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: AppColors.cream),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Nicknames',
-                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: const Text(
+                        'Nicknames',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (!_editing) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    IconButton.filledTonal(
+                      key: const Key('edit-nicknames'),
+                      tooltip: 'Edit nicknames',
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                        backgroundColor: AppColors.cream,
+                        foregroundColor: AppColors.plum,
+                      ),
+                      onPressed: enabled
+                          ? () => setState(() {
+                              _editing = true;
+                              _saved = false;
+                            })
+                          : null,
+                      icon: const Icon(Icons.edit_outlined, size: 20),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: AppSpacing.xs),
               const Text(
-                'Choose the names you want to see in your private space.',
-                style: TextStyle(color: AppColors.inkMuted, height: 1.35),
+                'The names that feel like you.',
+                style: TextStyle(color: AppColors.plum, height: 1.4),
               ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                key: const Key('own-nickname'),
-                controller: _own,
-                onChanged: _edited,
-                enabled: enabled,
-                maxLength: 40,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Your nickname',
-                  hintText: 'Your name in this private space',
+              const SizedBox(height: AppSpacing.xl),
+              _NicknameIdentity(
+                label: 'You',
+                name: couple?.ownNickname ?? 'Your name',
+                icon: Icons.person_outline_rounded,
+                tint: AppColors.cream,
+                hasNickname: couple?.ownNickname != null,
+                editor: _editing
+                    ? _nicknameField(
+                        key: const Key('own-nickname'),
+                        controller: _own,
+                        label: 'Your nickname',
+                        enabled: enabled,
+                      )
+                    : null,
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                child: Divider(height: 1, color: AppColors.cream),
+              ),
+              _NicknameIdentity(
+                label: 'Your partner',
+                name: couple?.partnerNickname ?? 'Their name',
+                icon: Icons.favorite_border_rounded,
+                tint: AppColors.blush.withValues(alpha: 0.16),
+                hasNickname: couple?.partnerNickname != null,
+                editor: _editing
+                    ? _nicknameField(
+                        key: const Key('partner-nickname'),
+                        controller: _partner,
+                        label: 'Partner nickname',
+                        enabled: enabled,
+                      )
+                    : null,
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.paper,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ExcludeSemantics(
+                      child: Icon(
+                        Icons.lock_outline_rounded,
+                        size: 18,
+                        color: AppColors.plum,
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Just for you. These nicknames are personal and aren’t visible to your partner.',
+                        style: TextStyle(
+                          color: AppColors.plum,
+                          fontSize: 13,
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(
-                key: const Key('partner-nickname'),
-                controller: _partner,
-                onChanged: _edited,
-                enabled: enabled,
-                maxLength: 40,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Partner nickname',
-                  hintText: 'What do you call your partner?',
-                ),
-              ),
-              if (!paired)
+              if (!paired) ...[
+                const SizedBox(height: AppSpacing.md),
                 const Text(
                   'Pair with your partner to add nicknames.',
-                  style: TextStyle(color: AppColors.inkMuted),
+                  style: TextStyle(color: AppColors.plum, height: 1.4),
                 ),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: AppSpacing.sm),
-                Text(_error!, style: const TextStyle(color: AppColors.error)),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: AppColors.error, height: 1.4),
+                  ),
+                ),
               ],
               if (_saved) ...[
                 const SizedBox(height: AppSpacing.sm),
-                const Text(
-                  'Nicknames saved.',
-                  style: TextStyle(color: AppColors.success),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.sm),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const Key('save-nicknames'),
-                  onPressed: enabled ? _save : null,
-                  child: Text(
-                    widget.controller.nicknameSaving
-                        ? 'Saving nicknames…'
-                        : 'Save nicknames',
+                Semantics(
+                  liveRegion: true,
+                  child: const Text(
+                    'Nicknames saved.',
+                    style: TextStyle(color: AppColors.plum, height: 1.4),
                   ),
                 ),
-              ),
-              TextButton(
-                key: const Key('cancel-nicknames'),
-                // Cancelling is local and remains safe even if auth/pairing
-                // changed while an edit was open.
-                onPressed: _dirty && !widget.controller.busy ? _cancel : null,
-                child: const Text('Cancel edits'),
-              ),
+              ],
+              if (_editing) ...[
+                const SizedBox(height: AppSpacing.md),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const Key('save-nicknames'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      backgroundColor: AppColors.plum,
+                      foregroundColor: AppColors.card,
+                    ),
+                    onPressed: enabled ? _save : null,
+                    child: Semantics(
+                      liveRegion: widget.controller.nicknameSaving,
+                      child: Text(
+                        widget.controller.nicknameSaving
+                            ? 'Saving nicknames…'
+                            : _error != null
+                            ? 'Try saving again'
+                            : 'Save nicknames',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    key: const Key('cancel-nicknames'),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      foregroundColor: AppColors.plum,
+                    ),
+                    // Cancelling only discards the local draft. The draft guard
+                    // still ignores a late save response after cancellation.
+                    onPressed: !widget.controller.busy ? _cancel : null,
+                    child: const Text('Cancel edits'),
+                  ),
+                ),
+              ],
             ],
           ),
         );
       },
+    );
+  }
+
+  InputDecoration _fieldDecoration(String label) => InputDecoration(
+    labelText: label,
+    floatingLabelBehavior: FloatingLabelBehavior.always,
+    filled: true,
+    fillColor: AppColors.paper,
+    contentPadding: const EdgeInsets.all(AppSpacing.lg),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      borderSide: const BorderSide(color: AppColors.cream),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      borderSide: const BorderSide(color: AppColors.cream),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      borderSide: const BorderSide(color: AppColors.plum),
+    ),
+  );
+
+  Widget _nicknameField({
+    required Key key,
+    required TextEditingController controller,
+    required String label,
+    required bool enabled,
+  }) => TextField(
+    key: key,
+    controller: controller,
+    onChanged: _edited,
+    enabled: enabled,
+    maxLength: 40,
+    textCapitalization: TextCapitalization.words,
+    textInputAction: label == 'Your nickname'
+        ? TextInputAction.next
+        : TextInputAction.done,
+    decoration: _fieldDecoration(label),
+  );
+}
+
+class _NicknameIdentity extends StatelessWidget {
+  const _NicknameIdentity({
+    required this.label,
+    required this.name,
+    required this.icon,
+    required this.tint,
+    required this.hasNickname,
+    this.editor,
+  });
+
+  final String label;
+  final String name;
+  final IconData icon;
+  final Color tint;
+  final bool hasNickname;
+  final Widget? editor;
+
+  @override
+  Widget build(BuildContext context) {
+    final words = name.trim().split(RegExp(r'\s+'));
+    final initials = words
+        .where((word) => word.isNotEmpty)
+        .take(2)
+        .map((word) => word.characters.first)
+        .join()
+        .toUpperCase();
+    return Semantics(
+      label: '$label: $name',
+      excludeSemantics: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: hasNickname && initials.isNotEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        initials,
+                        style: const TextStyle(
+                          color: AppColors.plum,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  )
+                : Icon(icon, color: AppColors.plum, size: 24),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.plum,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                editor ??
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -33,7 +33,11 @@ class EditorPainter extends CustomPainter {
         );
       case StickerElement():
         // Centered emoji.
-        final tp = _layout(element.emoji, const Color(0xFF000000), element.size);
+        final tp = _layout(
+          element.emoji,
+          const Color(0xFF000000),
+          element.size,
+        );
         tp.paint(
           canvas,
           element.position - Offset(tp.width / 2, tp.height / 2),
@@ -49,8 +53,7 @@ class EditorPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke;
-    final path = Path()
-      ..moveTo(stroke.points.first.dx, stroke.points.first.dy);
+    final path = Path()..moveTo(stroke.points.first.dx, stroke.points.first.dy);
     for (final p in stroke.points.skip(1)) {
       path.lineTo(p.dx, p.dy);
     }

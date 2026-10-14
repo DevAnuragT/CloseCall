@@ -83,11 +83,9 @@ class SupabaseCoupleRepository implements CoupleRepository {
 
   @override
   Future<Couple?> coupleForUser(String userId) async {
-    final row = await _client
-        .from(_table)
-        .select()
-        .contains('member_ids', [userId])
-        .maybeSingle();
+    final row = await _client.from(_table).select().contains('member_ids', [
+      userId,
+    ]).maybeSingle();
     return row == null ? null : Couple.fromJson(row);
   }
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:closecall_client/closecall_client.dart';
 import 'package:flutter/foundation.dart';
+import '../../../core/async/bounded_retry.dart';
 import '../data/auth_session.dart';
 
 /// Account status is authoritative only for the identity that requested it.
@@ -37,7 +38,10 @@ class AccountController extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final result = await session.currentAccount();
+      final result = await retryWithBackoff(
+        operation: session.currentAccount,
+        isCurrent: () => _current(revision, id),
+      );
       if (!_current(revision, id)) return;
       if (result != null && result.userId != id) {
         throw StateError('Account identity does not match the signed-in user.');

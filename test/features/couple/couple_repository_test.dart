@@ -11,12 +11,15 @@ void main() {
   setUp(() => repo = InMemoryCoupleRepository(random: Random(7)));
 
   group('createCouple', () {
-    test('returns a valid code and an incomplete couple with the user', () async {
-      final result = await repo.createCouple('alice');
-      expect(PairingCode.isValid(result.code), isTrue);
-      expect(result.couple.memberIds, ['alice']);
-      expect(result.couple.isComplete, isFalse);
-    });
+    test(
+      'returns a valid code and an incomplete couple with the user',
+      () async {
+        final result = await repo.createCouple('alice');
+        expect(PairingCode.isValid(result.code), isTrue);
+        expect(result.couple.memberIds, ['alice']);
+        expect(result.couple.isComplete, isFalse);
+      },
+    );
 
     test('is idempotent while pending (same code returned)', () async {
       final first = await repo.createCouple('alice');
@@ -25,18 +28,23 @@ void main() {
       expect(second.couple.id, first.couple.id);
     });
 
-    test('throws alreadyPaired once the user is in a complete couple', () async {
-      final created = await repo.createCouple('alice');
-      await repo.joinByCode('bob', created.code);
-      expect(
-        () => repo.createCouple('alice'),
-        throwsA(isA<PairingException>().having(
-          (e) => e.error,
-          'error',
-          PairingError.alreadyPaired,
-        )),
-      );
-    });
+    test(
+      'throws alreadyPaired once the user is in a complete couple',
+      () async {
+        final created = await repo.createCouple('alice');
+        await repo.joinByCode('bob', created.code);
+        expect(
+          () => repo.createCouple('alice'),
+          throwsA(
+            isA<PairingException>().having(
+              (e) => e.error,
+              'error',
+              PairingError.alreadyPaired,
+            ),
+          ),
+        );
+      },
+    );
   });
 
   group('joinByCode', () {
@@ -49,15 +57,23 @@ void main() {
 
     test('accepts the formatted (ABC-DEF) code', () async {
       final created = await repo.createCouple('alice');
-      final couple = await repo.joinByCode('bob', PairingCode.format(created.code));
+      final couple = await repo.joinByCode(
+        'bob',
+        PairingCode.format(created.code),
+      );
       expect(couple.isComplete, isTrue);
     });
 
     test('rejects a malformed code', () async {
       expect(
         () => repo.joinByCode('bob', 'nope'),
-        throwsA(isA<PairingException>().having(
-          (e) => e.error, 'error', PairingError.invalidCode)),
+        throwsA(
+          isA<PairingException>().having(
+            (e) => e.error,
+            'error',
+            PairingError.invalidCode,
+          ),
+        ),
       );
     });
 
@@ -66,8 +82,13 @@ void main() {
       final unused = PairingCode.generate(random: Random(999));
       expect(
         () => repo.joinByCode('bob', unused),
-        throwsA(isA<PairingException>().having(
-          (e) => e.error, 'error', PairingError.codeNotFound)),
+        throwsA(
+          isA<PairingException>().having(
+            (e) => e.error,
+            'error',
+            PairingError.codeNotFound,
+          ),
+        ),
       );
     });
 
@@ -75,8 +96,13 @@ void main() {
       final created = await repo.createCouple('alice');
       expect(
         () => repo.joinByCode('alice', created.code),
-        throwsA(isA<PairingException>().having(
-          (e) => e.error, 'error', PairingError.cannotPairWithSelf)),
+        throwsA(
+          isA<PairingException>().having(
+            (e) => e.error,
+            'error',
+            PairingError.cannotPairWithSelf,
+          ),
+        ),
       );
     });
 
@@ -85,8 +111,13 @@ void main() {
       await repo.joinByCode('bob', created.code);
       expect(
         () => repo.joinByCode('carol', created.code),
-        throwsA(isA<PairingException>().having(
-          (e) => e.error, 'error', PairingError.codeNotFound)),
+        throwsA(
+          isA<PairingException>().having(
+            (e) => e.error,
+            'error',
+            PairingError.codeNotFound,
+          ),
+        ),
       );
     });
   });

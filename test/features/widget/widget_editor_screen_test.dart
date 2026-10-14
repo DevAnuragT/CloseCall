@@ -5,10 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  Future<void> pumpEditor(
-    WidgetTester tester,
-    WidgetEditorController c,
-  ) async {
+  Future<void> pumpEditor(WidgetTester tester, WidgetEditorController c) async {
     tester.view.physicalSize = const Size(1000, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -20,8 +17,9 @@ void main() {
     );
   }
 
-  testWidgets('dragging on the canvas in draw mode adds a stroke',
-      (tester) async {
+  testWidgets('dragging on the canvas in draw mode adds a stroke', (
+    tester,
+  ) async {
     final c = WidgetEditorController();
     await pumpEditor(tester, c);
 
@@ -35,23 +33,29 @@ void main() {
     expect(c.elements.single, isA<StrokeElement>());
   });
 
-  testWidgets('tapping in sticker mode places the selected sticker',
-      (tester) async {
+  testWidgets('tapping in sticker mode places the selected sticker', (
+    tester,
+  ) async {
     final c = WidgetEditorController()..tool = EditorTool.sticker;
     await pumpEditor(tester, c);
 
-    await tester.tapAt(tester.getCenter(find.byKey(const Key('editor-canvas'))));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const Key('editor-canvas'))),
+    );
     await tester.pump();
 
     expect(c.elements.single, isA<StickerElement>());
   });
 
-  testWidgets('text tool: tap -> dialog -> add places a text element',
-      (tester) async {
+  testWidgets('text tool: tap -> dialog -> add places a text element', (
+    tester,
+  ) async {
     final c = WidgetEditorController()..tool = EditorTool.text;
     await pumpEditor(tester, c);
 
-    await tester.tapAt(tester.getCenter(find.byKey(const Key('editor-canvas'))));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const Key('editor-canvas'))),
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -81,9 +85,9 @@ void main() {
     final c = WidgetEditorController()..addSticker('❤️', const Offset(50, 50));
     await pumpEditor(tester, c);
 
-    final state = tester.state<State<WidgetEditorScreen>>(
-      find.byType(WidgetEditorScreen),
-    ) as dynamic;
+    final state =
+        tester.state<State<WidgetEditorScreen>>(find.byType(WidgetEditorScreen))
+            as dynamic;
 
     await tester.runAsync(() async {
       final bytes = await state.export(pixelRatio: 1.0);
