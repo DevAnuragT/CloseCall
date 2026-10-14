@@ -947,6 +947,10 @@ void main() {
           // Inside an ephemeral database only: reproduce the prior scheduling
           // actions on a real pre-scheduling schema, not the happy fresh-install SQL.
           await session.db.unsafeSimpleExecute(
+            'DROP TABLE closecall_moment_event_outbox; '
+            'DROP TABLE closecall_reminder_event_outbox; '
+            'DROP TABLE closecall_reminder; '
+            'DROP TABLE closecall_moment; '
             'DROP TABLE closecall_widget_device_credential; '
             'DROP TABLE closecall_push_outbox; '
             'DROP TABLE closecall_push_device_registration; '
@@ -981,6 +985,9 @@ void main() {
             '20261006120000000-fcm-outbox',
             '20261006224415374-widget-device-credentials',
             '20261007041835495-live-mood',
+            '20261010204723852-moments',
+            '20261012083947841-reminders',
+            '20261014053004876-reminder-fcm',
           ]);
           expect(
             await database.MigrationManager.verifyDatabaseIntegrity(session),

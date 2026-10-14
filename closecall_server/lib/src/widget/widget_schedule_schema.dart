@@ -67,6 +67,103 @@ List<ForeignKeyDefinition> widgetCredentialForeignKeys() => [
   ),
 ];
 
+List<ForeignKeyDefinition> momentForeignKeys() => [
+  ForeignKeyDefinition(
+    constraintName: 'closecall_moment_same_couple_author',
+    columns: ['coupleId', 'authorMemberId'],
+    referenceTable: 'closecall_couple_member',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+];
+
+/// Composite outbox references require a matching unique parent index. The
+/// Moments model predates that relation, so extend its target schema alongside
+/// the pending Reminders migration rather than rewriting the installed one.
+IndexDefinition momentCoupleIndex() => IndexDefinition(
+  indexName: 'closecall_moment_couple_id_unique',
+  elements: [
+    for (final column in ['coupleId', 'id'])
+      IndexElementDefinition(
+        type: IndexElementDefinitionType.column,
+        definition: column,
+      ),
+  ],
+  type: 'btree',
+  isUnique: true,
+  isPrimary: false,
+);
+
+List<ForeignKeyDefinition> momentEventForeignKeys() => [
+  ForeignKeyDefinition(
+    constraintName: 'closecall_moment_event_same_couple_moment',
+    columns: ['coupleId', 'momentId'],
+    referenceTable: 'closecall_moment',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+  ForeignKeyDefinition(
+    constraintName: 'closecall_moment_event_same_couple_recipient',
+    columns: ['coupleId', 'recipientMemberId'],
+    referenceTable: 'closecall_couple_member',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+];
+
+List<ForeignKeyDefinition> reminderForeignKeys() => [
+  ForeignKeyDefinition(
+    constraintName: 'closecall_reminder_same_couple_creator',
+    columns: ['coupleId', 'creatorMemberId'],
+    referenceTable: 'closecall_couple_member',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+];
+
+IndexDefinition reminderCoupleIndex() => IndexDefinition(
+  indexName: 'closecall_reminder_couple_id_unique',
+  elements: [
+    for (final column in ['coupleId', 'id'])
+      IndexElementDefinition(
+        type: IndexElementDefinitionType.column,
+        definition: column,
+      ),
+  ],
+  type: 'btree',
+  isUnique: true,
+  isPrimary: false,
+);
+
+List<ForeignKeyDefinition> reminderEventForeignKeys() => [
+  ForeignKeyDefinition(
+    constraintName: 'closecall_reminder_event_same_couple_reminder',
+    columns: ['coupleId', 'reminderId'],
+    referenceTable: 'closecall_reminder',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+  ForeignKeyDefinition(
+    constraintName: 'closecall_reminder_event_same_couple_recipient',
+    columns: ['coupleId', 'recipientMemberId'],
+    referenceTable: 'closecall_couple_member',
+    referenceTableSchema: 'public',
+    referenceColumns: ['coupleId', 'id'],
+    onUpdate: ForeignKeyAction.noAction,
+    onDelete: ForeignKeyAction.cascade,
+  ),
+];
+
 List<TableDefinition> withScheduleConstraints(
   List<TableDefinition> tables,
 ) => tables.map((table) {
@@ -78,10 +175,18 @@ List<TableDefinition> withScheduleConstraints(
   final isPushTable = table.name == 'closecall_push_device_registration';
   final isPushOutboxTable = table.name == 'closecall_push_outbox';
   final isCredentialTable = table.name == 'closecall_widget_device_credential';
+  final isMomentTable = table.name == 'closecall_moment';
+  final isMomentEventTable = table.name == 'closecall_moment_event_outbox';
+  final isReminderTable = table.name == 'closecall_reminder';
+  final isReminderEventTable = table.name == 'closecall_reminder_event_outbox';
   if (!isScheduleTable &&
       !isPushTable &&
       !isPushOutboxTable &&
-      !isCredentialTable) {
+      !isCredentialTable &&
+      !isMomentTable &&
+      !isMomentEventTable &&
+      !isReminderTable &&
+      !isReminderEventTable) {
     return table;
   }
   // Serverpod 4.0.3's PostgresAnalyzer resolves conkey/confkey without WITH
@@ -89,7 +194,15 @@ List<TableDefinition> withScheduleConstraints(
   // view is ONLY for runtime verification, not SQL/artifact generation. The
   // canonical definitions above retain correct paired FK column ordering.
   final additional =
-      (isCredentialTable
+      (isReminderEventTable
+              ? reminderEventForeignKeys()
+              : isReminderTable
+              ? reminderForeignKeys()
+              : isMomentEventTable
+              ? momentEventForeignKeys()
+              : isMomentTable
+              ? momentForeignKeys()
+              : isCredentialTable
               ? widgetCredentialForeignKeys()
               : isPushTable
               ? pushRegistrationForeignKeys()
@@ -113,6 +226,21 @@ List<TableDefinition> withScheduleConstraints(
           })
           .toList();
   return table.copyWith(
+    indexes: isMomentTable
+        ? [
+            ...table.indexes.where(
+              (index) => index.indexName != momentCoupleIndex().indexName,
+            ),
+            momentCoupleIndex(),
+          ]
+        : isReminderTable
+        ? [
+            ...table.indexes.where(
+              (index) => index.indexName != reminderCoupleIndex().indexName,
+            ),
+            reminderCoupleIndex(),
+          ]
+        : table.indexes,
     foreignKeys: [
       ...table.foreignKeys.where(
         (key) => !additional.any((a) => a.constraintName == key.constraintName),

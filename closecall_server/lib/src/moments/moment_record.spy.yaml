@@ -1,0 +1,22 @@
+class: MomentRecord
+table: closecall_moment
+serverOnly: true
+fields:
+  id: UuidValue?, defaultPersist=random
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  authorMemberId: int
+  authorId: String
+  text: String
+  kind: String
+  durationMs: int?
+  createdAt: DateTime, default=now
+  requestId: String
+  contentHash: String
+  storagePath: String?
+  deletedAt: DateTime?
+indexes:
+  closecall_moment_request_unique:
+    fields: coupleId, requestId
+    unique: true
+  closecall_moment_timeline:
+    fields: coupleId, createdAt, id

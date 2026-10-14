@@ -15,6 +15,10 @@
 import '../widget/widget_schedule_schema.dart';
 import 'package:closecall_server/src/generated/media/media_asset.dart'
     as _ibuid3ro;
+import 'package:closecall_server/src/generated/moments/moment_entry.dart'
+    as _iqvr1c08;
+import 'package:closecall_server/src/generated/reminders/reminder_entry.dart'
+    as _ir7gi34d;
 import 'package:serverpod/protocol.dart' as _isp;
 import 'package:serverpod/serverpod.dart' as _is;
 import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
@@ -27,6 +31,10 @@ import 'future_calls_generated_models/widget_timeline_future_call_wake_model.dar
 import 'media/media_asset.dart' as _ijjfwapm;
 import 'media/media_failure.dart' as _iuzipihh;
 import 'media/media_record.dart' as _i6kv8n64;
+import 'moments/moment_entry.dart' as _iq4regyx;
+import 'moments/moment_event_outbox.dart' as _iazdxdla;
+import 'moments/moment_failure.dart' as _ilmm6qir;
+import 'moments/moment_record.dart' as _ipgyhm3z;
 import 'mood/mood_failure.dart' as _ievswv9n;
 import 'mood/mood_state.dart' as _i3uwx2a4;
 import 'pairing/couple.dart' as _iz3xjlbz;
@@ -36,6 +44,10 @@ import 'pairing/pairing_state.dart' as _iyyqlhox;
 import 'push/push_device_registration.dart' as _i48xv6cw;
 import 'push/push_failure.dart' as _i9648dgo;
 import 'push/push_outbox.dart' as _i6z8z91q;
+import 'reminders/reminder_entry.dart' as _ipb0000r;
+import 'reminders/reminder_event_outbox.dart' as _ibwgwkt8;
+import 'reminders/reminder_failure.dart' as _ishkpy03;
+import 'reminders/reminder_record.dart' as _iqvmz5zf;
 import 'widget/schedule_failure.dart' as _ipjphtkx;
 import 'widget/timeline_notice.dart' as _iulii77s;
 import 'widget/widget_delivery_record.dart' as _ib5zdgim;
@@ -52,6 +64,10 @@ export 'auth/account_state.dart';
 export 'media/media_asset.dart';
 export 'media/media_failure.dart';
 export 'media/media_record.dart';
+export 'moments/moment_entry.dart';
+export 'moments/moment_event_outbox.dart';
+export 'moments/moment_failure.dart';
+export 'moments/moment_record.dart';
 export 'mood/mood_failure.dart';
 export 'mood/mood_state.dart';
 export 'pairing/couple.dart';
@@ -61,6 +77,10 @@ export 'pairing/pairing_state.dart';
 export 'push/push_device_registration.dart';
 export 'push/push_failure.dart';
 export 'push/push_outbox.dart';
+export 'reminders/reminder_entry.dart';
+export 'reminders/reminder_event_outbox.dart';
+export 'reminders/reminder_failure.dart';
+export 'reminders/reminder_record.dart';
 export 'widget/schedule_failure.dart';
 export 'widget/timeline_notice.dart';
 export 'widget/widget_delivery_record.dart';
@@ -378,6 +398,304 @@ class Protocol extends _is.DatabaseSerializationManager {
       managed: true,
     ),
     _isp.TableDefinition(
+      name: 'closecall_moment',
+      dartName: 'MomentRecord',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue?',
+          columnDefault: 'random',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'authorMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'authorId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'text',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'kind',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'durationMs',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: true,
+          dartType: 'int?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'createdAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'requestId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'contentHash',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'storagePath',
+          columnType: _isp.ColumnType.text,
+          isNullable: true,
+          dartType: 'String?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'deletedAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_moment_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_moment_request_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'coupleId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'requestId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
+          indexName: 'closecall_moment_timeline',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'coupleId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'createdAt',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'id',
+            ),
+          ],
+          type: 'btree',
+          isUnique: false,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
+    _isp.TableDefinition(
+      name: 'closecall_moment_event_outbox',
+      dartName: 'MomentEventOutbox',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue?',
+          columnDefault: 'random',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'momentId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'recipientMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'eventType',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'createdAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'attempts',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+          columnDefault: '0',
+        ),
+        _isp.ColumnDefinition(
+          name: 'availableAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'leasedUntil',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'leaseOwner',
+          columnType: _isp.ColumnType.text,
+          isNullable: true,
+          dartType: 'String?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'expiresAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+        ),
+        _isp.ColumnDefinition(
+          name: 'completedAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'lastError',
+          columnType: _isp.ColumnType.text,
+          isNullable: true,
+          dartType: 'String?',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_moment_event_outbox_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_moment_event_outbox_fk_1',
+          columns: ['momentId'],
+          referenceTable: 'closecall_moment',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_moment_event_outbox_fk_2',
+          columns: ['recipientMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_moment_event_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'momentId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'recipientMemberId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'eventType',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
+          indexName: 'closecall_moment_event_ready_idx',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'completedAt',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'availableAt',
+            ),
+          ],
+          type: 'btree',
+          isUnique: false,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
+    _isp.TableDefinition(
       name: 'closecall_push_device_registration',
       dartName: 'PushDeviceRegistration',
       schema: 'public',
@@ -631,6 +949,302 @@ class Protocol extends _is.DatabaseSerializationManager {
         ),
         _isp.IndexDefinition(
           indexName: 'closecall_push_outbox_ready_idx',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'completedAt',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'availableAt',
+            ),
+          ],
+          type: 'btree',
+          isUnique: false,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
+    _isp.TableDefinition(
+      name: 'closecall_reminder',
+      dartName: 'ReminderRecord',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue?',
+          columnDefault: 'random',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'creatorMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'creatorId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'title',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'kind',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'remindAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+        ),
+        _isp.ColumnDefinition(
+          name: 'completedAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'createdAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'requestId',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_reminder_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_reminder_fk_1',
+          columns: ['creatorMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_reminder_request_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'coupleId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'requestId',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
+          indexName: 'closecall_reminder_due',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'coupleId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'remindAt',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'id',
+            ),
+          ],
+          type: 'btree',
+          isUnique: false,
+          isPrimary: false,
+        ),
+      ],
+      managed: true,
+    ),
+    _isp.TableDefinition(
+      name: 'closecall_reminder_event_outbox',
+      dartName: 'ReminderEventOutbox',
+      schema: 'public',
+      module: 'closecall',
+      columns: [
+        _isp.ColumnDefinition(
+          name: 'id',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue?',
+          columnDefault: 'random',
+        ),
+        _isp.ColumnDefinition(
+          name: 'coupleId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'reminderId',
+          columnType: _isp.ColumnType.uuid,
+          isNullable: false,
+          dartType: 'UuidValue',
+        ),
+        _isp.ColumnDefinition(
+          name: 'recipientMemberId',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+        ),
+        _isp.ColumnDefinition(
+          name: 'eventType',
+          columnType: _isp.ColumnType.text,
+          isNullable: false,
+          dartType: 'String',
+        ),
+        _isp.ColumnDefinition(
+          name: 'createdAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'attempts',
+          columnType: _isp.ColumnType.bigint,
+          isNullable: false,
+          dartType: 'int',
+          columnDefault: '0',
+        ),
+        _isp.ColumnDefinition(
+          name: 'availableAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+          columnDefault: 'now',
+        ),
+        _isp.ColumnDefinition(
+          name: 'leasedUntil',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'leaseOwner',
+          columnType: _isp.ColumnType.text,
+          isNullable: true,
+          dartType: 'String?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'expiresAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: false,
+          dartType: 'DateTime',
+        ),
+        _isp.ColumnDefinition(
+          name: 'completedAt',
+          columnType: _isp.ColumnType.timestampWithoutTimeZone,
+          isNullable: true,
+          dartType: 'DateTime?',
+        ),
+        _isp.ColumnDefinition(
+          name: 'lastError',
+          columnType: _isp.ColumnType.text,
+          isNullable: true,
+          dartType: 'String?',
+        ),
+      ],
+      foreignKeys: [
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_reminder_event_outbox_fk_0',
+          columns: ['coupleId'],
+          referenceTable: 'closecall_couple',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_reminder_event_outbox_fk_1',
+          columns: ['reminderId'],
+          referenceTable: 'closecall_reminder',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+        _isp.ForeignKeyDefinition(
+          constraintName: 'closecall_reminder_event_outbox_fk_2',
+          columns: ['recipientMemberId'],
+          referenceTable: 'closecall_couple_member',
+          referenceTableSchema: 'public',
+          referenceColumns: ['id'],
+          onUpdate: _isp.ForeignKeyAction.noAction,
+          onDelete: _isp.ForeignKeyAction.cascade,
+          matchType: null,
+        ),
+      ],
+      indexes: [
+        _isp.IndexDefinition(
+          indexName: 'closecall_reminder_event_unique',
+          tableSpace: null,
+          elements: [
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'reminderId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'recipientMemberId',
+            ),
+            _isp.IndexElementDefinition(
+              type: _isp.IndexElementDefinitionType.column,
+              definition: 'eventType',
+            ),
+          ],
+          type: 'btree',
+          isUnique: true,
+          isPrimary: false,
+        ),
+        _isp.IndexDefinition(
+          indexName: 'closecall_reminder_event_ready_idx',
           tableSpace: null,
           elements: [
             _isp.IndexElementDefinition(
@@ -1318,6 +1932,18 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == _i6kv8n64.MediaRecord) {
       return _i6kv8n64.MediaRecord.fromJson(data) as T;
     }
+    if (t == _iq4regyx.MomentEntry) {
+      return _iq4regyx.MomentEntry.fromJson(data) as T;
+    }
+    if (t == _iazdxdla.MomentEventOutbox) {
+      return _iazdxdla.MomentEventOutbox.fromJson(data) as T;
+    }
+    if (t == _ilmm6qir.MomentFailure) {
+      return _ilmm6qir.MomentFailure.fromJson(data) as T;
+    }
+    if (t == _ipgyhm3z.MomentRecord) {
+      return _ipgyhm3z.MomentRecord.fromJson(data) as T;
+    }
     if (t == _ievswv9n.MoodFailure) {
       return _ievswv9n.MoodFailure.fromJson(data) as T;
     }
@@ -1344,6 +1970,18 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (t == _i6z8z91q.PushOutbox) {
       return _i6z8z91q.PushOutbox.fromJson(data) as T;
+    }
+    if (t == _ipb0000r.ReminderEntry) {
+      return _ipb0000r.ReminderEntry.fromJson(data) as T;
+    }
+    if (t == _ibwgwkt8.ReminderEventOutbox) {
+      return _ibwgwkt8.ReminderEventOutbox.fromJson(data) as T;
+    }
+    if (t == _ishkpy03.ReminderFailure) {
+      return _ishkpy03.ReminderFailure.fromJson(data) as T;
+    }
+    if (t == _iqvmz5zf.ReminderRecord) {
+      return _iqvmz5zf.ReminderRecord.fromJson(data) as T;
     }
     if (t == _ipjphtkx.ScheduleFailure) {
       return _ipjphtkx.ScheduleFailure.fromJson(data) as T;
@@ -1399,6 +2037,20 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (t == _is.getType<_i6kv8n64.MediaRecord?>()) {
       return (data != null ? _i6kv8n64.MediaRecord.fromJson(data) : null) as T;
     }
+    if (t == _is.getType<_iq4regyx.MomentEntry?>()) {
+      return (data != null ? _iq4regyx.MomentEntry.fromJson(data) : null) as T;
+    }
+    if (t == _is.getType<_iazdxdla.MomentEventOutbox?>()) {
+      return (data != null ? _iazdxdla.MomentEventOutbox.fromJson(data) : null)
+          as T;
+    }
+    if (t == _is.getType<_ilmm6qir.MomentFailure?>()) {
+      return (data != null ? _ilmm6qir.MomentFailure.fromJson(data) : null)
+          as T;
+    }
+    if (t == _is.getType<_ipgyhm3z.MomentRecord?>()) {
+      return (data != null ? _ipgyhm3z.MomentRecord.fromJson(data) : null) as T;
+    }
     if (t == _is.getType<_ievswv9n.MoodFailure?>()) {
       return (data != null ? _ievswv9n.MoodFailure.fromJson(data) : null) as T;
     }
@@ -1429,6 +2081,24 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (t == _is.getType<_i6z8z91q.PushOutbox?>()) {
       return (data != null ? _i6z8z91q.PushOutbox.fromJson(data) : null) as T;
+    }
+    if (t == _is.getType<_ipb0000r.ReminderEntry?>()) {
+      return (data != null ? _ipb0000r.ReminderEntry.fromJson(data) : null)
+          as T;
+    }
+    if (t == _is.getType<_ibwgwkt8.ReminderEventOutbox?>()) {
+      return (data != null
+              ? _ibwgwkt8.ReminderEventOutbox.fromJson(data)
+              : null)
+          as T;
+    }
+    if (t == _is.getType<_ishkpy03.ReminderFailure?>()) {
+      return (data != null ? _ishkpy03.ReminderFailure.fromJson(data) : null)
+          as T;
+    }
+    if (t == _is.getType<_iqvmz5zf.ReminderRecord?>()) {
+      return (data != null ? _iqvmz5zf.ReminderRecord.fromJson(data) : null)
+          as T;
     }
     if (t == _is.getType<_ipjphtkx.ScheduleFailure?>()) {
       return (data != null ? _ipjphtkx.ScheduleFailure.fromJson(data) : null)
@@ -1507,6 +2177,18 @@ class Protocol extends _is.DatabaseSerializationManager {
               .toList()
           as T;
     }
+    if (t == List<_iqvr1c08.MomentEntry>) {
+      return (data as List)
+              .map((e) => deserialize<_iqvr1c08.MomentEntry>(e))
+              .toList()
+          as T;
+    }
+    if (t == List<_ir7gi34d.ReminderEntry>) {
+      return (data as List)
+              .map((e) => deserialize<_ir7gi34d.ReminderEntry>(e))
+              .toList()
+          as T;
+    }
     try {
       return _iacs.Protocol().deserialize<T>(data, t);
     } on _is.DeserializationTypeNotFoundException catch (_) {}
@@ -1527,6 +2209,10 @@ class Protocol extends _is.DatabaseSerializationManager {
       _ijjfwapm.MediaAsset => 'MediaAsset',
       _iuzipihh.MediaFailure => 'MediaFailure',
       _i6kv8n64.MediaRecord => 'MediaRecord',
+      _iq4regyx.MomentEntry => 'MomentEntry',
+      _iazdxdla.MomentEventOutbox => 'MomentEventOutbox',
+      _ilmm6qir.MomentFailure => 'MomentFailure',
+      _ipgyhm3z.MomentRecord => 'MomentRecord',
       _ievswv9n.MoodFailure => 'MoodFailure',
       _i3uwx2a4.MoodState => 'MoodState',
       _iz3xjlbz.Couple => 'Couple',
@@ -1536,6 +2222,10 @@ class Protocol extends _is.DatabaseSerializationManager {
       _i48xv6cw.PushDeviceRegistration => 'PushDeviceRegistration',
       _i9648dgo.PushFailure => 'PushFailure',
       _i6z8z91q.PushOutbox => 'PushOutbox',
+      _ipb0000r.ReminderEntry => 'ReminderEntry',
+      _ibwgwkt8.ReminderEventOutbox => 'ReminderEventOutbox',
+      _ishkpy03.ReminderFailure => 'ReminderFailure',
+      _iqvmz5zf.ReminderRecord => 'ReminderRecord',
       _ipjphtkx.ScheduleFailure => 'ScheduleFailure',
       _iulii77s.TimelineNotice => 'TimelineNotice',
       _ib5zdgim.WidgetDeliveryRecord => 'WidgetDeliveryRecord',
@@ -1572,6 +2262,14 @@ class Protocol extends _is.DatabaseSerializationManager {
         return 'MediaFailure';
       case _i6kv8n64.MediaRecord():
         return 'MediaRecord';
+      case _iq4regyx.MomentEntry():
+        return 'MomentEntry';
+      case _iazdxdla.MomentEventOutbox():
+        return 'MomentEventOutbox';
+      case _ilmm6qir.MomentFailure():
+        return 'MomentFailure';
+      case _ipgyhm3z.MomentRecord():
+        return 'MomentRecord';
       case _ievswv9n.MoodFailure():
         return 'MoodFailure';
       case _i3uwx2a4.MoodState():
@@ -1590,6 +2288,14 @@ class Protocol extends _is.DatabaseSerializationManager {
         return 'PushFailure';
       case _i6z8z91q.PushOutbox():
         return 'PushOutbox';
+      case _ipb0000r.ReminderEntry():
+        return 'ReminderEntry';
+      case _ibwgwkt8.ReminderEventOutbox():
+        return 'ReminderEventOutbox';
+      case _ishkpy03.ReminderFailure():
+        return 'ReminderFailure';
+      case _iqvmz5zf.ReminderRecord():
+        return 'ReminderRecord';
       case _ipjphtkx.ScheduleFailure():
         return 'ScheduleFailure';
       case _iulii77s.TimelineNotice():
@@ -1657,6 +2363,18 @@ class Protocol extends _is.DatabaseSerializationManager {
     if (dataClassName == 'MediaRecord') {
       return deserialize<_i6kv8n64.MediaRecord>(data['data']);
     }
+    if (dataClassName == 'MomentEntry') {
+      return deserialize<_iq4regyx.MomentEntry>(data['data']);
+    }
+    if (dataClassName == 'MomentEventOutbox') {
+      return deserialize<_iazdxdla.MomentEventOutbox>(data['data']);
+    }
+    if (dataClassName == 'MomentFailure') {
+      return deserialize<_ilmm6qir.MomentFailure>(data['data']);
+    }
+    if (dataClassName == 'MomentRecord') {
+      return deserialize<_ipgyhm3z.MomentRecord>(data['data']);
+    }
     if (dataClassName == 'MoodFailure') {
       return deserialize<_ievswv9n.MoodFailure>(data['data']);
     }
@@ -1683,6 +2401,18 @@ class Protocol extends _is.DatabaseSerializationManager {
     }
     if (dataClassName == 'PushOutbox') {
       return deserialize<_i6z8z91q.PushOutbox>(data['data']);
+    }
+    if (dataClassName == 'ReminderEntry') {
+      return deserialize<_ipb0000r.ReminderEntry>(data['data']);
+    }
+    if (dataClassName == 'ReminderEventOutbox') {
+      return deserialize<_ibwgwkt8.ReminderEventOutbox>(data['data']);
+    }
+    if (dataClassName == 'ReminderFailure') {
+      return deserialize<_ishkpy03.ReminderFailure>(data['data']);
+    }
+    if (dataClassName == 'ReminderRecord') {
+      return deserialize<_iqvmz5zf.ReminderRecord>(data['data']);
     }
     if (dataClassName == 'ScheduleFailure') {
       return deserialize<_ipjphtkx.ScheduleFailure>(data['data']);
@@ -1763,6 +2493,10 @@ class Protocol extends _is.DatabaseSerializationManager {
     switch (t) {
       case _i6kv8n64.MediaRecord:
         return _i6kv8n64.MediaRecord.t;
+      case _iazdxdla.MomentEventOutbox:
+        return _iazdxdla.MomentEventOutbox.t;
+      case _ipgyhm3z.MomentRecord:
+        return _ipgyhm3z.MomentRecord.t;
       case _iz3xjlbz.Couple:
         return _iz3xjlbz.Couple.t;
       case _ijn3tadz.CoupleMember:
@@ -1771,6 +2505,10 @@ class Protocol extends _is.DatabaseSerializationManager {
         return _i48xv6cw.PushDeviceRegistration.t;
       case _i6z8z91q.PushOutbox:
         return _i6z8z91q.PushOutbox.t;
+      case _ibwgwkt8.ReminderEventOutbox:
+        return _ibwgwkt8.ReminderEventOutbox.t;
+      case _iqvmz5zf.ReminderRecord:
+        return _iqvmz5zf.ReminderRecord.t;
       case _ib5zdgim.WidgetDeliveryRecord:
         return _ib5zdgim.WidgetDeliveryRecord.t;
       case _incj22aa.WidgetDeviceCredentialRecord:

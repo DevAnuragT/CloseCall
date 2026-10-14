@@ -19,6 +19,28 @@ abstract interface class FcmSender {
   Future<FcmSendResult> send({required String token, required int version});
 }
 
+/// Separate capability for user-visible Moment notifications. Keeping this
+/// interface independent means existing invalidation sender fakes remain
+/// source-compatible and cannot accidentally receive private Moment data.
+abstract interface class MomentFcmSender {
+  Future<FcmSendResult> sendMoment({
+    required String token,
+    required String momentId,
+    required String eventType,
+  });
+}
+
+/// Separate capability for user-visible Reminder notifications. Keeping this
+/// interface independent prevents widget invalidation sends from carrying
+/// reminder identifiers or notification text.
+abstract interface class ReminderFcmSender {
+  Future<FcmSendResult> sendReminder({
+    required String token,
+    required String reminderId,
+    required String eventType,
+  });
+}
+
 /// The minimum service-account fields needed for OAuth JWT bearer exchange.
 /// This object deliberately does not expose a toString implementation that
 /// could accidentally include the private key.
@@ -108,7 +130,7 @@ class FcmServiceAccount {
 typedef HttpClientFactory = HttpClient Function();
 
 /// FCM HTTP v1 sender using the service account OAuth JWT bearer flow.
-class FcmHttpV1Sender implements FcmSender {
+class FcmHttpV1Sender implements FcmSender, MomentFcmSender, ReminderFcmSender {
   FcmHttpV1Sender(
     this.account, {
     HttpClientFactory? httpClientFactory,
@@ -156,6 +178,99 @@ class FcmHttpV1Sender implements FcmSender {
     } catch (_) {
       // Do not leak key material, access tokens, or response bytes through
       // error logging. A bounded retry is safer than dropping an event.
+      return const FcmSendResult(FcmSendStatus.transientFailure);
+    }
+  }
+
+  @override
+  Future<FcmSendResult> sendMoment({
+    required String token,
+    required String momentId,
+    required String eventType,
+  }) async {
+    // Only opaque identifiers cross the push boundary. Text, audio paths,
+    // email identities and private URLs are intentionally absent.
+    if (!RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+        ).hasMatch(momentId) ||
+        eventType != 'moment_created') {
+      return const FcmSendResult(FcmSendStatus.permanentFailure);
+    }
+    try {
+      final accessToken = await _accessTokenForRequest();
+      final uri = Uri.parse(
+        'https://fcm.googleapis.com/v1/projects/'
+        '${Uri.encodeComponent(account.projectId)}/messages:send',
+      );
+      final response = await _postJson(
+        uri,
+        headers: {'Authorization': 'Bearer $accessToken'},
+        body: {
+          'message': {
+            'token': token,
+            'notification': {
+              'title': 'CloseCall',
+              'body': 'New moment from your partner',
+            },
+            'data': {'type': eventType, 'momentId': momentId},
+          },
+        },
+      );
+      return _classifyFcmResponse(response.statusCode, response.body);
+    } on TimeoutException {
+      return const FcmSendResult(FcmSendStatus.transientFailure);
+    } on SocketException {
+      return const FcmSendResult(FcmSendStatus.transientFailure);
+    } on HttpException {
+      return const FcmSendResult(FcmSendStatus.transientFailure);
+    } on FormatException {
+      return const FcmSendResult(FcmSendStatus.permanentFailure);
+    } catch (_) {
+      return const FcmSendResult(FcmSendStatus.transientFailure);
+    }
+  }
+
+  @override
+  Future<FcmSendResult> sendReminder({
+    required String token,
+    required String reminderId,
+    required String eventType,
+  }) async {
+    // Only opaque identifiers cross the push boundary. Reminder titles and
+    // other private fields are intentionally absent from the payload.
+    if (!_uuid.hasMatch(reminderId) || eventType != 'reminder_created') {
+      return const FcmSendResult(FcmSendStatus.permanentFailure);
+    }
+    try {
+      final accessToken = await _accessTokenForRequest();
+      final uri = Uri.parse(
+        'https://fcm.googleapis.com/v1/projects/'
+        '${Uri.encodeComponent(account.projectId)}/messages:send',
+      );
+      final response = await _postJson(
+        uri,
+        headers: {'Authorization': 'Bearer $accessToken'},
+        body: {
+          'message': {
+            'token': token,
+            'notification': {
+              'title': 'CloseCall',
+              'body': 'Your partner added a reminder',
+            },
+            'data': {'type': eventType, 'reminderId': reminderId},
+          },
+        },
+      );
+      return _classifyFcmResponse(response.statusCode, response.body);
+    } on TimeoutException {
+      return const FcmSendResult(FcmSendStatus.transientFailure);
+    } on SocketException {
+      return const FcmSendResult(FcmSendStatus.transientFailure);
+    } on HttpException {
+      return const FcmSendResult(FcmSendStatus.transientFailure);
+    } on FormatException {
+      return const FcmSendResult(FcmSendStatus.permanentFailure);
+    } catch (_) {
       return const FcmSendResult(FcmSendStatus.transientFailure);
     }
   }
@@ -291,6 +406,10 @@ class FcmHttpV1Sender implements FcmSender {
       return false;
     }
   }
+
+  static final _uuid = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
 }
 
 class _HttpResponse {

@@ -16,10 +16,14 @@ import 'package:closecall_client/src/protocol/auth/account_state.dart'
     as _iksdjlut;
 import 'package:closecall_client/src/protocol/media/media_asset.dart'
     as _i7z5ta07;
+import 'package:closecall_client/src/protocol/moments/moment_entry.dart'
+    as _iw96ik5z;
 import 'package:closecall_client/src/protocol/mood/mood_state.dart'
     as _i5qdsw2w;
 import 'package:closecall_client/src/protocol/pairing/pairing_state.dart'
     as _i9hl8iq9;
+import 'package:closecall_client/src/protocol/reminders/reminder_entry.dart'
+    as _im86chxx;
 import 'package:closecall_client/src/protocol/widget/widget_delivery_state.dart'
     as _ih73c9dn;
 import 'package:closecall_client/src/protocol/widget/widget_device_credential.dart'
@@ -297,6 +301,43 @@ class EndpointMedia extends _isc.EndpointRef {
       });
 }
 
+/// {@category Endpoint}
+class EndpointMoments extends _isc.EndpointRef {
+  EndpointMoments(_isc.EndpointCaller caller) : super(caller);
+
+  @override
+  String get name => 'moments';
+
+  _ida.Future<_iw96ik5z.MomentEntry> createMoment({
+    required String requestId,
+    required String text,
+    _idt.ByteData? voiceBytes,
+  }) => caller.callServerEndpoint<_iw96ik5z.MomentEntry>(
+    'moments',
+    'createMoment',
+    {'requestId': requestId, 'text': text, 'voiceBytes': voiceBytes},
+  );
+
+  _ida.Future<List<_iw96ik5z.MomentEntry>> listMoments({
+    String? beforeId,
+    int limit = 20,
+  }) => caller.callServerEndpoint<List<_iw96ik5z.MomentEntry>>(
+    'moments',
+    'listMoments',
+    {'beforeId': beforeId, 'limit': limit},
+  );
+
+  _ida.Future<_idt.ByteData> downloadVoice({required String momentId}) =>
+      caller.callServerEndpoint<_idt.ByteData>('moments', 'downloadVoice', {
+        'momentId': momentId,
+      });
+
+  _ida.Future<void> deleteMoment({required String momentId}) =>
+      caller.callServerEndpoint<void>('moments', 'deleteMoment', {
+        'momentId': momentId,
+      });
+}
+
 /// Couple-scoped current mood. The authenticated session is the only source
 /// of identity; callers never choose a user or couple.
 /// {@category Endpoint}
@@ -344,6 +385,15 @@ class EndpointPairing extends _isc.EndpointRef {
         {},
       );
 
+  /// Removes only the authenticated member from a couple. Shared records stay
+  /// with the remaining member; member-owned delivery/credential rows cascade
+  /// with the departed membership row.
+  _ida.Future<void> unpair(String coupleId) => caller.callServerEndpoint<void>(
+    'pairing',
+    'unpair',
+    {'coupleId': coupleId},
+  );
+
   _ida.Future<_i9hl8iq9.PairingState> updateNicknames(
     String coupleId,
     String? ownNickname,
@@ -387,6 +437,47 @@ class EndpointPush extends _isc.EndpointRef {
     'deviceId': deviceId,
     'token': token,
   });
+}
+
+/// {@category Endpoint}
+class EndpointReminders extends _isc.EndpointRef {
+  EndpointReminders(_isc.EndpointCaller caller) : super(caller);
+
+  @override
+  String get name => 'reminders';
+
+  _ida.Future<List<_im86chxx.ReminderEntry>> listReminders() =>
+      caller.callServerEndpoint<List<_im86chxx.ReminderEntry>>(
+        'reminders',
+        'listReminders',
+        {},
+      );
+
+  _ida.Future<_im86chxx.ReminderEntry> createReminder({
+    required String requestId,
+    required String title,
+    required String kind,
+    required DateTime remindAt,
+  }) => caller.callServerEndpoint<_im86chxx.ReminderEntry>(
+    'reminders',
+    'createReminder',
+    {
+      'requestId': requestId,
+      'title': title,
+      'kind': kind,
+      'remindAt': remindAt,
+    },
+  );
+
+  _ida.Future<void> completeReminder({required String reminderId}) =>
+      caller.callServerEndpoint<void>('reminders', 'completeReminder', {
+        'reminderId': reminderId,
+      });
+
+  _ida.Future<void> deleteReminder({required String reminderId}) =>
+      caller.callServerEndpoint<void>('reminders', 'deleteReminder', {
+        'reminderId': reminderId,
+      });
 }
 
 /// Explicit bearer authorization, independent of the interactive login token.
@@ -560,9 +651,11 @@ class Client extends _isc.ServerpodClientShared {
     emailIdp = EndpointEmailIdp(this);
     jwtRefresh = EndpointJwtRefresh(this);
     media = EndpointMedia(this);
+    moments = EndpointMoments(this);
     mood = EndpointMood(this);
     pairing = EndpointPairing(this);
     push = EndpointPush(this);
+    reminders = EndpointReminders(this);
     widgetBackground = EndpointWidgetBackground(this);
     widgetDevice = EndpointWidgetDevice(this);
     widgetSchedule = EndpointWidgetSchedule(this);
@@ -579,11 +672,15 @@ class Client extends _isc.ServerpodClientShared {
 
   late final EndpointMedia media;
 
+  late final EndpointMoments moments;
+
   late final EndpointMood mood;
 
   late final EndpointPairing pairing;
 
   late final EndpointPush push;
+
+  late final EndpointReminders reminders;
 
   late final EndpointWidgetBackground widgetBackground;
 
@@ -600,9 +697,11 @@ class Client extends _isc.ServerpodClientShared {
     'emailIdp': emailIdp,
     'jwtRefresh': jwtRefresh,
     'media': media,
+    'moments': moments,
     'mood': mood,
     'pairing': pairing,
     'push': push,
+    'reminders': reminders,
     'widgetBackground': widgetBackground,
     'widgetDevice': widgetDevice,
     'widgetSchedule': widgetSchedule,

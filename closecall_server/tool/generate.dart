@@ -6,8 +6,9 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:dart_style/dart_style.dart';
 import 'package:yaml/yaml.dart';
 
-/// Reproducible Serverpod 4.0.3 generation, followed by a narrowly scoped AST
-/// extension for composite-FK schema verification. Run from closecall_server:
+/// Reproducible Serverpod 4.0.3 generation, followed by narrow AST extensions
+/// for composite-FK schema verification and Moments' default page size.
+/// Run from closecall_server:
 ///   ../.tooling/flutter/bin/dart run tool/generate.dart
 /// CI (read-only drift check, followed by the usual analyze/tests):
 ///   ../.tooling/flutter/bin/dart run tool/generate.dart --check
@@ -17,7 +18,8 @@ import 'package:yaml/yaml.dart';
 /// Extending its generated target getter binds production and test harness to
 /// the SAME non-generated schema function. No handwritten generated patch is
 /// required. This wrapper never reads passwords or copies private runtime data,
-/// never changes the host CLI, and writes generated files only in this server.
+/// never changes the host CLI, and writes only server/test-tools/typed-client
+/// generation outputs.
 Future<void> main(List<String> args) async {
   if (args.any((arg) => arg != '--check')) {
     stderr.writeln('Usage: dart run tool/generate.dart [--check]');
@@ -167,6 +169,13 @@ dependencies:
     protocol.writeAsStringSync(
       extendScheduleProtocol(protocol.readAsStringSync()),
     );
+    for (final path in [
+      '${client.path}/lib/src/protocol/client.dart',
+      '${staged.path}/test/integration/test_tools/serverpod_test_tools.dart',
+    ]) {
+      final file = File(path);
+      file.writeAsStringSync(extendMomentDefaults(file.readAsStringSync()));
+    }
     final changes = <String>[];
     for (final directory in [
       'lib/src/generated',
@@ -265,6 +274,36 @@ class _Edit {
   final int start;
   final int end;
   final String text;
+}
+
+/// Serverpod 4.0.3 makes nonnullable optional endpoint parameters required in
+/// generated callers. Restore the Moments contract's default through its AST;
+/// every RPC continues sending an explicit integer over the wire.
+String extendMomentDefaults(String source) {
+  final unit = parseString(content: source, throwIfDiagnostics: true).unit;
+  final methods = unit.declarations
+      .whereType<ClassDeclaration>()
+      .expand(
+        (c) =>
+            (c.body as BlockClassBody).members.whereType<MethodDeclaration>(),
+      )
+      .where((m) => m.name.lexeme == 'listMoments');
+  final method = methods.single;
+  final parameter = method.parameters!.parameters
+      .where((p) => RegExp(r'\blimit\b').hasMatch(p.toSource()))
+      .single;
+  final shape = parameter.toSource().replaceAll(RegExp(r'\s+'), ' ');
+  if (shape != 'required int limit' && shape != 'int limit = 20') {
+    throw StateError('Unexpected generated Moments limit parameter.');
+  }
+  source = source.replaceRange(
+    parameter.offset,
+    parameter.end,
+    'int limit = 20',
+  );
+  return DartFormatter(
+    languageVersion: DartFormatter.latestLanguageVersion,
+  ).format(source);
 }
 
 void _copyDirectory(Directory source, Directory target) {

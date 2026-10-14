@@ -33,6 +33,35 @@ void main() {
   });
 
   test(
+    'rejects reminder payloads unless the event and opaque UUID are valid',
+    () async {
+      final sender = FcmHttpV1Sender(
+        FcmServiceAccount(
+          projectId: 'closecall-prod-456',
+          clientEmail: 'sender@example.test',
+          privateKey: key.replaceAll(r'\n', '\n'),
+        ),
+      );
+      expect(
+        (await sender.sendReminder(
+          token: 'token',
+          reminderId: 'not-an-id',
+          eventType: 'reminder_created',
+        )).status,
+        FcmSendStatus.permanentFailure,
+      );
+      expect(
+        (await sender.sendReminder(
+          token: 'token',
+          reminderId: '00000000-0000-0000-0000-000000000000',
+          eventType: 'private_title',
+        )).status,
+        FcmSendStatus.permanentFailure,
+      );
+    },
+  );
+
+  test(
     'rejects partial or malformed credentials without exposing secret values',
     () {
       expect(

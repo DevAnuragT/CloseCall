@@ -22,9 +22,11 @@ import '../auth/anonymous_idp_endpoint.dart' as _in0zita6;
 import '../auth/email_idp_endpoint.dart' as _iuc1hd5t;
 import '../auth/jwt_refresh_endpoint.dart' as _inwq3ztq;
 import '../media/media_endpoint.dart' as _i9ppd1x8;
+import '../moments/moments_endpoint.dart' as _ipqrr5ra;
 import '../mood/mood_endpoint.dart' as _i3bz3xom;
 import '../pairing/pairing_endpoint.dart' as _iku2870h;
 import '../push/push_endpoint.dart' as _ii21ahkp;
+import '../reminders/reminders_endpoint.dart' as _ipy6rmqz;
 import '../widget/widget_background_endpoint.dart' as _i0aswh2u;
 import '../widget/widget_device_endpoint.dart' as _iywg07ft;
 import '../widget/widget_schedule_endpoint.dart' as _iiq50v3t;
@@ -43,10 +45,14 @@ class Endpoints extends _is.EndpointDispatch {
       'jwtRefresh': _inwq3ztq.JwtRefreshEndpoint()
         ..initialize(server, 'jwtRefresh', null),
       'media': _i9ppd1x8.MediaEndpoint()..initialize(server, 'media', null),
+      'moments': _ipqrr5ra.MomentsEndpoint()
+        ..initialize(server, 'moments', null),
       'mood': _i3bz3xom.MoodEndpoint()..initialize(server, 'mood', null),
       'pairing': _iku2870h.PairingEndpoint()
         ..initialize(server, 'pairing', null),
       'push': _ii21ahkp.PushEndpoint()..initialize(server, 'push', null),
+      'reminders': _ipy6rmqz.RemindersEndpoint()
+        ..initialize(server, 'reminders', null),
       'widgetBackground': _i0aswh2u.WidgetBackgroundEndpoint()
         ..initialize(server, 'widgetBackground', null),
       'widgetDevice': _iywg07ft.WidgetDeviceEndpoint()
@@ -308,6 +314,90 @@ class Endpoints extends _is.EndpointDispatch {
         ),
       },
     );
+    connectors['moments'] = _is.EndpointConnector(
+      name: 'moments',
+      endpoint: endpoints['moments']!,
+      methodConnectors: {
+        'createMoment': _is.MethodConnector(
+          name: 'createMoment',
+          params: {
+            'requestId': _is.ParameterDescription(
+              name: 'requestId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'text': _is.ParameterDescription(
+              name: 'text',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'voiceBytes': _is.ParameterDescription(
+              name: 'voiceBytes',
+              type: _is.getType<_idt.ByteData?>(),
+              nullable: true,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['moments'] as _ipqrr5ra.MomentsEndpoint).createMoment(
+                session,
+                requestId: params['requestId'],
+                text: params['text'],
+                voiceBytes: params['voiceBytes'],
+              ),
+        ),
+        'listMoments': _is.MethodConnector(
+          name: 'listMoments',
+          params: {
+            'beforeId': _is.ParameterDescription(
+              name: 'beforeId',
+              type: _is.getType<String?>(),
+              nullable: true,
+            ),
+            'limit': _is.ParameterDescription(
+              name: 'limit',
+              type: _is.getType<int>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['moments'] as _ipqrr5ra.MomentsEndpoint).listMoments(
+                session,
+                beforeId: params['beforeId'],
+                limit: params['limit'],
+              ),
+        ),
+        'downloadVoice': _is.MethodConnector(
+          name: 'downloadVoice',
+          params: {
+            'momentId': _is.ParameterDescription(
+              name: 'momentId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['moments'] as _ipqrr5ra.MomentsEndpoint).downloadVoice(
+                session,
+                momentId: params['momentId'],
+              ),
+        ),
+        'deleteMoment': _is.MethodConnector(
+          name: 'deleteMoment',
+          params: {
+            'momentId': _is.ParameterDescription(
+              name: 'momentId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['moments'] as _ipqrr5ra.MomentsEndpoint).deleteMoment(
+                session,
+                momentId: params['momentId'],
+              ),
+        ),
+      },
+    );
     connectors['mood'] = _is.EndpointConnector(
       name: 'mood',
       endpoint: endpoints['mood']!,
@@ -368,6 +458,21 @@ class Endpoints extends _is.EndpointDispatch {
           call: (_is.Session session, Map<String, dynamic> params) async =>
               (endpoints['pairing'] as _iku2870h.PairingEndpoint).currentCouple(
                 session,
+              ),
+        ),
+        'unpair': _is.MethodConnector(
+          name: 'unpair',
+          params: {
+            'coupleId': _is.ParameterDescription(
+              name: 'coupleId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['pairing'] as _iku2870h.PairingEndpoint).unpair(
+                session,
+                params['coupleId'],
               ),
         ),
         'updateNicknames': _is.MethodConnector(
@@ -457,6 +562,79 @@ class Endpoints extends _is.EndpointDispatch {
                 deviceId: params['deviceId'],
                 token: params['token'],
               ),
+        ),
+      },
+    );
+    connectors['reminders'] = _is.EndpointConnector(
+      name: 'reminders',
+      endpoint: endpoints['reminders']!,
+      methodConnectors: {
+        'listReminders': _is.MethodConnector(
+          name: 'listReminders',
+          params: {},
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['reminders'] as _ipy6rmqz.RemindersEndpoint)
+                  .listReminders(session),
+        ),
+        'createReminder': _is.MethodConnector(
+          name: 'createReminder',
+          params: {
+            'requestId': _is.ParameterDescription(
+              name: 'requestId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'title': _is.ParameterDescription(
+              name: 'title',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'kind': _is.ParameterDescription(
+              name: 'kind',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+            'remindAt': _is.ParameterDescription(
+              name: 'remindAt',
+              type: _is.getType<DateTime>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['reminders'] as _ipy6rmqz.RemindersEndpoint)
+                  .createReminder(
+                    session,
+                    requestId: params['requestId'],
+                    title: params['title'],
+                    kind: params['kind'],
+                    remindAt: params['remindAt'],
+                  ),
+        ),
+        'completeReminder': _is.MethodConnector(
+          name: 'completeReminder',
+          params: {
+            'reminderId': _is.ParameterDescription(
+              name: 'reminderId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['reminders'] as _ipy6rmqz.RemindersEndpoint)
+                  .completeReminder(session, reminderId: params['reminderId']),
+        ),
+        'deleteReminder': _is.MethodConnector(
+          name: 'deleteReminder',
+          params: {
+            'reminderId': _is.ParameterDescription(
+              name: 'reminderId',
+              type: _is.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call: (_is.Session session, Map<String, dynamic> params) async =>
+              (endpoints['reminders'] as _ipy6rmqz.RemindersEndpoint)
+                  .deleteReminder(session, reminderId: params['reminderId']),
         ),
       },
     );

@@ -1,0 +1,3 @@
+exception: MomentFailure
+fields:
+  code: String

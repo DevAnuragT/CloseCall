@@ -112,6 +112,78 @@ class PairingEndpoint extends Endpoint {
     );
   }
 
+  /// Removes only the authenticated member from a couple. Shared records stay
+  /// with the remaining member; member-owned delivery/credential rows cascade
+  /// with the departed membership row.
+  Future<void> unpair(Session session, String coupleId) async {
+    final user = session.authenticated!.userIdentifier;
+    final coupleUuid = UuidValue.fromString(coupleId);
+    await session.db.transaction((transaction) async {
+      await _lockUser(session, user, transaction);
+      await session.db.unsafeQuery(
+        'SELECT id FROM closecall_couple WHERE id = CAST(@id AS uuid) FOR UPDATE',
+        parameters: QueryParameters.named({'id': coupleId}),
+        transaction: transaction,
+      );
+      final member = await CoupleMember.db.findFirstRow(
+        session,
+        where: (t) =>
+            t.coupleId.equals(coupleUuid) & t.userIdentifier.equals(user),
+        transaction: transaction,
+      );
+      if (member == null) throw PairingFailure(code: 'not_paired');
+      final members = await CoupleMember.db.find(
+        session,
+        where: (t) => t.coupleId.equals(coupleUuid),
+        transaction: transaction,
+      );
+      final remaining = members.where((row) => row.id != member.id).toList();
+      if (remaining.isNotEmpty) {
+        final survivor = remaining.single;
+        // Moment records have a same-couple FK to their author membership.
+        // Reassign that historical ownership before the membership cascade so
+        // shared history is not destroyed when a person leaves.
+        await session.db.unsafeQuery(
+          'UPDATE closecall_moment SET "authorMemberId" = @survivor '
+          'WHERE "authorMemberId" = @departing',
+          parameters: QueryParameters.named({
+            'survivor': survivor.id,
+            'departing': member.id,
+          }),
+          transaction: transaction,
+        );
+        final couple = (await Couple.db.findById(
+          session,
+          coupleUuid,
+          transaction: transaction,
+        ))!;
+        couple.pairingCode = await _newInviteCode(session, transaction);
+        await Couple.db.updateRow(session, couple, transaction: transaction);
+      } else {
+        // No partner remains, so there is no shared audience. The couple and
+        // all of its dependent private data can be removed safely.
+        final couple = await Couple.db.findById(
+          session,
+          coupleUuid,
+          transaction: transaction,
+        );
+        if (couple != null) {
+          await Couple.db.deleteRow(session, couple, transaction: transaction);
+        }
+        return;
+      }
+      await CoupleMember.db.deleteRow(session, member, transaction: transaction);
+      if (remaining.isNotEmpty && !remaining.single.creatorSlot) {
+        remaining.single.creatorSlot = true;
+        await CoupleMember.db.updateRow(
+          session,
+          remaining.single,
+          transaction: transaction,
+        );
+      }
+    });
+  }
+
   Future<PairingState> updateNicknames(
     Session session,
     String coupleId,
@@ -202,6 +274,22 @@ class PairingEndpoint extends Endpoint {
     UuidValue id,
     Transaction transaction,
   ) async => (await Couple.db.findById(session, id, transaction: transaction))!;
+
+  Future<String> _newInviteCode(
+    Session session,
+    Transaction transaction,
+  ) async {
+    for (var attempt = 0; attempt < 32; attempt++) {
+      final code = InviteCode.generate();
+      final rows = await session.db.unsafeQuery(
+        'SELECT id FROM closecall_couple WHERE "pairingCode" = @code',
+        parameters: QueryParameters.named({'code': code}),
+        transaction: transaction,
+      );
+      if (rows.isEmpty) return code;
+    }
+    throw StateError('Could not allocate a unique invite code.');
+  }
 
   Future<Couple> _createWithUniqueCode(
     Session session,

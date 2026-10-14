@@ -1,0 +1,8 @@
+class: ReminderEntry
+fields:
+  id: UuidValue
+  title: String
+  kind: String
+  remindAt: DateTime
+  completedAt: DateTime?
+  createdAt: DateTime

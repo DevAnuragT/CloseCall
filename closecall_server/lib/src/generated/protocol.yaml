@@ -17,6 +17,11 @@ media:
   - uploadPhoto:
   - listAssets:
   - downloadPhoto:
+moments:
+  - createMoment:
+  - listMoments:
+  - downloadVoice:
+  - deleteMoment:
 mood:
   - current:
   - setMood:
@@ -24,10 +29,16 @@ pairing:
   - createCouple:
   - joinByCode:
   - currentCouple:
+  - unpair:
   - updateNicknames:
 push:
   - registerDevice:
   - revokeDevice:
+reminders:
+  - listReminders:
+  - createReminder:
+  - completeReminder:
+  - deleteReminder:
 widgetBackground:
   - currentTimeline:
   - downloadPhoto:

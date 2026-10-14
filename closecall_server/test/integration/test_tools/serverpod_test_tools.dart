@@ -21,10 +21,14 @@ import 'package:closecall_server/src/generated/future_calls_generated_models/wid
     as _ihjesomv;
 import 'package:closecall_server/src/generated/media/media_asset.dart'
     as _ibuid3ro;
+import 'package:closecall_server/src/generated/moments/moment_entry.dart'
+    as _iqvr1c08;
 import 'package:closecall_server/src/generated/mood/mood_state.dart'
     as _i3kuo6kc;
 import 'package:closecall_server/src/generated/pairing/pairing_state.dart'
     as _iye5whdh;
+import 'package:closecall_server/src/generated/reminders/reminder_entry.dart'
+    as _ir7gi34d;
 import 'package:closecall_server/src/generated/widget/widget_delivery_state.dart'
     as _iy1hps0l;
 import 'package:closecall_server/src/generated/widget/widget_device_credential.dart'
@@ -184,11 +188,15 @@ class TestEndpoints {
 
   late final _MediaEndpoint media;
 
+  late final _MomentsEndpoint moments;
+
   late final _MoodEndpoint mood;
 
   late final _PairingEndpoint pairing;
 
   late final _PushEndpoint push;
+
+  late final _RemindersEndpoint reminders;
 
   late final _WidgetBackgroundEndpoint widgetBackground;
 
@@ -209,9 +217,11 @@ class _InternalTestEndpoints extends TestEndpoints
     emailIdp = _EmailIdpEndpoint(endpoints, serializationManager);
     jwtRefresh = _JwtRefreshEndpoint(endpoints, serializationManager);
     media = _MediaEndpoint(endpoints, serializationManager);
+    moments = _MomentsEndpoint(endpoints, serializationManager);
     mood = _MoodEndpoint(endpoints, serializationManager);
     pairing = _PairingEndpoint(endpoints, serializationManager);
     push = _PushEndpoint(endpoints, serializationManager);
+    reminders = _RemindersEndpoint(endpoints, serializationManager);
     widgetBackground = _WidgetBackgroundEndpoint(
       endpoints,
       serializationManager,
@@ -718,6 +728,148 @@ class _MediaEndpoint {
   }
 }
 
+class _MomentsEndpoint {
+  _MomentsEndpoint(this._endpointDispatch, this._serializationManager);
+
+  final _is.EndpointDispatch _endpointDispatch;
+
+  final _is.SerializationManager _serializationManager;
+
+  _ida.Future<_iqvr1c08.MomentEntry> createMoment(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String requestId,
+    required String text,
+    _idt.ByteData? voiceBytes,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'moments',
+            method: 'createMoment',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'moments',
+          methodName: 'createMoment',
+          parameters: _ist.testObjectToJson({
+            'requestId': requestId,
+            'text': text,
+            'voiceBytes': voiceBytes,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_iqvr1c08.MomentEntry>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<List<_iqvr1c08.MomentEntry>> listMoments(
+    _ist.TestSessionBuilder sessionBuilder, {
+    String? beforeId,
+    int limit = 20,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'moments',
+            method: 'listMoments',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'moments',
+          methodName: 'listMoments',
+          parameters: _ist.testObjectToJson({
+            'beforeId': beforeId,
+            'limit': limit,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<List<_iqvr1c08.MomentEntry>>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_idt.ByteData> downloadVoice(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String momentId,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'moments',
+            method: 'downloadVoice',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'moments',
+          methodName: 'downloadVoice',
+          parameters: _ist.testObjectToJson({'momentId': momentId}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_idt.ByteData>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<void> deleteMoment(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String momentId,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'moments',
+            method: 'deleteMoment',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'moments',
+          methodName: 'deleteMoment',
+          parameters: _ist.testObjectToJson({'momentId': momentId}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<void>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+}
+
 class _MoodEndpoint {
   _MoodEndpoint(this._endpointDispatch, this._serializationManager);
 
@@ -885,6 +1037,37 @@ class _PairingEndpoint {
     });
   }
 
+  _ida.Future<void> unpair(
+    _ist.TestSessionBuilder sessionBuilder,
+    String coupleId,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'pairing',
+            method: 'unpair',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'pairing',
+          methodName: 'unpair',
+          parameters: _ist.testObjectToJson({'coupleId': coupleId}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<void>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
   _ida.Future<_iye5whdh.PairingState> updateNicknames(
     _ist.TestSessionBuilder sessionBuilder,
     String coupleId,
@@ -989,6 +1172,145 @@ class _PushEndpoint {
             'deviceId': deviceId,
             'token': token,
           }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<void>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+}
+
+class _RemindersEndpoint {
+  _RemindersEndpoint(this._endpointDispatch, this._serializationManager);
+
+  final _is.EndpointDispatch _endpointDispatch;
+
+  final _is.SerializationManager _serializationManager;
+
+  _ida.Future<List<_ir7gi34d.ReminderEntry>> listReminders(
+    _ist.TestSessionBuilder sessionBuilder,
+  ) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'reminders',
+            method: 'listReminders',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'reminders',
+          methodName: 'listReminders',
+          parameters: _ist.testObjectToJson({}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<List<_ir7gi34d.ReminderEntry>>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<_ir7gi34d.ReminderEntry> createReminder(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String requestId,
+    required String title,
+    required String kind,
+    required DateTime remindAt,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'reminders',
+            method: 'createReminder',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'reminders',
+          methodName: 'createReminder',
+          parameters: _ist.testObjectToJson({
+            'requestId': requestId,
+            'title': title,
+            'kind': kind,
+            'remindAt': remindAt,
+          }),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<_ir7gi34d.ReminderEntry>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<void> completeReminder(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String reminderId,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'reminders',
+            method: 'completeReminder',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'reminders',
+          methodName: 'completeReminder',
+          parameters: _ist.testObjectToJson({'reminderId': reminderId}),
+          serializationManager: _serializationManager,
+        );
+        var _localReturnValue =
+            await (_localCallContext.method.call(
+                  _localUniqueSession,
+                  _localCallContext.arguments,
+                )
+                as _ida.Future<void>);
+        return _localReturnValue;
+      } finally {
+        await _localUniqueSession.close();
+      }
+    });
+  }
+
+  _ida.Future<void> deleteReminder(
+    _ist.TestSessionBuilder sessionBuilder, {
+    required String reminderId,
+  }) async {
+    return _ist.callAwaitableFunctionAndHandleExceptions(() async {
+      var _localUniqueSession =
+          (sessionBuilder as _ist.InternalTestSessionBuilder).internalBuild(
+            endpoint: 'reminders',
+            method: 'deleteReminder',
+          );
+      try {
+        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+          createSessionCallback: (_) => _localUniqueSession,
+          endpointPath: 'reminders',
+          methodName: 'deleteReminder',
+          parameters: _ist.testObjectToJson({'reminderId': reminderId}),
           serializationManager: _serializationManager,
         );
         var _localReturnValue =

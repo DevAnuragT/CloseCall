@@ -1,0 +1,9 @@
+class: MomentEntry
+fields:
+  momentId: String
+  coupleId: String
+  authorId: String
+  text: String
+  kind: String
+  durationMs: int?
+  createdAt: DateTime

@@ -1,7 +1,9 @@
 import 'src/auth/authentication.dart';
 import 'src/generated/serverpod.dart';
+import 'src/moments/moment_event_dispatcher.dart';
 import 'src/push/fcm_sender.dart';
 import 'src/push/push_outbox_dispatcher.dart';
+import 'src/reminders/reminder_event_dispatcher.dart';
 import 'src/widget/widget_schedule_policy.dart';
 
 /// Starts the API with JWT authentication and persistent PostgreSQL storage.
@@ -32,17 +34,32 @@ Future<void> run(List<String> args) async {
   // runner is only their best-effort wake-up/reconciliation mechanism.
   if (account == null) {
     PushOutboxRuntime.dispatcher = null;
+    MomentEventOutboxRuntime.dispatcher = null;
+    ReminderEventOutboxRuntime.dispatcher = null;
     return;
   }
-  final dispatcher = PushOutboxDispatcher(sender: FcmHttpV1Sender(account));
+  final sender = FcmHttpV1Sender(account);
+  final dispatcher = PushOutboxDispatcher(sender: sender);
+  final momentDispatcher = MomentEventOutboxDispatcher(sender: sender);
+  final reminderDispatcher = ReminderEventOutboxDispatcher(sender: sender);
   PushOutboxRuntime.dispatcher = dispatcher;
+  MomentEventOutboxRuntime.dispatcher = momentDispatcher;
+  ReminderEventOutboxRuntime.dispatcher = reminderDispatcher;
   final runner = PushOutboxRunner(dispatcher);
+  final momentRunner = MomentEventOutboxRunner(momentDispatcher);
+  final reminderRunner = ReminderEventOutboxRunner(reminderDispatcher);
   runner.start(pod);
+  momentRunner.start(pod);
+  reminderRunner.start(pod);
   pod.experimental.shutdownTasks.addTask(
     'closecall-push-outbox-runner',
     () async {
       runner.stop();
+      momentRunner.stop();
+      reminderRunner.stop();
       PushOutboxRuntime.dispatcher = null;
+      MomentEventOutboxRuntime.dispatcher = null;
+      ReminderEventOutboxRuntime.dispatcher = null;
     },
   );
 }

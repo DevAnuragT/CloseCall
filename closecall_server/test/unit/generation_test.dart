@@ -14,6 +14,18 @@ class Protocol {
 ''';
 
 void main() {
+  test('Moments default extension is narrow, reproducible and fails closed', () {
+    const source =
+        'class EndpointMoments { void listMoments({String? beforeId, required int limit}) {} }';
+    final extended = extendMomentDefaults(source);
+    expect(extended, contains('int limit = 20'));
+    expect(extendMomentDefaults(extended), extended);
+    expect(
+      () =>
+          extendMomentDefaults(source.replaceAll('int limit', 'String limit')),
+      throwsStateError,
+    );
+  });
   test(
     'structured schema extension is idempotent and independent of formatting',
     () {

@@ -1,0 +1,20 @@
+class: ReminderRecord
+table: closecall_reminder
+serverOnly: true
+fields:
+  id: UuidValue?, defaultPersist=random
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  creatorMemberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  creatorId: String
+  title: String
+  kind: String
+  remindAt: DateTime
+  completedAt: DateTime?
+  createdAt: DateTime, default=now
+  requestId: String
+indexes:
+  closecall_reminder_request_unique:
+    fields: coupleId, requestId
+    unique: true
+  closecall_reminder_due:
+    fields: coupleId, remindAt, id

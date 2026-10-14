@@ -1,0 +1,23 @@
+class: ReminderEventOutbox
+table: closecall_reminder_event_outbox
+serverOnly: true
+fields:
+  id: UuidValue?, defaultPersist=random
+  coupleId: UuidValue, relation(parent=closecall_couple, onDelete=Cascade)
+  reminderId: UuidValue, relation(parent=closecall_reminder, onDelete=Cascade)
+  recipientMemberId: int, relation(parent=closecall_couple_member, onDelete=Cascade)
+  eventType: String
+  createdAt: DateTime, default=now
+  attempts: int, default=0
+  availableAt: DateTime, default=now
+  leasedUntil: DateTime?
+  leaseOwner: String?
+  expiresAt: DateTime
+  completedAt: DateTime?
+  lastError: String?
+indexes:
+  closecall_reminder_event_unique:
+    fields: reminderId, recipientMemberId, eventType
+    unique: true
+  closecall_reminder_event_ready_idx:
+    fields: completedAt, availableAt
