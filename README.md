@@ -48,6 +48,19 @@ machine-wide Flutter. On a fresh clone, install the pinned version independently
 using [Flutter's official archive](https://docs.flutter.dev/install/archive), or
 use FVM if you already have it. Never commit SDK binaries.
 
+## Fresh clone: Firebase placeholders
+
+`lib/firebase_options.dart` and `android/app/google-services.json` are
+committed as **placeholders** so the project compiles. With them the app builds
+and runs against the live backend, but push notifications and closed-app widget
+updates are disabled. To enable them, replace both files with your own Firebase
+project (`flutterfire configure`) and, on the server, set the
+`FCM_SERVICE_ACCOUNT_JSON` secret. Keep real values out of git:
+`git update-index --skip-worktree lib/firebase_options.dart android/app/google-services.json`.
+
+A prebuilt Android debug APK connected to the live backend is attached to the
+GitHub release.
+
 ## Quick start (existing isolated SDK)
 
 From the repository root:
