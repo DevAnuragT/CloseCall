@@ -11,6 +11,19 @@ class MainActivity : FlutterActivity() {
         // Before Flutter restores auth, prevent a wake from applying an old
         // couple's timeline. Fresh owned display may remain during validation.
         WidgetTimelineStore.suspendForStartup(applicationContext)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "closecall/background_reliability")
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "status" -> result.success(BackgroundReliability.status(applicationContext))
+                        "requestBatteryExemption" -> result.success(BackgroundReliability.requestBatteryExemption(this))
+                        "openAutostart" -> result.success(BackgroundReliability.openAutostart(this))
+                        else -> result.notImplemented()
+                    }
+                } catch (failure: Exception) {
+                    result.error("background_reliability", "Background settings are unavailable (${failure.javaClass.simpleName})", null)
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "closecall/widget_timeline")
             .setMethodCallHandler { call, result ->
                 if (call.method !in setOf("cacheTimeline", "disableTimeline", "clearTimeline", "suspendForStartup", "restoreScope", "recordPhotoOwner", "configureBackgroundServerUrl")) {

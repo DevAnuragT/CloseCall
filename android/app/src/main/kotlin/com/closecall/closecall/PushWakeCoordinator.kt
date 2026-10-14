@@ -22,6 +22,7 @@ internal object PushWakeCoordinator {
     private const val RETRIES = "background_retries"
     private const val MAX_VERSION = 9_000_000_000_000_000L
     private const val MAX_RETRIES = 3
+    private const val WATCHDOG_MS = 15_000L
     private const val REQUEST_CODE = 7822
     private val lock = Any()
     val executor = Executors.newSingleThreadExecutor()
@@ -63,6 +64,7 @@ internal object PushWakeCoordinator {
      */
     fun process(context: Context) {
         val version: Long
+        val attempt: Int
         synchronized(lock) {
             val data = prefs(context)
             val pending = data.getLong(PENDING, -1L)
@@ -72,7 +74,20 @@ internal object PushWakeCoordinator {
                 return
             }
             version = pending
+            // Counted up front: a run frozen by the OS never reaches the end.
+            attempt = data.getInt(RETRIES, 0) + 1
+            if (attempt > MAX_RETRIES) {
+                check(data.edit().putLong(APPLIED, maxOf(applied, version))
+                    .remove(PENDING).remove(RETRIES).commit())
+                cancel(context)
+                return
+            }
+            check(data.edit().putInt(RETRIES, attempt).commit())
         }
+
+        // Vendor task freezers can stop this process mid-fetch. Arm a retry
+        // first; every outcome below replaces or cancels it.
+        schedule(context, WATCHDOG_MS)
 
         var completed = false
         try {
@@ -104,13 +119,11 @@ internal object PushWakeCoordinator {
                 check(editor.commit())
                 cancel(context)
             } else {
-                val retries = data.getInt(RETRIES, 0) + 1
-                if (retries >= MAX_RETRIES) {
+                if (attempt >= MAX_RETRIES) {
                     check(data.edit().putLong(APPLIED, maxOf(highestApplied, version))
                         .remove(PENDING).remove(RETRIES).commit())
                     cancel(context)
                 } else {
-                    check(data.edit().putInt(RETRIES, retries).commit())
                     schedule(context, 30_000L)
                 }
             }
