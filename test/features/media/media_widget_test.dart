@@ -171,6 +171,13 @@ void main() {
           ).pop(testPng);
           await Future<void>.delayed(const Duration(milliseconds: 100));
         });
+        // PNG preparation is asynchronous; wait for the send, not a fixed delay.
+        for (var attempt = 0; attempt < 100 && sends.isEmpty; attempt++) {
+          await tester.pumpAndSettle();
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 50)),
+          );
+        }
         await tester.pumpAndSettle();
         expect(find.byType(WidgetPreviewScreen), findsNothing);
         expect(repository.requestIds, hasLength(1));

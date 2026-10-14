@@ -510,6 +510,12 @@ void main() {
         ).pop(testPng);
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
+      for (var attempt = 0; attempt < 100 && sends.isEmpty; attempt++) {
+        await tester.pumpAndSettle();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+      }
       await tester.pumpAndSettle();
       expect(find.byType(WidgetPreviewScreen), findsNothing);
       expect(applied, 0);
