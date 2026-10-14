@@ -33,6 +33,10 @@ internal object WidgetBackgroundDelivery {
     private const val MAX_ENCODED_PHOTO_BYTES = 3 * 1024 * 1024
     private const val MAX_TOTAL_BYTES = 24 * 1024 * 1024
     private const val HTTP_TIMEOUT_MS = 5_000
+    // Photos come from the database-backed store on a small plan; a 2 MiB PNG
+    // can take well over 5 s before the first byte.
+    private const val CONNECT_TIMEOUT_MS = 10_000
+    private const val READ_TIMEOUT_MS = 30_000
     private const val CLOCK_SKEW_MS = 5 * 60 * 1000L
     private val credentialPattern = Regex("^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$")
 
@@ -232,8 +236,8 @@ internal object WidgetBackgroundDelivery {
     private fun postJson(url: URL, body: String, maxBytes: Int): Response {
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
-            connectTimeout = HTTP_TIMEOUT_MS
-            readTimeout = HTTP_TIMEOUT_MS
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             useCaches = false

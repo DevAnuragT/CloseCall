@@ -90,7 +90,13 @@ internal object WidgetTimelineStore {
         val scope = input["scope"] as? String ?: throw IllegalArgumentException("Missing scope")
         WidgetTimelinePolicy.validate(scope, 0, emptyList(), emptyMap())
         val assetId = input["assetId"]?.let(WidgetTimelinePolicy::id)
-        val path = prefs(context).getString(IMAGE_PATH, null) ?: throw IllegalStateException("Missing photo")
+        // The write's widget refresh can run before this call and clear the path while
+        // startup is still suspended; recover the file Flutter just wrote.
+        val path = prefs(context).getString(IMAGE_PATH, null)
+            ?: latestManualPhoto(context)?.also {
+                check(prefs(context).edit().putString(IMAGE_PATH, it).commit())
+            }
+            ?: throw IllegalStateException("Missing photo")
         require(safeDisplayedFile(context, path) != null)
         // A newly written local photo is not permission to resume the previous
         // timeline. Flutter must publish fresh recipient truth separately.
@@ -100,6 +106,18 @@ internal object WidgetTimelineStore {
         val owner = Owner(scope, retainedPath, assetId, WidgetClockAnchor(wall, wall, SystemClock.elapsedRealtime(), boot(context)))
         writeOwner(context, owner)
         armExpiry(context, owner)
+    }
+
+    private fun latestManualPhoto(context: Context): String? {
+        val pattern = Regex("widget_([0-9]+)(?:_([0-9]+))?\\.png")
+        return context.filesDir.listFiles()
+            ?.mapNotNull { file ->
+                val match = pattern.matchEntire(file.name) ?: return@mapNotNull null
+                if (!file.isFile) return@mapNotNull null
+                Triple(match.groupValues[1].toLongOrNull() ?: 0L, match.groupValues[2].toLongOrNull() ?: 0L, file)
+            }
+            ?.maxWithOrNull(compareBy({ it.first }, { it.second }))
+            ?.third?.absolutePath
     }
 
     private fun safeDisplayedFile(context: Context, path: String): File? {
